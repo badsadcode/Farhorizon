@@ -1,6 +1,6 @@
 #pragma once
-// Stage 1 showcase: loads a data-defined scene, renders the star field, the star and the
-// imported ship, and lets the developer orbit or free-fly the camera.
+// FARHORIZON application: loads a data-defined space scene and runs the Stage 2 flight sandbox
+// (player ship, station proxy, asteroid fields, HUD, targeting) with developer tooling.
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -11,53 +11,49 @@
 #include "engine/core/clock.h"
 #include "engine/debug/frame_stats.h"
 #include "engine/debug/overlay.h"
-#include "engine/math/frames.h"
 #include "engine/platform/input.h"
-#include "game/camera.h"
+#include "game/camera_rig.h"
 #include "game/content/scene_def.h"
-#include "game/content/ship_def.h"
+#include "game/content/visual_profile.h"
+#include "game/ship_controller.h"
+#include "game/world/space_world.h"
 
 namespace fh {
 
 class Window;
 class VkContext;
 class Renderer;
-using MeshHandle = std::uint32_t;
 
 struct AppOptions {
   std::filesystem::path contentDir;
   std::filesystem::path shaderDir;
-  std::string sceneId = "scene.stage1_showcase";
+  std::string sceneId = "scene.stage2_flight";
+  std::string benchmarkId;                       // e.g. bench.asteroid_field_chase
+  std::filesystem::path benchmarkOut;            // default: benchmarks/<benchmark id>
   int width = 1600;
   int height = 900;
   bool validation = false;
   bool vsync = true;
-  bool overlay = true;
+  bool devOverlay = true;
+  bool autofly = false;
+  std::optional<std::string> cameraOverride;
   int exitAfterFrames = 0;                       // 0 = run until closed
   std::optional<std::filesystem::path> screenshotOnExit;
-  double benchmarkSeconds = 0;                   // > 0: record frame stats, export, exit
-  std::filesystem::path benchmarkOut = "benchmarks/stage1_cockpit_empty_space";
+  std::optional<std::string> look;               // visual profile id override
 };
 
-class ShowcaseApp {
+class GameApp {
  public:
-  explicit ShowcaseApp(AppOptions options);
-  ~ShowcaseApp();
+  explicit GameApp(AppOptions options);
+  ~GameApp();
   int run();
 
  private:
-  struct ActiveObject {
-    MeshHandle mesh = 0;
-    Vec3 localPosition;      // relative to the floating origin
-    Quat rotation;
-    Mat4 meshFix;            // data-driven correction: rotation * scale * recentre
-  };
-
   bool loadContent(std::vector<std::string>& errors);  // all-or-nothing; keeps old state on failure
-  void handleFrameInput(float dt);
-  void rebaseIfNeeded();
-  void buildOverlay();
-  void requestScreenshot();
+  void handleAppInput();
+  void buildOverlay(const CameraView& view, const Mat4& viewProj, const Transform& ship);
+  void buildDevOverlay();
+  void setMouseCapture(bool on);
 
   AppOptions options_;
   std::unique_ptr<Window> window_;
@@ -65,20 +61,27 @@ class ShowcaseApp {
   std::unique_ptr<Renderer> renderer_;
   InputState input_;
   std::optional<AssetManifest> manifest_;
+  std::optional<BenchmarkDef> benchmark_;
   SceneDef scene_;
-  LocalFrame frame_;
-  std::vector<ActiveObject> objects_;
-  DevCamera camera_;
+  VisualProfileSet looks_;
+  int activeLook_ = 0;
+  double lookShownUntil_ = 0;
+  std::unique_ptr<SpaceWorld> world_;
+  ShipController controller_;
+  CameraRig camera_;
   FixedStepClock clock_;
   FrameStats stats_;
   OverlayBuilder overlay_;
-  bool showOverlay_ = true;
+  bool showDevOverlay_ = true;
+  bool mouseCaptured_ = false;
   std::vector<std::string> contentErrors_;
   std::optional<std::filesystem::path> pendingScreenshot_;
   int screenshotCounter_ = 0;
   std::uint64_t frameCount_ = 0;
-  std::uint64_t meshTriangles_ = 0;
+  std::uint32_t visibleAsteroids_ = 0;
+  std::uint32_t rebases_ = 0;
   double runTime_ = 0;
+  bool quit_ = false;
 };
 
 }  // namespace fh

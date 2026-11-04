@@ -52,6 +52,10 @@ void Window::toggleFullscreen() {
 bool Window::isFullscreen() const { return (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0; }
 bool Window::isMinimized() const { return (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED) != 0; }
 
+bool Window::hasFocus() const { return (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0; }
+void Window::setRelativeMouse(bool on) { SDL_SetWindowRelativeMouseMode(window_, on); }
+bool Window::relativeMouse() const { return SDL_GetWindowRelativeMouseMode(window_); }
+
 void Window::pixelSize(int& w, int& h) const { SDL_GetWindowSizeInPixels(window_, &w, &h); }
 
 bool Window::consumeResized() {

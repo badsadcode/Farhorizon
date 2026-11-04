@@ -10,6 +10,7 @@
 #include "engine/core/log.h"
 #include "game/content/scene_def.h"
 #include "game/content/ship_def.h"
+#include "game/content/visual_profile.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -28,9 +29,12 @@ int main(int argc, char** argv) {
       if (entry.type == "ship") {
         fh::loadShipDef(*manifest, id, &errors);
       } else if (entry.type == "scene") {
-        if (auto scene = fh::loadSceneDef(*manifest, id, &errors))
-          for (const auto& o : scene->objects)
-            if (!manifest->find(o.ship)) errors.push_back("scene '" + id + "': unknown ship '" + o.ship + "'");
+        fh::loadSceneDef(*manifest, id, &errors);  // also checks referenced ships and meshes
+      } else if (entry.type == "visuals") {
+        fh::loadVisualProfiles(*manifest, id, &errors);
+      } else if (entry.type == "benchmark") {
+        if (auto b = fh::loadBenchmarkDef(*manifest, id, &errors); b && !fh::loadSceneDef(*manifest, b->scene, &errors))
+          errors.push_back("benchmark '" + id + "': scene '" + b->scene + "' failed to load");
       } else if (entry.type == "mesh") {
         std::string err;
         if (auto path = manifest->resolve(id, "mesh"); path && !fh::loadGltfMesh(*path, &err))

@@ -1,42 +1,60 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 0 + Stage 1 spike._
+_Last updated: 2026-11-04 · Stage 2 (flight) + retro post-processing._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
 | Item | State | Notes |
 |---|---|---|
-| CMake C++20 project, module layout | ✅ | `engine/`, `game/`, `tools/`, `tests/`, `content/`, `docs/` |
-| Pinned dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
-| Vulkan minimum feature set chosen | ✅ | ADR 0001: Vulkan 1.3 + dynamicRendering + synchronization2 |
-| Logging (console + `farhorizon.log`) | ✅ | per-subsystem tags, warn/error counters |
-| Crash diagnostics | 🟡 | fatal errors are logged with context; no minidump/stack trace yet |
-| Test harness | ✅ | `fh_unit_tests` (21 tests, GPU-free) + content validation via CTest |
-| Coding conventions, issue log, changelog | ✅ | `docs/CODING_CONVENTIONS.md`, `docs/ISSUES.md`, `CHANGELOG.md` |
-| Windows clean-clone build | 🟡 | authored for MSVC and covered by the CI workflow, **not yet compiled on Windows** (ISSUES #1) |
+| CMake C++20 project, module layout | ✅ | |
+| Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
+| Vulkan minimum feature set | ✅ | ADR 0001 |
+| Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
+| Test harness | ✅ | 36 unit tests + content validation (CTest) |
+| CI | 🟡 | Linux job (sanitizers + headless render) green. Windows job fixed to use the official LunarG SDK installer; awaiting its first green run |
 
 ## Stage 1 — window and visible space
 | Item | State | Notes |
 |---|---|---|
-| SDL3 window + input | ✅ | action bindings from JSON |
-| Vulkan swapchain / render path | ✅ | resize and out-of-date recreation verified (xdotool resize test); minimized windows skip rendering |
-| Validation layer + error surfacing | ✅ | 0 messages across all test runs; count shown on overlay; `--validation` exits with code 2 on any message |
-| Camera | ✅ | orbit + free-fly; free-fly speed 1 m/s–200 km/s |
-| Star field | ✅ | 9,000 instanced stars, deterministic seed, galactic band |
-| Procedural sky, star disc and glare | ✅ | placeholder for authored nebula textures |
-| Imported GLB ship, lit | ✅ | Kenney CC0 placeholder; GGX PBR, one directional light (star) + hemispheric ambient |
-| Simple PBR material | ✅ | base colour factor/texture, metallic, roughness, emissive; data-driven overrides |
-| Developer overlay | ✅ | FPS, CPU ms, GPU ms (timestamps), draws, triangles, GPU memory, origin generation, validation |
-| Fullscreen toggle | 🟡 | implemented (borderless); not observable under Xvfb, verify on Windows |
-| Asset reload | ✅ | F5; invalid content is rejected with precise errors and the previous scene keeps running (verified) |
-| Screenshot | ✅ | F12 or `--screenshot` |
-| Benchmark export | ✅ | `--benchmark` → CSV + JSON |
-| Double-precision frames + floating origin | ✅ | unit tests plus in-app verification (44 rebases at ~35 km/s, no jumps) |
-| Fixed-timestep loop | ✅ | 60 Hz, capped catch-up; drives auto-rotate today |
-| HDR target, bloom, exposure pass | ⬜ | next render milestone |
-| Shadows, IBL, LOD, particles | ⬜ | later stages |
+| SDL3 window/input, Vulkan swapchain, resize | ✅ | |
+| Validation layer + overlay counters | ✅ | 0 messages in all runs |
+| Star field, procedural sky, star disc | ✅ | sky colours now data-driven per scene |
+| Imported GLB ship with PBR | ✅ | |
+| Developer overlay, screenshots, benchmark export | ✅ | |
+| Hot reload (F5) with rollback | ✅ | now also reloads bindings/looks and keeps the player's pose |
+| Double-precision frames + floating origin | ✅ | focus is now the player ship |
+
+## Stage 2 — real ship flight
+| Item | State | Notes |
+|---|---|---|
+| Pilot controls (6DOF) | ✅ | keyboard + mouse virtual stick; verified interactively via xdotool |
+| Flight assist on/off | ✅ | set-speed + damping / inertial; unit-tested |
+| Speed modes: precision, cruise, boost | ✅ | boost is energy limited with release-to-rearm |
+| Velocity HUD | ✅ | speed, set-speed, throttle bar, prograde/retrograde marker, boost bar, assist/mode |
+| Chase + cockpit cameras | ✅ | data-driven; cockpit at `socket_pilot` |
+| Ship component data | ✅ | flight, precision, boost, cameras, sockets, engine glow, lights in ship JSON |
+| Sockets / attachment points | ✅ | glTF `socket_*` / `hardpoint_*` nodes + JSON fallbacks; unit-tested |
+| Target selection | ✅ | T cycle (stations first), G nearest asteroid; bracket, distance, range rate, off-screen arrow |
+| Simple asteroids | ✅ | procedural, deterministic meshes + clustered fields, instanced, frustum culled |
+| Station proxy | ✅ | Kenney CC0 hangar + dish, running lights, nav marker |
+| Collisions | 🟡 | sphere vs sphere with push-out/bounce and impact warning. Crude for the station (one sphere). |
+| Rebindable controls | 🟡 | via `input.json` + F5. No in-game rebinding UI yet. |
+| Rebasing without visible jumps | ✅ | unit-tested (interpolation continuity) and observed in a 40 s flight |
+| "Fun to fly for 10 minutes" | ⬜ | needs a human play session on real hardware |
+| In-system travel drive | ⬜ | design 4.2. Not in the Stage 2 list. Next candidate. |
+
+## Rendering (design 9.3)
+| Item | State | Notes |
+|---|---|---|
+| HDR target + tonemap + exposure | ✅ | ADR 0004 |
+| Bloom | ✅ | quarter-res soft-knee, iterative Gaussian |
+| Looks / post profiles | ✅ | `retro80s` (default) and `clean`; F4; HUD palette per look |
+| Colour grade, scanlines, chromatic aberration, grain, vignette | ✅ | all data-driven |
+| Fill + rim lighting | ✅ | scene data |
+| Engine glow, running lights | ✅ | additive billboards |
+| Instanced meshes | ✅ | |
+| Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
 
 ## Later stages
-Not started: ship flight model (Stage 2), docking/interiors/on-foot (3), mining/market/save (4),
-planet landing (5), combat/contracts (6), polish (7). The data types for ship flight parameters are
-parsed but unused.
+Not started: docking/interiors/on-foot (3), mining/market/save (4), planet landing (5),
+combat/contracts (6), polish (7).

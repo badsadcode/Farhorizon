@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "default": "retro80s",
+  "profiles": [
+    {
+      "id": "retro80s",
+      "name": "Retro 80s",
+      "bloomStrength": 0.85,
+      "bloomThreshold": 0.9,
+      "bloomKnee": 0.5,
+      "bloomRadius": 1.6,
+      "bloomIterations": 4,
+      "shadowTint": [
+        0.88,
+        0.95,
+        1.16
+      ],
+      "highlightTint": [
+        1.14,
+        0.95,
+        1.04
+      ],
+      "saturation": 1.18,
+      "contrast": 1.04,
+      "vignette": 0.32,
+      "scanlines": 0.1,
+      "scanlinePeriod": 3.0,
+      "chromaticAberration": 0.014,
+      "grain": 0.025,
+      "hud": {
+        "primary": [
+          255,
+          105,
+          205,
+          235
+        ],
+        "nav": [
+          80,
+          230,
+          255,
+          235
+        ],
+        "field": [
+          190,
+          255,
+          130,
+          220
+        ],
+        "warn": [
+          255,
+          70,
+          60,
+          255
+        ]
+      }
+    },
+    {
+      "id": "clean",
+      "name": "Clean",
+      "bloomStrength": 0.25,
+      "bloomThreshold": 1.6,
+      "bloomKnee": 0.6,
+      "bloomRadius": 1.0,
+      "bloomIterations": 2,
+      "hud": {
+        "primary": [
+          255,
+          196,
+          120,
+          235
+        ],
+        "nav": [
+          120,
+          220,
+          255,
+          235
+        ],
+        "field": [
+          170,
+          200,
+          150,
+          220
+        ],
+        "warn": [
+          255,
+          90,
+          70,
+          255
+        ]
+      }
+    }
+  ]
+}

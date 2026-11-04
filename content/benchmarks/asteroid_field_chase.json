@@ -1,0 +1,8 @@
+{
+  "id": "bench.asteroid_field_chase",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "player": { "systemPosition": [149597865500.0, 11999700.0, -3500001200.0], "rotationDeg": [0, 20, 0] },
+  "autofly": { "throttle": 0.35, "rotation": [0.02, 0.12, 0.0] }
+}

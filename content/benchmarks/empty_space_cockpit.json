@@ -1,0 +1,8 @@
+{
+  "id": "bench.empty_space_cockpit",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "cockpit",
+  "player": { "systemPosition": [149597890000.0, 12000000.0, -3500000000.0], "rotationDeg": [0, 90, 0] },
+  "autofly": { "throttle": 0.5, "rotation": [0.0, 0.15, 0.0] }
+}

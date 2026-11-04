@@ -4,10 +4,18 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   mat4 viewProj;
   mat4 invViewProj;
   vec4 sunDirCos;      // xyz: unit direction toward the star, w: cos(star angular radius)
-  vec4 sunColorExp;    // rgb: star colour * intensity (linear), w: exposure
+  vec4 sunColorExp;    // rgb: star colour * intensity (linear), w: exposure (applied in tonemap.frag)
   vec4 ambientSkyTime; // rgb: ambient from "sky" hemisphere, w: time in seconds
   vec4 ambientGround;  // rgb: ambient from opposite hemisphere, w: galactic plane tilt (radians)
   vec4 viewport;       // width, height, 1/width, 1/height
+  vec4 camRight;       // xyz camera right (render space), for billboards
+  vec4 camUp;          // xyz camera up
+  vec4 skyBase;        // rgb deep-space background colour
+  vec4 skyBand;        // rgb galactic band colour, a band intensity
+  vec4 skyNebula;      // rgb nebula tint, a nebula strength
+  vec4 fillDir;        // xyz unit direction toward the fill light (bounce/nebula), w unused
+  vec4 fillColor;      // rgb fill colour * intensity (soft diffuse only)
+  vec4 rimColorPower;  // rgb rim (edge) light colour, a exponent
 } frame;
 
 vec3 tonemapACES(vec3 x) {

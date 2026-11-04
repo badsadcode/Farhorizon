@@ -33,10 +33,11 @@ void main() {
   band = pow(band, 6.0);
   float dust = fbm(dir * 3.0);
   float wisps = fbm(dir * 7.0 + vec3(3.1, 1.7, 0.4));
-  vec3 col = vec3(0.0016, 0.0019, 0.0030);
-  col += band * vec3(0.020, 0.018, 0.024) * (0.55 + 0.9 * dust);
-  col += band * smoothstep(0.55, 0.9, wisps) * vec3(0.010, 0.004, 0.012);   // faint nebula tint
-  col *= 1.0 - 0.6 * band * smoothstep(0.55, 0.75, fbm(dir * 11.0));        // dark lanes
+  vec3 col = frame.skyBase.rgb;
+  col += band * frame.skyBand.rgb * frame.skyBand.a * (0.55 + 0.9 * dust);
+  float neb = smoothstep(0.45, 0.9, wisps) * (0.4 + band);
+  col += neb * frame.skyNebula.rgb * frame.skyNebula.a;                   // data-driven nebula tint
+  col *= 1.0 - 0.6 * band * smoothstep(0.55, 0.75, fbm(dir * 11.0));     // dark lanes
 
   // Star disc and glare.
   vec3 sunDir = frame.sunDirCos.xyz;
@@ -48,5 +49,5 @@ void main() {
   float ang = acos(clamp(c, -1.0, 1.0));
   col += sun * (0.020 * exp(-ang * 9.0) + 0.06 * exp(-ang * 70.0) + 0.6 * exp(-ang * 600.0));
 
-  outColor = vec4(tonemapACES(col * frame.sunColorExp.w), 1.0);
+  outColor = vec4(col, 1.0);  // linear HDR radiance
 }

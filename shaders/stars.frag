@@ -8,6 +8,5 @@ void main() {
   float r2 = dot(vCorner, vCorner);
   float a = exp(-r2 * 4.0);
   if (a < 0.004) discard;
-  // Additive; tone-mapped per star (cheap and good enough until the HDR target lands).
-  outColor = vec4(tonemapACES(vColor * a * frame.sunColorExp.w), 1.0);
+  outColor = vec4(vColor * a, 1.0);  // additive into the HDR target
 }

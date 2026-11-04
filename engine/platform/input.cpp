@@ -36,6 +36,16 @@ bool InputState::loadBindings(const std::filesystem::path& jsonPath, std::vector
       parsed[action].push_back(static_cast<int>(sc));
     }
   }
+  if (j.contains("mouse") && j["mouse"].is_object()) {
+    const auto& m = j["mouse"];
+    MouseSettings ms;
+    ms.sensitivity = m.value("sensitivity", ms.sensitivity);
+    ms.invertY = m.value("invertY", ms.invertY);
+    ms.deadzone = m.value("deadzone", ms.deadzone);
+    ms.recenterPerSecond = m.value("recenterPerSecond", ms.recenterPerSecond);
+    if (ms.sensitivity <= 0 || ms.deadzone < 0 || ms.deadzone >= 1) ok = fail("input mouse settings out of range");
+    else mouse_ = ms;
+  }
   bindings_ = std::move(parsed);
   log::info("input", "loaded {} action bindings", bindings_.size());
   return ok;

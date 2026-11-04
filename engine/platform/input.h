@@ -9,6 +9,13 @@ union SDL_Event;
 
 namespace fh {
 
+struct MouseSettings {
+  float sensitivity = 0.0022f;  // virtual-stick units per pixel of mouse motion
+  bool invertY = false;
+  float deadzone = 0.04f;       // fraction of full deflection
+  float recenterPerSecond = 0.0f;  // 0 = stick stays where you leave it
+};
+
 class InputState {
  public:
   // Loads action -> key bindings. Unknown key names are reported and skipped.
@@ -17,6 +24,7 @@ class InputState {
   bool down(const std::string& action) const;
   bool pressed(const std::string& action) const;  // went down this frame
 
+  const MouseSettings& mouse() const { return mouse_; }
   float mouseDx() const { return mouseDx_; }
   float mouseDy() const { return mouseDy_; }
   float wheel() const { return wheel_; }
@@ -34,6 +42,7 @@ class InputState {
   std::vector<bool> keysPressed_ = std::vector<bool>(512, false);
   float mouseDx_ = 0, mouseDy_ = 0, wheel_ = 0;
   unsigned mouseButtons_ = 0;
+  MouseSettings mouse_;
 };
 
 }  // namespace fh

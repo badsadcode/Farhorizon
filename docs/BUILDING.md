@@ -45,9 +45,9 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
 ## Command line
 
 ```
-farhorizon [--content DIR] [--shaders DIR] [--scene ID] [--size WxH]
-           [--validation | --no-validation] [--no-vsync] [--no-overlay]
-           [--frames N] [--screenshot FILE] [--benchmark SECONDS] [--bench-out PREFIX]
+farhorizon [--content DIR] [--shaders DIR] [--scene ID] [--size WxH] [--camera chase|cockpit|orbit|free]
+           [--look retro80s|clean] [--autofly] [--validation | --no-validation] [--no-vsync] [--no-overlay]
+           [--frames N] [--screenshot FILE] [--benchmark ID] [--bench-out PREFIX]
 ```
 
 Validation is on by default in Debug builds. With `--validation`, any validation message makes the
@@ -55,7 +55,12 @@ process exit with code 2, so CI catches API misuse.
 
 ## Benchmarks
 
+Benchmarks are data (`content/benchmarks/*.json`): a scene, a start pose, a camera and scripted input.
+
 ```bash
-farhorizon --no-vsync --size 1920x1080 --benchmark 10 --bench-out benchmarks/stage1_cockpit_empty_space
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.empty_space_cockpit
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.asteroid_field_chase
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_approach
 ```
-This writes per-frame `*.csv` (cpu_ms, gpu_ms, draw_calls, triangles) and a summary `*.json`.
+Each run writes `benchmarks/<id>.csv` (per frame: cpu_ms, gpu_ms, draw_calls, triangles) and
+`benchmarks/<id>.json` (summary).

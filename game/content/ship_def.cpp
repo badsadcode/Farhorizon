@@ -26,14 +26,67 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
   if (d.meshScale <= 0) r.error("'meshScale' must be > 0");
   if (d.massTons <= 0) r.error("'massTons' must be > 0");
 
+  d.collisionRadius = float(r.num(j, "collisionRadius", false, 0.0));
   if (j.contains("flight") && j["flight"].is_object()) {
     const auto& f = j["flight"];
-    d.flight.forwardAcceleration = float(r.num(f, "forwardAcceleration"));
-    d.flight.lateralAcceleration = float(r.num(f, "lateralAcceleration"));
-    d.flight.angularAcceleration = float(r.num(f, "angularAcceleration"));
-    d.flight.maxCruiseSpeed = float(r.num(f, "maxCruiseSpeed"));
+    FlightParams& fp = d.flight;
+    fp.forwardAcceleration = float(r.num(f, "forwardAcceleration"));
+    fp.lateralAcceleration = float(r.num(f, "lateralAcceleration"));
+    fp.angularAcceleration = float(r.num(f, "angularAcceleration"));
+    fp.maxCruiseSpeed = float(r.num(f, "maxCruiseSpeed"));
+    fp.reverseAcceleration = float(r.num(f, "reverseAcceleration", false, fp.forwardAcceleration * 0.5));
+    const Vec3 rates = r.vec3(f, "maxAngularRateDeg", false, {50.0f, 40.0f, 80.0f});
+    fp.maxAngularRate = {radians(rates.x), radians(rates.y), radians(rates.z)};
+    fp.strafeSpeedFraction = float(r.num(f, "strafeSpeedFraction", false, fp.strafeSpeedFraction));
+    fp.maxReverseFraction = float(r.num(f, "maxReverseFraction", false, fp.maxReverseFraction));
+    if (fp.forwardAcceleration <= 0 || fp.lateralAcceleration <= 0 || fp.angularAcceleration <= 0 ||
+        fp.maxCruiseSpeed <= 0 || fp.reverseAcceleration <= 0)
+      r.error("flight accelerations and maxCruiseSpeed must be > 0");
   } else {
     r.error("missing object 'flight'");
+  }
+  if (j.contains("precision") && j["precision"].is_object()) {
+    const auto& pr = j["precision"];
+    d.flight.precisionSpeedScale = float(r.num(pr, "speedScale", false, d.flight.precisionSpeedScale));
+    d.flight.precisionAccelScale = float(r.num(pr, "accelerationScale", false, d.flight.precisionAccelScale));
+    d.flight.precisionAngularScale = float(r.num(pr, "angularScale", false, d.flight.precisionAngularScale));
+  }
+  if (j.contains("boost") && j["boost"].is_object()) {
+    const auto& b = j["boost"];
+    d.flight.boostSpeedMultiplier = float(r.num(b, "speedMultiplier", false, d.flight.boostSpeedMultiplier));
+    d.flight.boostAccelMultiplier = float(r.num(b, "accelerationMultiplier", false, d.flight.boostAccelMultiplier));
+    d.flight.boostEnergyCapacity = float(r.num(b, "energyCapacity", false, d.flight.boostEnergyCapacity));
+    d.flight.boostDrainPerSecond = float(r.num(b, "drainPerSecond", false, d.flight.boostDrainPerSecond));
+    d.flight.boostRegenPerSecond = float(r.num(b, "regenPerSecond", false, d.flight.boostRegenPerSecond));
+    d.flight.boostMinEnergyToStart = float(r.num(b, "minEnergyToStart", false, d.flight.boostMinEnergyToStart));
+    if (d.flight.boostEnergyCapacity <= 0) r.error("boost.energyCapacity must be > 0");
+  }
+  if (j.contains("cameras") && j["cameras"].is_object()) {
+    const auto& c = j["cameras"];
+    if (c.contains("cockpit")) {
+      d.cameras.cockpitSocket = r.str(c["cockpit"], "socket", false, d.cameras.cockpitSocket);
+      d.cameras.cockpitFovDeg = float(r.num(c["cockpit"], "fovDeg", false, d.cameras.cockpitFovDeg));
+    }
+    if (c.contains("chase")) {
+      const auto& ch = c["chase"];
+      d.cameras.chaseDistance = float(r.num(ch, "distance", false, d.cameras.chaseDistance));
+      d.cameras.chaseHeight = float(r.num(ch, "height", false, d.cameras.chaseHeight));
+      d.cameras.chasePositionLag = float(r.num(ch, "positionLag", false, d.cameras.chasePositionLag));
+      d.cameras.chaseRotationLag = float(r.num(ch, "rotationLag", false, d.cameras.chaseRotationLag));
+      d.cameras.chaseFovDeg = float(r.num(ch, "fovDeg", false, d.cameras.chaseFovDeg));
+    }
+  }
+  if (j.contains("sockets")) {
+    if (!j["sockets"].is_object()) {
+      r.error("'sockets' must be an object keyed by socket name");
+    } else {
+      for (const auto& [name, sj] : j["sockets"].items()) {
+        SocketDef sd;
+        sd.position = r.vec3(sj, "position");
+        sd.rotationDeg = r.vec3(sj, "rotationDeg", false);
+        d.sockets.emplace(name, sd);
+      }
+    }
   }
 
   if (j.contains("mounts")) {
@@ -44,31 +97,19 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
         else r.error("'mounts' entries must be strings");
   }
 
-  if (j.contains("materialOverrides")) {
-    if (!j["materialOverrides"].is_object()) {
-      r.error("'materialOverrides' must be an object keyed by material name");
-    } else {
-      for (const auto& [matName, o] : j["materialOverrides"].items()) {
-        if (!o.is_object()) {
-          r.error("materialOverrides." + matName + " must be an object");
-          continue;
-        }
-        MaterialOverride mo;
-        if (o.contains("baseColor")) {
-          const auto& c = o["baseColor"];
-          if (c.is_array() && (c.size() == 3 || c.size() == 4)) {
-            mo.baseColor = Vec4(c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
-                                c.size() == 4 ? c[3].get<float>() : 1.0f);
-          } else {
-            r.error("materialOverrides." + matName + ".baseColor must be [r,g,b] or [r,g,b,a]");
-          }
-        }
-        if (o.contains("metallic")) mo.metallic = float(r.num(o, "metallic"));
-        if (o.contains("roughness")) mo.roughness = float(r.num(o, "roughness"));
-        if (o.contains("emissive")) mo.emissive = r.vec3(o, "emissive");
-        d.materialOverrides.emplace(matName, mo);
-      }
-    }
+  d.materialOverrides = r.materialOverrides(j);
+  d.lights = r.lights(j);
+  if (j.contains("engineGlow") && j["engineGlow"].is_object()) {
+    const auto& g = j["engineGlow"];
+    if (g.contains("sockets") && g["sockets"].is_array())
+      for (const auto& sname : g["sockets"])
+        if (sname.is_string()) d.engineGlow.sockets.push_back(sname.get<std::string>());
+    d.engineGlow.color = r.vec3(g, "color", false, d.engineGlow.color);
+    d.engineGlow.boostColor = r.vec3(g, "boostColor", false, d.engineGlow.boostColor);
+    d.engineGlow.idleSize = float(r.num(g, "idleSize", false, d.engineGlow.idleSize));
+    d.engineGlow.thrustSize = float(r.num(g, "thrustSize", false, d.engineGlow.thrustSize));
+    d.engineGlow.idleIntensity = float(r.num(g, "idleIntensity", false, d.engineGlow.idleIntensity));
+    d.engineGlow.thrustIntensity = float(r.num(g, "thrustIntensity", false, d.engineGlow.thrustIntensity));
   }
   if (!r.ok()) return std::nullopt;
   return d;

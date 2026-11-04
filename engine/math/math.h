@@ -77,6 +77,10 @@ struct Quat {
             w * b.w - x * b.x - y * b.y - z * b.z};
   }
   Quat conjugate() const { return {-x, -y, -z, w}; }
+  // Body axes (right-handed, +Y up, -Z forward).
+  Vec3 right() const { return rotate({1, 0, 0}); }
+  Vec3 up() const { return rotate({0, 1, 0}); }
+  Vec3 forward() const { return rotate({0, 0, -1}); }
   Vec3 rotate(const Vec3& v) const {
     const Vec3 u{x, y, z};
     const Vec3 t = cross(u, v) * 2.0f;
@@ -86,6 +90,19 @@ struct Quat {
 inline Quat normalize(const Quat& q) {
   const float n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
   return n > 0 ? Quat{q.x / n, q.y / n, q.z / n, q.w / n} : Quat{};
+}
+
+inline float dot(const Quat& a, const Quat& b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+// Normalised lerp along the shortest arc; adequate for smoothing small per-frame rotations.
+inline Quat nlerp(const Quat& a, Quat b, float t) {
+  if (dot(a, b) < 0) b = {-b.x, -b.y, -b.z, -b.w};
+  return normalize(Quat{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t});
+}
+// Integrates a body-frame angular velocity (rad/s) over dt.
+inline Quat integrateBodyRate(const Quat& q, const Vec3& omegaBody, float dt) {
+  const float rate = length(omegaBody);
+  if (rate * dt < 1e-9f) return q;
+  return normalize(q * Quat::fromAxisAngle(omegaBody / rate, rate * dt));
 }
 
 struct Mat4 {
@@ -206,6 +223,55 @@ inline Mat4 Mat4::inverse() const {
   float* o = &r.c[0].x;
   for (int i = 0; i < 16; ++i) o[i] = inv[i] * det;
   return r;
+}
+
+// View frustum for culling, extracted from a reversed-Z infinite projection * view matrix.
+// Planes: left, right, bottom, top, near (the far plane is at infinity). ax+by+cz+d >= 0 is inside.
+struct Frustum {
+  Vec4 planes[5];
+  static Frustum fromViewProj(const Mat4& m) {
+    auto row = [&](int r) { return Vec4(m.at(r, 0), m.at(r, 1), m.at(r, 2), m.at(r, 3)); };
+    const Vec4 r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3);
+    auto add = [](const Vec4& a, const Vec4& b, float s) { return Vec4(a.x + s * b.x, a.y + s * b.y, a.z + s * b.z, a.w + s * b.w); };
+    Frustum f;
+    f.planes[0] = add(r3, r0, 1);
+    f.planes[1] = add(r3, r0, -1);
+    f.planes[2] = add(r3, r1, 1);
+    f.planes[3] = add(r3, r1, -1);
+    f.planes[4] = add(r3, r2, -1);  // reversed-Z: near plane is z_ndc <= 1
+    for (auto& p : f.planes) {
+      const float n = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+      if (n > 0) p = Vec4(p.x / n, p.y / n, p.z / n, p.w / n);
+    }
+    return f;
+  }
+  bool sphereVisible(const Vec3& c, float r) const {
+    for (const auto& p : planes)
+      if (p.x * c.x + p.y * c.y + p.z * c.z + p.w < -r) return false;
+    return true;
+  }
+};
+
+// Rotation part of a matrix (columns are normalised first, so uniform/non-uniform scale is ignored).
+inline Quat quatFromMatrix(const Mat4& m) {
+  const Vec3 c0 = normalize(m.c[0].xyz()), c1 = normalize(m.c[1].xyz()), c2 = normalize(m.c[2].xyz());
+  const float m00 = c0.x, m11 = c1.y, m22 = c2.z;
+  Quat q;
+  const float tr = m00 + m11 + m22;
+  if (tr > 0) {
+    const float s = std::sqrt(tr + 1.0f) * 2.0f;
+    q = {(c1.z - c2.y) / s, (c2.x - c0.z) / s, (c0.y - c1.x) / s, 0.25f * s};
+  } else if (m00 > m11 && m00 > m22) {
+    const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f;
+    q = {0.25f * s, (c1.x + c0.y) / s, (c2.x + c0.z) / s, (c1.z - c2.y) / s};
+  } else if (m11 > m22) {
+    const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f;
+    q = {(c1.x + c0.y) / s, 0.25f * s, (c2.y + c1.z) / s, (c2.x - c0.z) / s};
+  } else {
+    const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f;
+    q = {(c2.x + c0.z) / s, (c2.y + c1.z) / s, 0.25f * s, (c0.y - c1.x) / s};
+  }
+  return normalize(q);
 }
 
 inline constexpr float radians(float deg) { return deg * (kPi / 180.0f); }

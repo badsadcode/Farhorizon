@@ -1,0 +1,315 @@
+{
+  "id": "scene.stage2_flight",
+  "name": "Stage 2 flight test - Kestrel approach",
+  "exposure": 1.0,
+  "star": {
+    "systemPosition": [
+      0,
+      0,
+      0
+    ],
+    "color": [
+      1.0,
+      0.93,
+      0.82
+    ],
+    "intensity": 3.2,
+    "angularDiameterDeg": 0.55
+  },
+  "starfield": {
+    "seed": 7741,
+    "count": 9000,
+    "brightness": 1.0,
+    "galacticPlaneTiltDeg": 28.0
+  },
+  "ambient": {
+    "skyColor": [
+      0.035,
+      0.045,
+      0.07
+    ],
+    "groundColor": [
+      0.02,
+      0.015,
+      0.012
+    ],
+    "fillDirection": [
+      0.55,
+      0.45,
+      0.7
+    ],
+    "fillColor": [
+      0.075,
+      0.035,
+      0.13
+    ],
+    "rimColor": [
+      0.2,
+      0.08,
+      0.36
+    ],
+    "rimPower": 3.5
+  },
+  "floatingOrigin": {
+    "rebaseDistance": 4096.0
+  },
+  "camera": {
+    "initialMode": "chase",
+    "fovDeg": 62.0,
+    "orbitDistance": 22.0,
+    "yawDeg": 125,
+    "pitchDeg": 14.0,
+    "autoRotateDegPerSec": 5.0
+  },
+  "player": {
+    "ship": "ship.sparrow",
+    "systemPosition": [
+      149597870700.0,
+      12000000.0,
+      -3500000000.0
+    ],
+    "rotationDeg": [
+      0,
+      0,
+      0
+    ]
+  },
+  "props": [
+    {
+      "id": "station.kestrel",
+      "name": "Kestrel Station",
+      "mesh": "mesh.station.hub",
+      "scale": 70.0,
+      "systemPosition": [
+        149597871100.0,
+        12000150.0,
+        -3500003200.0
+      ],
+      "rotationDeg": [
+        0,
+        25,
+        0
+      ],
+      "collisionRadius": 120.0,
+      "marker": "station",
+      "materialOverrides": {
+        "metal": {
+          "metallic": 0.7,
+          "roughness": 0.5
+        },
+        "metalDark": {
+          "metallic": 0.6,
+          "roughness": 0.6
+        },
+        "metalRed": {
+          "metallic": 0.3,
+          "roughness": 0.55
+        },
+        "dark": {
+          "metallic": 0.1,
+          "roughness": 0.85
+        }
+      },
+      "lights": [
+        {
+          "position": [
+            -70,
+            36,
+            -105
+          ],
+          "color": [
+            3.5,
+            0.4,
+            2.8
+          ],
+          "size": 3.0,
+          "blinkHz": 0.7,
+          "phase": 0.0,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            70,
+            36,
+            -105
+          ],
+          "color": [
+            3.5,
+            0.4,
+            2.8
+          ],
+          "size": 3.0,
+          "blinkHz": 0.7,
+          "phase": 0.5,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            -70,
+            36,
+            105
+          ],
+          "color": [
+            0.4,
+            2.6,
+            3.5
+          ],
+          "size": 3.0,
+          "blinkHz": 0.7,
+          "phase": 0.25,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            70,
+            36,
+            105
+          ],
+          "color": [
+            0.4,
+            2.6,
+            3.5
+          ],
+          "size": 3.0,
+          "blinkHz": 0.7,
+          "phase": 0.75,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            -40,
+            -35,
+            -106
+          ],
+          "color": [
+            2.4,
+            1.6,
+            0.6
+          ],
+          "size": 2.2
+        },
+        {
+          "position": [
+            0,
+            -35,
+            -106
+          ],
+          "color": [
+            2.4,
+            1.6,
+            0.6
+          ],
+          "size": 2.2
+        },
+        {
+          "position": [
+            40,
+            -35,
+            -106
+          ],
+          "color": [
+            2.4,
+            1.6,
+            0.6
+          ],
+          "size": 2.2
+        }
+      ]
+    },
+    {
+      "id": "station.kestrel.dish",
+      "name": "Kestrel comms array",
+      "mesh": "mesh.station.dish",
+      "scale": 70.0,
+      "systemPosition": [
+        149597871100.0,
+        12000213.0,
+        -3500003200.0
+      ],
+      "rotationDeg": [
+        0,
+        25,
+        0
+      ],
+      "collisionRadius": 40.0,
+      "targetable": false,
+      "marker": "none",
+      "materialOverrides": {
+        "metal": {
+          "metallic": 0.7,
+          "roughness": 0.45
+        },
+        "metalDark": {
+          "metallic": 0.6,
+          "roughness": 0.6
+        },
+        "dark": {
+          "metallic": 0.1,
+          "roughness": 0.85
+        }
+      },
+      "lights": [
+        {
+          "position": [
+            0,
+            30,
+            0
+          ],
+          "color": [
+            4.0,
+            0.3,
+            0.25
+          ],
+          "size": 2.5,
+          "blinkHz": 0.4,
+          "duty": 0.25
+        }
+      ]
+    }
+  ],
+  "asteroidFields": [
+    {
+      "id": "field.cinder",
+      "name": "Cinder Drift",
+      "systemPosition": [
+        149597863700.0,
+        11999700.0,
+        -3500004000.0
+      ],
+      "seed": 4417,
+      "count": 380,
+      "radius": 3200.0,
+      "thickness": 0.35,
+      "clusters": 7,
+      "minScale": 5.0,
+      "maxScale": 75.0,
+      "variants": 6,
+      "detail": 2,
+      "roughness": 0.38,
+      "color": [
+        0.32,
+        0.28,
+        0.25
+      ]
+    }
+  ],
+  "sky": {
+    "baseColor": [
+      0.002,
+      0.0012,
+      0.004
+    ],
+    "bandColor": [
+      0.02,
+      0.014,
+      0.03
+    ],
+    "bandIntensity": 1.1,
+    "nebulaColor": [
+      0.03,
+      0.006,
+      0.028
+    ],
+    "nebulaStrength": 1.0
+  }
+}

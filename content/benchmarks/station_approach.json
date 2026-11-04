@@ -1,0 +1,8 @@
+{
+  "id": "bench.station_approach",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "player": { "systemPosition": [149597871560.0, 12000180.0, -3500002850.0], "rotationDeg": [-3, 53, 0] },
+  "autofly": { "throttle": 0.12, "rotation": [0.0, 0.04, 0.0] }
+}

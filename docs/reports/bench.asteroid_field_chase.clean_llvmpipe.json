@@ -1,0 +1,14 @@
+{
+  "avgCpuMs": 84.69976234188037,
+  "avgFps": 11.806408570116414,
+  "avgGpuMs": 82.51357253846155,
+  "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "drawCalls": 32,
+  "frames": 117,
+  "maxCpuMs": 128.572349,
+  "maxGpuMs": 144.958331,
+  "minCpuMs": 67.42872299999999,
+  "p99CpuMs": 105.367216,
+  "scenario": "bench.asteroid_field_chase",
+  "triangles": 37103
+}

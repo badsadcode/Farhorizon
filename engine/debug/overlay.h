@@ -21,6 +21,9 @@ class OverlayBuilder {
  public:
   void clear() { vertices_.clear(); }
   void rect(float x, float y, float w, float h, OverlayColor c);
+  void line(float x0, float y0, float x1, float y1, float thickness, OverlayColor c);
+  void circle(float cx, float cy, float radius, float thickness, OverlayColor c, int segments = 32);
+  void triangle(float x0, float y0, float x1, float y1, float x2, float y2, OverlayColor c);
   // Draws text at pixel position; returns the height used. `scale` multiplies the 7px font.
   float text(float x, float y, const std::string& s, OverlayColor c, float scale = 2.0f);
   static float textWidth(const std::string& s, float scale = 2.0f);

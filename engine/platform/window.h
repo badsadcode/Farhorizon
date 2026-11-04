@@ -23,6 +23,10 @@ class Window {
   void toggleFullscreen();
   bool isFullscreen() const;
   bool isMinimized() const;
+  bool hasFocus() const;
+  // Relative mouse mode: hides the cursor and reports unbounded motion (mouse steering).
+  void setRelativeMouse(bool on);
+  bool relativeMouse() const;
 
   // Drawable size in pixels (may differ from window size on high-DPI displays).
   void pixelSize(int& w, int& h) const;

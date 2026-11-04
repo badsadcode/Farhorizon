@@ -6,8 +6,47 @@
       "source": "models/ships/sparrow_placeholder.glb",
       "license": "CC0 1.0 - Kenney Space Kit 'craft_cargoA' (kenney.nl). PLACEHOLDER until the real Sparrow model exists."
     },
-    "ship.sparrow": { "type": "ship", "source": "ships/ship_sparrow.json" },
-    "scene.stage1_showcase": { "type": "scene", "source": "scenes/stage1_showcase.scene.json" },
-    "config.input": { "type": "config", "source": "config/input.json" }
+    "mesh.station.hub": {
+      "type": "mesh",
+      "source": "models/stations/station_hub_placeholder.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'hangar_largeA' (kenney.nl). PLACEHOLDER station proxy."
+    },
+    "mesh.station.dish": {
+      "type": "mesh",
+      "source": "models/stations/station_dish_placeholder.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'satelliteDish_large' (kenney.nl). PLACEHOLDER station proxy."
+    },
+    "ship.sparrow": {
+      "type": "ship",
+      "source": "ships/ship_sparrow.json"
+    },
+    "scene.stage1_showcase": {
+      "type": "scene",
+      "source": "scenes/stage1_showcase.scene.json"
+    },
+    "scene.stage2_flight": {
+      "type": "scene",
+      "source": "scenes/stage2_flight.scene.json"
+    },
+    "bench.empty_space_cockpit": {
+      "type": "benchmark",
+      "source": "benchmarks/empty_space_cockpit.json"
+    },
+    "bench.asteroid_field_chase": {
+      "type": "benchmark",
+      "source": "benchmarks/asteroid_field_chase.json"
+    },
+    "config.input": {
+      "type": "config",
+      "source": "config/input.json"
+    },
+    "visuals.post_profiles": {
+      "type": "visuals",
+      "source": "visuals/post_profiles.json"
+    },
+    "bench.station_approach": {
+      "type": "benchmark",
+      "source": "benchmarks/station_approach.json"
+    }
   }
 }

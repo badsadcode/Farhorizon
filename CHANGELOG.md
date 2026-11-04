@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 — Stage 2: ship flight, plus a retro 80s look (2026-11-04)
+* 6DOF flight model (assist on/off, precision/cruise/boost, energy-limited boost), driven entirely
+  by ship JSON. Deterministic and unit-tested.
+* Keyboard and mouse virtual-stick controls. Mouse capture toggles on Esc; quit moved to F10.
+* Chase and cockpit cameras; developer orbit/free cameras moved to F2.
+* HUD: reticle, prograde/retrograde, speed/set-speed, throttle and boost bars, navigation markers,
+  target bracket with range and range rate, off-screen arrows, impact/proximity warnings.
+* Targeting (cycle, nearest asteroid, clear).
+* Procedural asteroid meshes and deterministic clustered fields (instanced, frustum culled);
+  station proxy from CC0 Kenney pieces; sphere collisions.
+* The floating origin follows the player ship; static bodies are recomputed from double positions.
+* glTF socket import (`socket_*`, `hardpoint_*`) with ship-JSON fallbacks.
+* Renderer: HDR target, bloom, final composite with colour grading and lens/film effects;
+  instanced mesh pipeline; additive glow sprites (engine exhaust, running lights); data-driven
+  sky, fill and rim lighting.
+* Data-driven looks (`content/visuals/post_profiles.json`): **Retro 80s** (default) and **Clean**,
+  each with its own HUD palette. F4 cycles, `--look` selects.
+* Data-driven benchmark paths (`content/benchmarks/`): empty-space cockpit, asteroid field chase,
+  station approach.
+* New schemas: ship (extended), scene (player/props/asteroidFields/sky), visuals, benchmark, input
+  (mouse). `tools/asset_tools/repair_kenney_glb.py` fixes the kit's invalid scene roots.
+* CI: the Windows job installs the Vulkan SDK with the official LunarG installer.
+
 ## 0.1.0 — Stage 0 + Stage 1 engineering spike (2026-11-04)
 * CMake/C++20 project skeleton with the `fh_core` (GPU-free) / `fh_engine` / `farhorizon` split.
   Warnings on, optional sanitizers.

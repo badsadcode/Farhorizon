@@ -1,18 +1,15 @@
-# Scene definition
+# Scene definition (`content/scenes/*.scene.json`)
 
-| Field | Type | Notes |
-|---|---|---|
-| `id`, `name` | string | required |
-| `exposure` | number | scene exposure multiplier (default 1) |
-| `star.systemPosition` | [x,y,z] metres (double) | system primary, normally `[0,0,0]` |
-| `star.color` | [r,g,b] linear | |
-| `star.intensity` | number | directional light multiplier |
-| `star.angularDiameterDeg` | number | apparent disc size |
-| `starfield.seed` | integer | required if `starfield` is present; generation is deterministic on every platform |
-| `starfield.count` | integer ≤ 200000 | |
-| `starfield.brightness` | number | |
-| `starfield.galacticPlaneTiltDeg` | number | orientation of the galactic band |
-| `ambient.skyColor` / `ambient.groundColor` | [r,g,b] linear | hemispheric ambient: star-facing / away-facing |
-| `floatingOrigin.rebaseDistance` | metres | see ADR 0002 |
-| `camera.fovDeg`, `orbitDistance`, `yawDeg`, `pitchDeg` (elevation), `autoRotateDegPerSec` | numbers | initial developer camera |
-| `objects[]` | `{ ship: AssetID, systemPosition: [x,y,z], rotationDeg: [x,y,z] }` | the first object anchors the initial floating origin |
+| Field | Notes |
+|---|---|
+| `id`, `name` | required |
+| `exposure` | exposure multiplier applied before tonemapping |
+| `star` | `systemPosition` (double metres), `color` (linear), `intensity`, `angularDiameterDeg` |
+| `starfield` | `seed` (required), `count` ≤ 200000, `brightness`, `galacticPlaneTiltDeg` |
+| `sky` | `baseColor`, `bandColor`, `bandIntensity`, `nebulaColor`, `nebulaStrength` (procedural sky colours) |
+| `ambient` | `skyColor` / `groundColor` (hemispheric, star-facing / away), `fillDirection` + `fillColor` (soft coloured fill light), `rimColor` + `rimPower` (edge light) |
+| `floatingOrigin.rebaseDistance` | metres, within [100, 100000] (ADR 0002) |
+| `camera` | `initialMode` (chase, cockpit, orbit, free), plus developer camera `fovDeg`, `orbitDistance`, `yawDeg`, `pitchDeg` (elevation), `autoRotateDegPerSec` |
+| `player` | `{ ship: AssetID, systemPosition, rotationDeg }`; the start pose also anchors the initial floating origin |
+| `props[]` | `{ id, name, mesh, scale, systemPosition, rotationDeg, spinAxis, spinDegPerSec, collisionRadius, targetable, marker, materialOverrides, lights[] }`. `marker` is the HUD category: `station`, or `none` to hide. Light positions are in scaled prop space. |
+| `asteroidFields[]` | `{ id, name, systemPosition, seed, count ≤ 20000, radius, thickness, clusters, minScale, maxScale, variants 1–16, detail 0–4, roughness, color }`. Rock meshes and placement are generated deterministically from the seed. |

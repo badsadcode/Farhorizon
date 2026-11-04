@@ -36,6 +36,10 @@ add_library(fh_core STATIC
   engine/render/starfield.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
+  game/content/visual_profile.cpp
+  game/ships/flight_model.cpp
+  game/world/asteroid_gen.cpp
+  game/world/space_world.cpp
 )
 target_include_directories(fh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fh_core PUBLIC fh_third_party)
@@ -59,12 +63,17 @@ if(FH_BUILD_GAME)
     shaders/sky.vert shaders/sky.frag
     shaders/stars.vert shaders/stars.frag
     shaders/mesh.vert shaders/mesh.frag
-    shaders/overlay.vert shaders/overlay.frag)
+    shaders/overlay.vert shaders/overlay.frag
+    shaders/tonemap.vert shaders/tonemap.frag
+    shaders/bloom_down.frag shaders/bloom_blur.frag
+    shaders/glow.vert shaders/glow.frag)
 
   add_executable(farhorizon
     game/main.cpp
-    game/showcase_app.cpp
-    game/camera.cpp
+    game/game_app.cpp
+    game/camera_rig.cpp
+    game/ship_controller.cpp
+    game/hud.cpp
   )
   target_link_libraries(farhorizon PRIVATE fh_engine)
   add_dependencies(farhorizon fh_shaders)
@@ -93,10 +102,13 @@ if(FH_BUILD_TESTS)
     tests/unit/test_assets.cpp
     tests/unit/test_content.cpp
     tests/unit/test_starfield.cpp
+    tests/unit/test_flight.cpp
+    tests/unit/test_world.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE
-    FH_TEST_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content")
+    FH_TEST_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content"
+    FH_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data")
   fh_set_warnings(fh_unit_tests)
   add_test(NAME unit COMMAND fh_unit_tests)
   add_test(NAME content COMMAND content_validator ${CMAKE_CURRENT_SOURCE_DIR}/content)

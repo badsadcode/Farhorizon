@@ -9,7 +9,6 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 0) uniform sampler2D baseColorTex;
 
 layout(push_constant) uniform Push {
-  mat4 model;
   vec4 baseColor;
   vec4 emissiveMetallic;
   vec4 params;
@@ -58,7 +57,12 @@ void main() {
   float hemi = dot(N, L) * 0.5 + 0.5;
   vec3 ambient = mix(frame.ambientGround.rgb, frame.ambientSkyTime.rgb, hemi);
   vec3 ambientSpec = F_Schlick(NoV, f0) * ambient * (1.0 - rough * 0.7);
-  vec3 color = direct + ambient * diffuseColor + ambientSpec + pc.emissiveMetallic.rgb;
+  // Soft fill light (wrapped diffuse) and rim light keep silhouettes readable on the shadow side.
+  float wrap = clamp((dot(N, frame.fillDir.xyz) + 0.4) / 1.4, 0.0, 1.0);
+  vec3 fill = frame.fillColor.rgb * wrap * (diffuseColor + f0 * 0.5);
+  float rim = pow(1.0 - NoV, max(frame.rimColorPower.a, 0.5));
+  vec3 rimLight = frame.rimColorPower.rgb * rim * (1.0 - 0.6 * NoL);
+  vec3 color = direct + fill + rimLight + ambient * diffuseColor + ambientSpec + pc.emissiveMetallic.rgb;
 
-  outColor = vec4(tonemapACES(color * frame.sunColorExp.w), base.a);
+  outColor = vec4(color, base.a);  // linear HDR radiance
 }

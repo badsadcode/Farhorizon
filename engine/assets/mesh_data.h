@@ -37,12 +37,20 @@ struct SubMesh {
   int material = -1;                 // index into MeshData::materials, -1 = default
 };
 
+// Named attachment point (pilot seat, airlock, hardpoints...) in mesh space.
+struct MeshSocket {
+  std::string name;
+  Vec3 position;
+  Quat rotation;
+};
+
 struct MeshData {
   std::vector<MeshVertex> vertices;
   std::vector<std::uint32_t> indices;
   std::vector<SubMesh> submeshes;
   std::vector<MaterialData> materials;
   std::vector<ImageRGBA8> images;
+  std::vector<MeshSocket> sockets;
   Vec3 boundsMin{0, 0, 0};
   Vec3 boundsMax{0, 0, 0};
 

@@ -20,16 +20,31 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 ambientSkyTime;
   Vec4 ambientGround;
   Vec4 viewport;
+  Vec4 camRight;
+  Vec4 camUp;
+  Vec4 skyBase;
+  Vec4 skyBand;
+  Vec4 skyNebula;
+  Vec4 fillDir;
+  Vec4 fillColor;
+  Vec4 rimColorPower;
 };
-static_assert(sizeof(FrameUniforms) == 208);
+static_assert(sizeof(FrameUniforms) == 336);
 
-struct MeshPush {  // must match mesh.vert / mesh.frag push constants
-  Mat4 model;
+struct MeshPush {  // must match mesh.frag push constants
   Vec4 baseColor;
   Vec4 emissiveMetallic;
   Vec4 params;
 };
-static_assert(sizeof(MeshPush) == 112);
+static_assert(sizeof(MeshPush) == 48);
+
+struct PostPush {  // must match tonemap.frag
+  Vec4 shadowTintSat;
+  Vec4 highlightTintCon;
+  Vec4 lens;
+  Vec4 misc;
+};
+static_assert(sizeof(PostPush) == 64);
 
 enum class Blend { None, Additive, Alpha };
 
@@ -143,6 +158,8 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
   si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   si.maxLod = VK_LOD_CLAMP_NONE;
   VK_CHECK(vkCreateSampler(ctx_.device(), &si, nullptr, &sampler_));
+  si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  VK_CHECK(vkCreateSampler(ctx_.device(), &si, nullptr, &clampSampler_));
 
   const std::uint8_t white[4] = {255, 255, 255, 255};
   whiteTexture_ = gpu::createTextureRGBA8(ctx_, white, 1, 1);
@@ -169,7 +186,7 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
     qi.queryCount = 2 * VkContext::kFramesInFlight;
     VK_CHECK(vkCreateQueryPool(ctx_.device(), &qi, nullptr, &queryPool_));
   }
-  ensureDepth();
+  ensureTargets();
 }
 
 Renderer::~Renderer() {
@@ -179,14 +196,23 @@ Renderer::~Renderer() {
   for (auto& f : frames_) {
     gpu::destroy(ctx_, f.uniforms);
     gpu::destroy(ctx_, f.overlayVertices);
+    gpu::destroy(ctx_, f.instances);
+    gpu::destroy(ctx_, f.glows);
   }
+  gpu::destroy(ctx_, hdr_);
+  gpu::destroy(ctx_, bloomA_);
+  gpu::destroy(ctx_, bloomB_);
   gpu::destroy(ctx_, whiteTexture_);
   gpu::destroy(ctx_, depth_);
   VkDevice d = ctx_.device();
   if (queryPool_) vkDestroyQueryPool(d, queryPool_, nullptr);
   vkDestroySampler(d, sampler_, nullptr);
-  for (VkPipeline p : {skyPipeline_, starPipeline_, meshPipeline_, overlayPipeline_}) vkDestroyPipeline(d, p, nullptr);
-  for (VkPipelineLayout l : {scenePipelineLayout_, meshPipelineLayout_, overlayPipelineLayout_})
+  vkDestroySampler(d, clampSampler_, nullptr);
+  for (VkPipeline p : {skyPipeline_, starPipeline_, meshPipeline_, overlayPipeline_, tonemapPipeline_,
+                       bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_})
+    vkDestroyPipeline(d, p, nullptr);
+  for (VkPipelineLayout l : {scenePipelineLayout_, meshPipelineLayout_, overlayPipelineLayout_, tonemapPipelineLayout_,
+                             bloomPipelineLayout_})
     vkDestroyPipelineLayout(d, l, nullptr);
   vkDestroyDescriptorPool(d, descriptorPool_, nullptr);
   vkDestroyDescriptorSetLayout(d, frameLayout_, nullptr);
@@ -231,7 +257,8 @@ VkShaderModule Renderer::loadShader(const char* name) {
 
 void Renderer::createPipelines() {
   VkDevice d = ctx_.device();
-  const VkFormat color = ctx_.swapchainFormat();
+  const VkFormat color = kHdrFormat;  // scene passes render to the HDR target
+  const VkFormat swap = ctx_.swapchainFormat();
 
   VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   li.setLayoutCount = 1;
@@ -239,12 +266,29 @@ void Renderer::createPipelines() {
   VK_CHECK(vkCreatePipelineLayout(d, &li, nullptr, &scenePipelineLayout_));
 
   const VkDescriptorSetLayout meshSets[] = {frameLayout_, materialLayout_};
-  VkPushConstantRange meshPush{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPush)};
+  VkPushConstantRange meshPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPush)};
   li.setLayoutCount = 2;
   li.pSetLayouts = meshSets;
   li.pushConstantRangeCount = 1;
   li.pPushConstantRanges = &meshPush;
   VK_CHECK(vkCreatePipelineLayout(d, &li, nullptr, &meshPipelineLayout_));
+  {
+    const VkDescriptorSetLayout tonemapSets[] = {frameLayout_, materialLayout_, materialLayout_};  // frame, HDR, bloom
+    VkPushConstantRange postPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostPush)};
+    VkPipelineLayoutCreateInfo tl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    tl.setLayoutCount = 3;
+    tl.pSetLayouts = tonemapSets;
+    tl.pushConstantRangeCount = 1;
+    tl.pPushConstantRanges = &postPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &tl, nullptr, &tonemapPipelineLayout_));
+    VkPushConstantRange bloomPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Vec4)};
+    VkPipelineLayoutCreateInfo bl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    bl.setLayoutCount = 1;
+    bl.pSetLayouts = &materialLayout_;
+    bl.pushConstantRangeCount = 1;
+    bl.pPushConstantRanges = &bloomPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &bl, nullptr, &bloomPipelineLayout_));
+  }
 
   VkPushConstantRange overlayPush{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2};
   li.setLayoutCount = 0;
@@ -279,16 +323,31 @@ void Renderer::createPipelines() {
   stars.attributes = {{0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0}, {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16}};
   starPipeline_ = buildPipeline(d, stars, color, kDepthFormat);
 
+  PipelineDesc glow;
+  glow.vert = load("glow.vert");
+  glow.frag = load("glow.frag");
+  glow.layout = scenePipelineLayout_;
+  glow.blend = Blend::Additive;
+  glow.depthTest = true;  // occluded by hulls, but never writes depth
+  glow.bindings = {{0, sizeof(GlowSprite), VK_VERTEX_INPUT_RATE_INSTANCE}};
+  glow.attributes = {{0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0}, {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16}};
+  glowPipeline_ = buildPipeline(d, glow, color, kDepthFormat);
+
   PipelineDesc mesh;
   mesh.vert = load("mesh.vert");
   mesh.frag = load("mesh.frag");
   mesh.layout = meshPipelineLayout_;
   mesh.depthTest = mesh.depthWrite = true;
   mesh.cull = VK_CULL_MODE_BACK_BIT;
-  mesh.bindings = {{0, sizeof(MeshVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
+  mesh.bindings = {{0, sizeof(MeshVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+                   {1, sizeof(Mat4), VK_VERTEX_INPUT_RATE_INSTANCE}};
   mesh.attributes = {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MeshVertex, position)},
                      {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MeshVertex, normal)},
-                     {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(MeshVertex, uv)}};
+                     {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(MeshVertex, uv)},
+                     {3, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
+                     {4, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+                     {5, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 32},
+                     {6, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 48}};
   meshPipeline_ = buildPipeline(d, mesh, color, kDepthFormat);
 
   PipelineDesc overlay;
@@ -298,26 +357,56 @@ void Renderer::createPipelines() {
   overlay.blend = Blend::Alpha;
   overlay.bindings = {{0, sizeof(OverlayVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
   overlay.attributes = {{0, 0, VK_FORMAT_R32G32_SFLOAT, 0}, {1, 0, VK_FORMAT_R8G8B8A8_UNORM, 8}};
-  overlayPipeline_ = buildPipeline(d, overlay, color, kDepthFormat);
-  log::info("render", "pipelines created (sky, stars, mesh, overlay)");
+  overlayPipeline_ = buildPipeline(d, overlay, swap, VK_FORMAT_UNDEFINED);
+
+  PipelineDesc tonemap;
+  tonemap.vert = load("tonemap.vert");
+  tonemap.frag = load("tonemap.frag");
+  tonemap.layout = tonemapPipelineLayout_;
+  tonemapPipeline_ = buildPipeline(d, tonemap, swap, VK_FORMAT_UNDEFINED);
+
+  PipelineDesc bloomDown;
+  bloomDown.vert = tonemap.vert;
+  bloomDown.frag = load("bloom_down.frag");
+  bloomDown.layout = bloomPipelineLayout_;
+  bloomDownPipeline_ = buildPipeline(d, bloomDown, kHdrFormat, VK_FORMAT_UNDEFINED);
+  PipelineDesc bloomBlur = bloomDown;
+  bloomBlur.frag = load("bloom_blur.frag");
+  bloomBlurPipeline_ = buildPipeline(d, bloomBlur, kHdrFormat, VK_FORMAT_UNDEFINED);
+  log::info("render", "pipelines created (sky, stars, mesh, bloom, tonemap, overlay)");
 }
 
-void Renderer::ensureDepth() {
+void Renderer::ensureTargets() {
   const VkExtent2D e = ctx_.swapchainExtent();
   if (depth_.image && depth_.extent.width == e.width && depth_.extent.height == e.height) return;
   vkDeviceWaitIdle(ctx_.device());
   gpu::destroy(ctx_, depth_);
+  gpu::destroy(ctx_, hdr_);
   depth_ = gpu::createImage(ctx_, e, kDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+  hdr_ = gpu::createImage(ctx_, e, kHdrFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                          VK_IMAGE_ASPECT_COLOR_BIT);
+  gpu::destroy(ctx_, bloomA_);
+  gpu::destroy(ctx_, bloomB_);
+  const VkExtent2D be{std::max(1u, e.width / 4), std::max(1u, e.height / 4)};
+  bloomA_ = gpu::createImage(ctx_, be, kHdrFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                             VK_IMAGE_ASPECT_COLOR_BIT);
+  bloomB_ = gpu::createImage(ctx_, be, kHdrFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                             VK_IMAGE_ASPECT_COLOR_BIT);
+  for (VkDescriptorSet* set : {&tonemapSet_, &bloomSetA_, &bloomSetB_})
+    if (*set) vkFreeDescriptorSets(ctx_.device(), descriptorPool_, 1, set);
+  tonemapSet_ = allocateMaterialSet(hdr_.view, clampSampler_);  // same layout: one combined image sampler
+  bloomSetA_ = allocateMaterialSet(bloomA_.view, clampSampler_);
+  bloomSetB_ = allocateMaterialSet(bloomB_.view, clampSampler_);
 }
 
-VkDescriptorSet Renderer::allocateMaterialSet(VkImageView view) {
+VkDescriptorSet Renderer::allocateMaterialSet(VkImageView view, VkSampler sampler) {
   VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   ai.descriptorPool = descriptorPool_;
   ai.descriptorSetCount = 1;
   ai.pSetLayouts = &materialLayout_;
   VkDescriptorSet set;
   VK_CHECK(vkAllocateDescriptorSets(ctx_.device(), &ai, &set));
-  VkDescriptorImageInfo ii{sampler_, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo ii{sampler ? sampler : sampler_, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
   w.dstSet = set;
   w.descriptorCount = 1;
@@ -377,10 +466,11 @@ void Renderer::setStarfield(const std::vector<StarInstance>& stars) {
 }
 
 bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem>& items,
-                      const std::vector<OverlayVertex>& overlay, const std::filesystem::path* screenshotPath) {
+                      const std::vector<GlowSprite>& glows, const std::vector<OverlayVertex>& overlay,
+                      const std::filesystem::path* screenshotPath) {
   std::uint32_t imageIndex = 0;
   if (!ctx_.beginFrame(imageIndex)) return false;
-  ensureDepth();
+  ensureTargets();
   const std::uint32_t fi = ctx_.frameIndex();
   FrameResources& fr = frames_[fi];
   const VkExtent2D extent = ctx_.swapchainExtent();
@@ -404,6 +494,15 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.ambientSkyTime = Vec4(p.ambientSky, p.timeSeconds);
   u.ambientGround = Vec4(p.ambientGround, p.galacticTiltRadians);
   u.viewport = Vec4(float(extent.width), float(extent.height), 1.0f / float(extent.width), 1.0f / float(extent.height));
+  // Rows of the rotation-only view matrix are the camera axes in render space.
+  u.camRight = Vec4(p.viewRotation.at(0, 0), p.viewRotation.at(0, 1), p.viewRotation.at(0, 2), 0);
+  u.camUp = Vec4(p.viewRotation.at(1, 0), p.viewRotation.at(1, 1), p.viewRotation.at(1, 2), 0);
+  u.skyBase = Vec4(p.skyBase, 0);
+  u.skyBand = Vec4(p.skyBand, p.skyBandIntensity);
+  u.skyNebula = Vec4(p.skyNebula, p.skyNebulaStrength);
+  u.fillDir = Vec4(normalize(p.fillDirection), 0);
+  u.fillColor = Vec4(p.fillColor, 0);
+  u.rimColorPower = Vec4(p.rimColor, p.rimPower);
   std::memcpy(fr.uniforms.mapped, &u, sizeof(u));
 
   // ---- Overlay vertices (grow buffer as needed; this slot's GPU work is complete) ----
@@ -414,6 +513,28 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                                            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
   }
   if (overlayBytes) std::memcpy(fr.overlayVertices.mapped, overlay.data(), overlayBytes);
+
+  // ---- Instances: group items by mesh so each submesh is one instanced draw ----
+  drawOrder_.resize(items.size());
+  for (std::uint32_t i = 0; i < items.size(); ++i) drawOrder_[i] = i;
+  std::stable_sort(drawOrder_.begin(), drawOrder_.end(),
+                   [&](std::uint32_t a, std::uint32_t b) { return items[a].mesh < items[b].mesh; });
+  instanceScratch_.clear();
+  for (std::uint32_t i : drawOrder_) instanceScratch_.push_back(items[i].model);
+  const VkDeviceSize instanceBytes = instanceScratch_.size() * sizeof(Mat4);
+  if (instanceBytes > fr.instances.size) {
+    gpu::destroy(ctx_, fr.instances);
+    fr.instances = gpu::createBuffer(ctx_, std::max<VkDeviceSize>(instanceBytes * 2, 64 * 1024),
+                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
+  }
+  if (instanceBytes) std::memcpy(fr.instances.mapped, instanceScratch_.data(), instanceBytes);
+  const VkDeviceSize glowBytes = glows.size() * sizeof(GlowSprite);
+  if (glowBytes > fr.glows.size) {
+    gpu::destroy(ctx_, fr.glows);
+    fr.glows = gpu::createBuffer(ctx_, std::max<VkDeviceSize>(glowBytes * 2, 16 * 1024),
+                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
+  }
+  if (glowBytes) std::memcpy(fr.glows.mapped, glows.data(), glowBytes);
 
   const bool wantShot = screenshotPath && ctx_.swapchainSupportsTransferSrc();
   if (screenshotPath && !wantShot) log::warn("render", "screenshot unsupported: swapchain lacks TRANSFER_SRC usage");
@@ -433,8 +554,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   }
 
   const VkImage swapImage = ctx_.swapchainImage(imageIndex);
-  gpu::imageBarrier(cmd, swapImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+  gpu::imageBarrier(cmd, hdr_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
   gpu::imageBarrier(cmd, depth_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
@@ -444,7 +565,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                     VK_IMAGE_ASPECT_DEPTH_BIT);
 
   VkRenderingAttachmentInfo colorAtt{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-  colorAtt.imageView = ctx_.swapchainView(imageIndex);
+  colorAtt.imageView = hdr_.view;
   colorAtt.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -489,30 +610,129 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     st.stars = starCount_;
   }
 
-  // Meshes
+  // Meshes (instanced per mesh group)
   if (!items.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
-    for (const auto& item : items) {
-      if (item.mesh >= meshes_.size()) continue;
-      const GpuMesh& m = meshes_[item.mesh];
-      VkDeviceSize off = 0;
-      vkCmdBindVertexBuffers(cmd, 0, 1, &m.vertices.buffer, &off);
-      vkCmdBindIndexBuffer(cmd, m.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-      for (const auto& sm : m.submeshes) {
-        const size_t matIndex =
-            (sm.material >= 0 && size_t(sm.material) + 1 < m.materials.size()) ? size_t(sm.material) : m.materials.size() - 1;
-        const GpuMaterial& mat = m.materials[matIndex];
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 1, 1, &mat.set, 0, nullptr);
-        MeshPush push{item.model, mat.baseColor, Vec4(mat.emissive, mat.metallic), Vec4(mat.roughness, 0, 0, 0)};
-        vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                           sizeof(push), &push);
-        vkCmdDrawIndexed(cmd, sm.indexCount, 1, sm.firstIndex, 0, 0);
-        ++st.drawCalls;
-        st.triangles += sm.indexCount / 3;
+    std::uint32_t begin = 0;
+    while (begin < drawOrder_.size()) {
+      const MeshHandle handle = items[drawOrder_[begin]].mesh;
+      std::uint32_t end = begin;
+      while (end < drawOrder_.size() && items[drawOrder_[end]].mesh == handle) ++end;
+      const std::uint32_t count = end - begin;
+      if (handle < meshes_.size()) {
+        const GpuMesh& m = meshes_[handle];
+        const VkBuffer buffers[2] = {m.vertices.buffer, fr.instances.buffer};
+        const VkDeviceSize offsets[2] = {0, VkDeviceSize(begin) * sizeof(Mat4)};
+        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+        vkCmdBindIndexBuffer(cmd, m.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+        for (const auto& sm : m.submeshes) {
+          const size_t matIndex = (sm.material >= 0 && size_t(sm.material) + 1 < m.materials.size())
+                                      ? size_t(sm.material)
+                                      : m.materials.size() - 1;
+          const GpuMaterial& mat = m.materials[matIndex];
+          vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 1, 1, &mat.set, 0,
+                                  nullptr);
+          MeshPush push{mat.baseColor, Vec4(mat.emissive, mat.metallic), Vec4(mat.roughness, 0, 0, 0)};
+          vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+          vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, 0);
+          ++st.drawCalls;
+          st.triangles += std::uint64_t(sm.indexCount / 3) * count;
+        }
+        st.meshInstances += count;
       }
+      begin = end;
     }
   }
+
+  // Glow sprites (additive, depth-tested against hulls, after opaque geometry)
+  if (!glows.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, glowPipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &fr.glows.buffer, &off);
+    vkCmdDraw(cmd, 6, static_cast<std::uint32_t>(glows.size()), 0, 0);
+    ++st.drawCalls;
+  }
+
+  vkCmdEndRendering(cmd);
+
+  // ---- Tonemap HDR -> swapchain, then overlay ----
+  gpu::imageBarrier(cmd, hdr_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  // ---- Bloom: bright-pass downsample, then separable blur ping-pong at quarter resolution ----
+  const PostProcessParams& pp = p.post;
+  VkDescriptorSet bloomSet = tonemapSet_;  // any readable image; contributes nothing at strength 0
+  if (pp.bloomStrength > 0.0f) {
+    const VkExtent2D be = bloomA_.extent;
+    auto bloomPass = [&](GpuImage& target, VkPipeline pipeline, VkDescriptorSet src, const Vec4& push) {
+      gpu::imageBarrier(cmd, target.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+      VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      att.imageView = target.view;
+      att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+      att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      VkRenderingInfo bri{VK_STRUCTURE_TYPE_RENDERING_INFO};
+      bri.renderArea = {{0, 0}, be};
+      bri.layerCount = 1;
+      bri.colorAttachmentCount = 1;
+      bri.pColorAttachments = &att;
+      vkCmdBeginRendering(cmd, &bri);
+      VkViewport bvp{0, 0, float(be.width), float(be.height), 0.0f, 1.0f};
+      VkRect2D bsc{{0, 0}, be};
+      vkCmdSetViewport(cmd, 0, 1, &bvp);
+      vkCmdSetScissor(cmd, 0, 1, &bsc);
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloomPipelineLayout_, 0, 1, &src, 0, nullptr);
+      vkCmdPushConstants(cmd, bloomPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Vec4), &push);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      vkCmdEndRendering(cmd);
+      gpu::imageBarrier(cmd, target.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+      ++st.drawCalls;
+    };
+    bloomPass(bloomA_, bloomDownPipeline_, tonemapSet_,
+              Vec4(pp.bloomThreshold, std::max(1e-3f, pp.bloomKnee), 1.0f / float(extent.width),
+                   1.0f / float(extent.height)));
+    const int iterations = std::clamp(pp.bloomIterations, 1, 4);
+    for (int i = 0; i < iterations; ++i) {
+      const float r = pp.bloomRadius;  // repeated constant-width blur widens smoothly (no ringing)
+      bloomPass(bloomB_, bloomBlurPipeline_, bloomSetA_, Vec4(r / float(be.width), 0, 0, 0));
+      bloomPass(bloomA_, bloomBlurPipeline_, bloomSetB_, Vec4(0, r / float(be.height), 0, 0));
+    }
+    bloomSet = bloomSetA_;
+  }
+
+  gpu::imageBarrier(cmd, swapImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+  VkRenderingAttachmentInfo swapAtt{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  swapAtt.imageView = ctx_.swapchainView(imageIndex);
+  swapAtt.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  swapAtt.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;  // the fullscreen tonemap writes every pixel
+  swapAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  VkRenderingInfo ri2{VK_STRUCTURE_TYPE_RENDERING_INFO};
+  ri2.renderArea = {{0, 0}, extent};
+  ri2.layerCount = 1;
+  ri2.colorAttachmentCount = 1;
+  ri2.pColorAttachments = &swapAtt;
+  vkCmdBeginRendering(cmd, &ri2);
+  vkCmdSetViewport(cmd, 0, 1, &vp);
+  vkCmdSetScissor(cmd, 0, 1, &sc);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipeline_);
+  const VkDescriptorSet tonemapSets[3] = {fr.frameSet, tonemapSet_, bloomSet};
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipelineLayout_, 0, 3, tonemapSets, 0, nullptr);
+  const PostPush post{Vec4(pp.shadowTint, pp.saturation), Vec4(pp.highlightTint, pp.contrast),
+                      Vec4(pp.vignette, pp.scanlines, pp.scanlinePeriod, pp.chromaticAberration),
+                      Vec4(pp.grain, pp.bloomStrength, p.timeSeconds, 0.0f)};
+  vkCmdPushConstants(cmd, tonemapPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(post), &post);
+  vkCmdDraw(cmd, 3, 1, 0, 0);
+  ++st.drawCalls;
 
   // Overlay
   if (!overlay.empty()) {

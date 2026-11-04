@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <string_view>
 
 #include "engine/assets/image_io.h"
 #include "engine/core/file_io.h"
@@ -178,6 +179,11 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
     float local[16];
     cgltf_node_transform_local(node, local);
     const Mat4 world = parent * toMat4(local);
+    if (node->name) {
+      const std::string_view n(node->name);
+      if (n.rfind("socket_", 0) == 0 || n.rfind("hardpoint_", 0) == 0)
+        mesh.sockets.push_back({std::string(n), world.transformPoint({0, 0, 0}), quatFromMatrix(world)});
+    }
     if (node->mesh)
       for (cgltf_size p = 0; p < node->mesh->primitives_count; ++p)
         if (!appendPrimitive(node->mesh->primitives[p], world)) return false;
@@ -201,9 +207,9 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
   }
   mesh.boundsMin = bmin;
   mesh.boundsMax = bmax;
-  log::info("gltf", "loaded '{}': {} verts, {} tris, {} submeshes, {} materials, {} images", pathStr,
-            mesh.vertices.size(), mesh.triangleCount(), mesh.submeshes.size(), mesh.materials.size(),
-            mesh.images.size());
+  log::info("gltf", "loaded '{}': {} verts, {} tris, {} submeshes, {} materials, {} images, {} sockets",
+            pathStr, mesh.vertices.size(), mesh.triangleCount(), mesh.submeshes.size(), mesh.materials.size(),
+            mesh.images.size(), mesh.sockets.size());
   return mesh;
 }
 

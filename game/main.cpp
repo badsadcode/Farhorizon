@@ -1,4 +1,4 @@
-// FARHORIZON entry point. Parses developer flags and runs the Stage 1 showcase.
+// FARHORIZON entry point. Parses developer flags and runs the game.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -9,7 +9,7 @@
 #include <SDL3/SDL_main.h>
 
 #include "engine/core/log.h"
-#include "game/showcase_app.h"
+#include "game/game_app.h"
 
 namespace {
 void printUsage() {
@@ -17,15 +17,18 @@ void printUsage() {
       "farhorizon [options]\n"
       "  --content <dir>        content root (default: built-in path)\n"
       "  --shaders <dir>        compiled SPIR-V directory\n"
-      "  --scene <assetId>      scene to load (default scene.stage1_showcase)\n"
+      "  --scene <assetId>      scene to load (default scene.stage2_flight)\n"
+      "  --camera <mode>        chase | cockpit | orbit | free\n"
+      "  --autofly              scripted gentle flight (smoke tests)\n"
+      "  --look <profileId>     visual look, e.g. retro80s or clean\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
       "  --no-validation        disable validation\n"
       "  --no-vsync             present without vsync\n"
-      "  --no-overlay           hide developer overlay\n"
+      "  --no-overlay           hide developer info overlay (HUD stays)\n"
       "  --frames <N>           exit after N frames\n"
       "  --screenshot <file>    write PNG of the last frame (use with --frames)\n"
-      "  --benchmark <seconds>  record frame times, export CSV/JSON, exit\n"
+      "  --benchmark <assetId>  run a data-defined benchmark (e.g. bench.asteroid_field_chase)\n"
       "  --bench-out <prefix>   output prefix for benchmark files\n");
 }
 }  // namespace
@@ -55,10 +58,13 @@ int main(int argc, char** argv) {
     } else if (a == "--validation") o.validation = true;
     else if (a == "--no-validation") o.validation = false;
     else if (a == "--no-vsync") o.vsync = false;
-    else if (a == "--no-overlay") o.overlay = false;
+    else if (a == "--no-overlay") o.devOverlay = false;
+    else if (a == "--camera") o.cameraOverride = next();
+    else if (a == "--autofly") o.autofly = true;
+    else if (a == "--look") o.look = next();
     else if (a == "--frames") o.exitAfterFrames = std::atoi(next());
     else if (a == "--screenshot") o.screenshotOnExit = std::filesystem::path(next());
-    else if (a == "--benchmark") o.benchmarkSeconds = std::atof(next());
+    else if (a == "--benchmark") o.benchmarkId = next();
     else if (a == "--bench-out") o.benchmarkOut = next();
     else if (a == "--help" || a == "-h") { printUsage(); return 0; }
     else { std::fprintf(stderr, "unknown option %s\n", a.c_str()); printUsage(); return 1; }
@@ -66,7 +72,7 @@ int main(int argc, char** argv) {
 
   fh::log::setLogFile("farhorizon.log");
   try {
-    fh::ShowcaseApp app(o);
+    fh::GameApp app(o);
     return app.run();
   } catch (const std::exception& e) {
     fh::log::error("fatal", "{}", e.what());
