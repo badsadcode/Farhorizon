@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.8.2 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.8.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,7 @@ add_library(fh_core STATIC
   engine/render/starfield.cpp
   engine/render/particle_atlas.cpp
   game/fx/particles.cpp
+  game/fx/light_selector.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
   game/content/visual_profile.cpp

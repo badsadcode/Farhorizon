@@ -1,4 +1,5 @@
 #include "game/content/map_def.h"
+#include "engine/core/log.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,6 +33,30 @@ float yawOf(const Quat& rotation) {
   return std::atan2(f.x, -f.z) * 180.0f / 3.14159265f;
 }
 }  // namespace
+
+void appendEmissionLights(const std::vector<GltfEmitterInfo>& emitters, std::vector<LightDef>& lights) {
+  const std::vector<LightDef> realLamps = lights;
+  for (const GltfEmitterInfo& e : emitters) {
+    // The fixture of a real lamp: the lamp does the lighting, and this would count it twice.
+    if (std::any_of(realLamps.begin(), realLamps.end(), [&](const LightDef& l) {
+          return l.range > 0 && length(l.position - e.centroid) < kLampFixtureRadius;
+        }))
+      continue;
+    const float facing = length(e.normalArea);
+    const bool flat = facing > 0.5f * e.area;
+    const float effective = std::max(facing, e.area * 0.25f);  // a closed shape shows a quarter of its area
+    LightDef def;
+    def.color = e.radiance;
+    def.intensity = effective * kEmissionLightGain;
+    // Off the surface by about its own size, so it spreads like a panel rather than a point on a wall.
+    def.position = flat ? e.centroid + (e.normalArea / facing) * (0.3f * std::sqrt(effective)) : e.centroid;
+    const float brightness = def.intensity * std::max({def.color.x, def.color.y, def.color.z});
+    if (brightness < 0.03f) continue;  // a tiny indicator: it glows, but lights nothing
+    def.range = std::clamp(std::sqrt(brightness / 0.01f), 2.0f, 40.0f);
+    def.size = 0.0f;
+    lights.push_back(def);
+  }
+}
 
 std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<std::string>* errors) {
   auto fail = [&](const std::string& message) {
@@ -140,22 +165,9 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
     d.lights.push_back(def);
   }
 
-  // Emissive surfaces light the room around them, in their own colour.
-  for (const GltfEmitterInfo& e : info.emitters) {
-    const float facing = length(e.normalArea);
-    const bool flat = facing > 0.5f * e.area;
-    const float effective = std::max(facing, e.area * 0.25f);  // a closed shape shows a quarter of its area
-    LightDef def;
-    def.color = e.radiance;
-    def.intensity = effective * kEmissionLightGain;
-    // Off the surface by about its own size, so it spreads like a panel rather than a point on a wall.
-    def.position = flat ? e.centroid + (e.normalArea / facing) * (0.3f * std::sqrt(effective)) : e.centroid;
-    const float brightness = def.intensity * std::max({def.color.x, def.color.y, def.color.z});
-    if (brightness < 0.03f) continue;  // a tiny indicator: it glows, but lights nothing
-    def.range = std::clamp(std::sqrt(brightness / 0.01f), 2.0f, 40.0f);
-    def.size = 0.0f;
-    d.lights.push_back(def);
-  }
+  const size_t realLampCount = d.lights.size();
+  appendEmissionLights(info.emitters, d.lights);
+  log::info("map", "{}: {} lights ({} from emissive surfaces)", d.name, d.lights.size(), d.lights.size() - realLampCount);
 
   if (!info.collision.indices.empty()) {
     auto collider = std::make_shared<TriangleCollider>();

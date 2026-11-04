@@ -149,11 +149,12 @@ TEST(mesh_collision_ignores_degenerate_triangles) {
   CHECK(b.build().empty());
 }
 
-// ---- The sample map, exported through the add-on from tools/blender/build_sample_derelict.py ----
+// ---- A fixture exported through the add-on by tools/blender/build_sample_derelict.py. Not the map in
+// content/maps, which the owner edits freely. ----
 
 TEST(map_sample_derelict_loads_with_everything_the_add_on_exports) {
   std::vector<std::string> errors;
-  const auto map = loadMap(std::filesystem::path(FH_TEST_CONTENT_DIR) / "maps" / "derelict_sample.glb", &errors);
+  const auto map = loadMap(std::filesystem::path(FH_TEST_DATA_DIR) / "derelict_fixture.glb", &errors);
   for (const auto& e : errors) fhtest::reportFailure(__FILE__, __LINE__, e);
   CHECK(map.has_value());
   if (!map) return;
@@ -212,7 +213,7 @@ TEST(map_sample_derelict_loads_with_everything_the_add_on_exports) {
 }
 
 TEST(map_sample_player_stands_on_the_floor_and_walks) {
-  const auto map = loadMap(std::filesystem::path(FH_TEST_CONTENT_DIR) / "maps" / "derelict_sample.glb", nullptr);
+  const auto map = loadMap(std::filesystem::path(FH_TEST_DATA_DIR) / "derelict_fixture.glb", nullptr);
   CHECK(map.has_value());
   if (!map) return;
   CharacterParams p;
@@ -238,7 +239,7 @@ TEST(map_without_a_player_start_is_a_clear_error) {
 }
 
 TEST(map_emissive_surface_lights_the_room_but_a_fixture_with_its_own_lamp_does_not) {
-  const auto map = loadMap(std::filesystem::path(FH_TEST_CONTENT_DIR) / "maps" / "derelict_sample.glb", nullptr);
+  const auto map = loadMap(std::filesystem::path(FH_TEST_DATA_DIR) / "derelict_fixture.glb", nullptr);
   CHECK(map.has_value());
   if (!map) return;
   int lit = 0, green = 0;
@@ -248,7 +249,35 @@ TEST(map_emissive_surface_lights_the_room_but_a_fixture_with_its_own_lamp_does_n
     if (l.color.y > l.color.x * 2.0f && l.color.y > l.color.z) ++green;
   }
   CHECK(green >= 1);  // the console's screen, in its own colour
-  CHECK(lit == 4 + green);  // four real lamps; their glow-only fixtures add nothing
+  CHECK(lit == 4 + green + 1);  // four real lamps and the door strip; glow-only fixtures add nothing
+}
+
+TEST(map_an_emissive_surface_next_to_a_lamp_is_its_fixture_even_without_the_setting) {
+  LightDef lamp;
+  lamp.position = {0, 2, 3};
+  lamp.intensity = 5;
+  lamp.range = 20;
+  GltfEmitterInfo fixture;
+  fixture.centroid = {0.2f, 2.1f, 2.9f};
+  fixture.normalArea = {0, 0, -1};
+  fixture.area = 1;
+  fixture.radiance = {1, 1, 1};
+  GltfEmitterInfo panel = fixture;
+  panel.centroid = {0, 6, 2.9f};
+  std::vector<LightDef> lights{lamp};
+  appendEmissionLights({fixture, panel}, lights);
+  CHECK(lights.size() == 2);  // the lamp, and the panel well away from it
+  if (lights.size() == 2) CHECK(lights[1].position.y > 5.0f);
+}
+
+TEST(map_a_small_emissive_surface_is_one_light_even_across_the_middle_of_the_map) {
+  const auto map = loadMap(std::filesystem::path(FH_TEST_DATA_DIR) / "derelict_fixture.glb", nullptr);
+  CHECK(map.has_value());
+  if (!map) return;
+  int blue = 0;
+  for (const auto& l : map->def.lights)
+    if (l.range > 0 && l.color.z > l.color.x * 2.0f && l.color.z > l.color.y * 2.0f) ++blue;
+  CHECK(blue == 1);
 }
 
 TEST(derelict_full_visit_dock_walk_in_return_undock) {

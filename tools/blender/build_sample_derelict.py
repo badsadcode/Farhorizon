@@ -1,6 +1,7 @@
 # Builds the sample derelict through the FARHORIZON add-on, the same way an artist would, and saves it:
 #   blender -b --factory-startup --python tools/blender/build_sample_derelict.py
-# Outputs content_src/maps/derelict_sample.blend and content/maps/derelict_sample.glb.
+# Writes only the test fixture, tests/data/derelict_fixture.glb. It never touches content/ or content_src/,
+# because the maps there are the owner's working files.
 # Everything is generated here, so the sample is original and has no outside files.
 import math
 import os
@@ -158,6 +159,7 @@ chrome = plain_material("polished_steel", (0.82, 0.84, 0.86), 1.0, 0.04)
 standing_water = plain_material("standing_water", (0.012, 0.014, 0.016), 0.0, 0.03)
 lamp_on = glow_material("lamp_warm", (1.0, 0.72, 0.42), 1.3)
 screen = glow_material("screen_green", (0.15, 1.0, 0.45), 0.9)
+strip_blue = glow_material("strip_blue", (0.1, 0.25, 1.0), 2.0)
 
 
 # ---- Geometry helpers ---------------------------------------------------------------------------
@@ -295,6 +297,9 @@ box("water_bay", (-1.0, 25.0, 0.006), (6.0, 7.0, 0.012), standing_water, solid=F
 box("console", (-1.6, 12.5, 0.55), (0.6, 1.2, 1.1), hull)
 box("console_screen", (-1.28, 12.5, 1.0), (0.03, 1.0, 0.6), screen, solid=False)
 
+# A warning strip over the bay door, across x = 0. It is one surface, so it must be one light.
+box("door_strip", (0, 17.25, 3.6), (2.0, 0.03, 0.25), strip_blue, solid=False)
+
 # ---- Entities, placed with the add-on -----------------------------------------------------------
 entity("player_start", (0, 0.3, 0))
 entity("exit", (0, -0.75, 1.3), fh_prompt="Return to your ship")
@@ -318,9 +323,5 @@ for line in warnings:
 if errors:
     sys.exit(1)
 
-blend = os.path.join(ROOT, "content_src", "maps", "derelict_sample.blend")
-os.makedirs(os.path.dirname(blend), exist_ok=True)
-result = editor.export_scene(bpy.context)
+result = editor.export_scene(bpy.context, os.path.join(ROOT, "tests", "data", "derelict_fixture.glb"))
 print("EXPORTED:", result)
-bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)
-print("SAVED:", blend)

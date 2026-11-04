@@ -31,8 +31,8 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 rimColorPower;
   Vec4 fogColorDensity;
   Vec4 lightCount;
-  Vec4 pointPosRange[8];
-  Vec4 pointColor[8];
+  Vec4 pointPosRange[16];
+  Vec4 pointColor[16];
   Vec4 atmoZenith;
   Vec4 atmoHorizon;
   Vec4 atmoGround;
@@ -48,7 +48,7 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 probeMin[8];
   Vec4 probeMax[8];
 };
-static_assert(sizeof(FrameUniforms) == 1360);
+static_assert(sizeof(FrameUniforms) == 1616);
 
 // Vulkan cube map table: sc, tc and ma for each face, as row vectors over (x, y, z).
 struct CubeFace {
@@ -972,7 +972,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.atmoZenith = Vec4(p.atmoZenith, p.atmosphereSky ? 1.0f : 0.0f);
   u.atmoHorizon = Vec4(p.atmoHorizon, std::max(0.1f, p.atmoHaze));
   u.atmoGround = Vec4(p.atmoGround, p.starVisibility);
-  const size_t nLights = std::min<size_t>(8, p.pointLights.size());
+  const size_t nLights = std::min<size_t>(kPointShadowLights, p.pointLights.size());
   u.lightCount = Vec4(float(nLights), 0, 0, 0);
   for (size_t i = 0; i < nLights; ++i) {
     u.pointPosRange[i] = Vec4(p.pointLights[i].position, p.pointLights[i].range);
@@ -1408,7 +1408,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     std::sort(lamps.begin(), lamps.end(), [&](const PointLight& a, const PointLight& b) {
       return dot(a.position - at, a.position - at) < dot(b.position - at, b.position - at);
     });
-    const std::uint32_t lampCount = std::uint32_t(std::min<size_t>(8, lamps.size()));
+    const std::uint32_t lampCount = std::uint32_t(std::min<size_t>(kPointShadowLights, lamps.size()));
     FrameUniforms base = u;
     base.lightCount = Vec4(float(lampCount), 0, 0, 0);
     for (std::uint32_t i = 0; i < lampCount; ++i) {

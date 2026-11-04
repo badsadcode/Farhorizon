@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/assets/gltf_loader.h"
 #include "engine/assets/mesh_data.h"
 #include "game/content/interior_def.h"
 
@@ -28,6 +29,11 @@ struct LoadedMap {
 };
 
 std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<std::string>* errors);
+
+// Turns emissive surfaces into lights, after the real lamps are in `lights`. A surface this close to a
+// real lamp is that lamp's fixture and adds nothing.
+inline constexpr float kLampFixtureRadius = 1.5f;
+void appendEmissionLights(const std::vector<GltfEmitterInfo>& emitters, std::vector<LightDef>& lights);
 
 // Blender watts to the game's light units. See docs/BLENDER_GUIDE.md.
 constexpr float kBlenderWattsToLight = 0.05f;

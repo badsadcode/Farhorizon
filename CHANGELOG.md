@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.3 — Lights stay on as you walk (2026-11-04)
+* **Fixed: parts of a map lit up suddenly as you walked towards them.** Only the 8 lights nearest the
+  player were used, so in a map with more than 8, lights further away switched off and back on.
+* **A scene can now use 16 lights at once, and all of them cast shadows.** Before it was 8, with shadows on 4.
+* **If a map has more than 16,** the ones that matter most where you stand are used, big lamps before tiny
+  nearby lights, and a change fades in or out instead of snapping.
+* **An emissive surface next to a real lamp no longer adds a second light,** even if its setting was not
+  turned off. A small emissive surface crossing the middle of a map is now one light, not two.
+* Tests use their own map, `tests/data/derelict_fixture.glb`, instead of the working map in `content/maps`.
+  `content/maps/untitled*.glb` is no longer tracked by git.
+
 ## 0.8.2 — The Ash Wren: a derelict you can fly to (2026-11-04)
 * **The sample derelict is in the world.** The Ash Wren drifts about 42 km from Kestrel. Select it with N,
   take the travel drive, set down on its hull, walk through your airlock and explore. Its Exit takes you

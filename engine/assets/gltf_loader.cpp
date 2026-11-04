@@ -207,6 +207,14 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
     constexpr float kCell = 3.0f;
     std::map<std::tuple<int, int, int>, GltfEmitterInfo> cells;
     const cgltf_size count = prim.indices ? prim.indices->count : pos->count;
+    // Cells start at this surface's own corner, so a small one is one light wherever it sits.
+    Vec3 origin{1e30f, 1e30f, 1e30f};
+    for (cgltf_size v = 0; v < pos->count; ++v) {
+      float tmp[3] = {0, 0, 0};
+      cgltf_accessor_read_float(pos, v, tmp, 3);
+      const Vec3 w = world.transformPoint({tmp[0], tmp[1], tmp[2]});
+      for (int k = 0; k < 3; ++k) origin[k] = std::min(origin[k], w[k]);
+    }
     for (cgltf_size t = 0; t + 2 < count; t += 3) {
       Vec3 corner[3];
       for (int k = 0; k < 3; ++k) {
@@ -218,7 +226,7 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
       const float a = length(n);
       if (a < 1e-7f) continue;
       const Vec3 c = (corner[0] + corner[1] + corner[2]) / 3.0f;
-      GltfEmitterInfo& e = cells[{int(std::floor(c.x / kCell)), int(std::floor(c.y / kCell)), int(std::floor(c.z / kCell))}];
+      GltfEmitterInfo& e = cells[{int((c.x - origin.x) / kCell), int((c.y - origin.y) / kCell), int((c.z - origin.z) / kCell)}];
       e.centroid += c * a;  // weighted: divided by the area below
       e.normalArea += n;
       e.area += a;

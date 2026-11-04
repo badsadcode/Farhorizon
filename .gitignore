@@ -14,3 +14,4 @@ tools/blender/farhorizon_editor.zip
 __pycache__/
 *.blend1
 *.blend2
+content/maps/untitled*.glb

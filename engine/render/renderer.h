@@ -123,7 +123,7 @@ struct RenderFrameParams {
   // Lighting features (Options > Graphics, and what each scene allows).
   Vec3 cameraPosition{};           // keeps shadow texels fixed in the world while the camera moves
   bool sunShadows = false;
-  bool pointShadows = false;       // the nearest lamps cast shadows
+  bool pointShadows = false;       // every lamp in the list casts shadows
   bool ambientOcclusion = false;
   float reflections = 0.0f;        // live reflection probe strength; 0 disables it
   bool liveAmbient = true;         // the live probe also supplies ambient light (not in Blender maps)
@@ -264,7 +264,7 @@ class Renderer {
   // Lighting: sun cascades, lamp cube shadows, ambient occlusion, reflection probe. ADR 0011.
   static constexpr std::uint32_t kSunShadowSize = 2048;
   static constexpr std::uint32_t kPointShadowSize = 512;
-  static constexpr std::uint32_t kPointShadowLights = 4;
+  static constexpr std::uint32_t kPointShadowLights = 16;
   static constexpr std::uint32_t kProbeSize = 128;
   static constexpr std::uint32_t kProbeMips = 8;
   static constexpr VkFormat kAoFormat = VK_FORMAT_R8_UNORM;

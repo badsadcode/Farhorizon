@@ -38,7 +38,7 @@ textures and entities, rather than learn a separate tool.
   maps built now will not need rework.
 
 * **Placed reflection probes are box-corrected cube maps** (0.8.1), one 512-pixel cube each, in an array
-  of up to 8 sharing one descriptor. Each is captured once, one per frame, with the lamps nearest to it
+  of up to 8 sharing one descriptor. Each is captured once, one per frame, with the lamps nearest to it (up to 16)
   at steady strength and their own shadow pass. The lookup follows the reflected ray to the box wall.
   Rejected: re-rendering every frame (cost) and a global probe only (reflections slide). The box must
   fit the room, and floors and walls lie exactly on it, so the fade happens outside the box. The live

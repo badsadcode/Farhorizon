@@ -18,6 +18,7 @@
 #include "game/content/visual_profile.h"
 #include "engine/audio/audio_device.h"
 #include "game/audio_director.h"
+#include "game/fx/light_selector.h"
 #include "game/fx/particles.h"
 #include "game/market_ui.h"
 #include "game/persistence/save_game.h"
@@ -162,6 +163,8 @@ class GameApp {
   std::vector<ParticleSprite> particleSprites_;
   TravelState lastTravelState_ = TravelState::Idle;
   SpeedDust dust_;
+  LightSelector lampSelector_;
+  AssetID lampSelectorScene_;
   float tunnelAmount_ = 0.0f;
   std::vector<Vec3> travelNozzles_;  // relative to the ship
   int mouseSettleFrames_ = 0;  // a window resize moves the cursor without the player touching it

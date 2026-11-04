@@ -20,7 +20,7 @@
 | 16 | open | interiors | Interior transitions are instant cuts (no seat/airlock animation or loading fade). |
 | 17 | open | interiors | The on-foot camera is not interpolated between fixed steps (possible slight judder at high refresh rates). |
 | 18 | open | audio | The placeholder sounds have only been verified by signal analysis (SDL disk driver), not by listening. The mix needs a human pass. |
-| 19 | partly fixed (0.7.1) | render | The 4 nearest lamps in local scenes cast shadows. Lamps 5-8 and flight-scene flares still shine through geometry. |
+| 19 | partly fixed (0.8.3) | render | All 16 lamps in local scenes cast shadows. Flight-scene flares still shine through geometry. |
 | 20 | fixed (0.5) | economy | Gale Ridge Supply Shed creates the first trade route. |
 | 21 | open | mining | Asteroids do not shrink visually as they deplete (yield only). |
 | 22 | fixed (0.7) | ui | Main, pause, options, load/save screens and a restyled terminal. |
@@ -57,4 +57,5 @@
 | 53 | open | maps | Placing a map in the world means editing the manifest and scene JSON by hand. The add-on could do it. |
 | 54 | open | maps | The Ash Wren's exterior is the interior model seen from outside, and shows its map name, "Derelict Sample", on entry. It has no hull markings where you land. |
 | 55 | open | render | Emissive surfaces are approximated by point lights, so light has no true panel shape, and a light offset from a flat panel can look slightly off up close. Nothing is emitted in reflections beyond the surface itself. |
-| 56 | open | render | Lights are chosen nearest-first per frame, so a room with more than 8 can pop as you walk. Emissive surfaces make this easier to hit. |
+| 56 | fixed (0.8.3) | render | Lights were chosen nearest-first per frame, so a room with more than 8 popped as you walked. Now 16 slots, chosen by contribution, with hysteresis and fades (`LightSelector`). |
+| 57 | open | render | Every lamp's shadow cube is redrawn each frame, 96 faces at most. Cheap on today's small maps, about 1.5 ms a frame on an RTX 3080. A big map will need static lamps' cubes cached. |

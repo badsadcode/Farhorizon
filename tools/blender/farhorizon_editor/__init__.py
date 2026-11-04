@@ -247,11 +247,11 @@ def run_checks(scene):
 
 # ---- Export -------------------------------------------------------------------------------------
 
-def export_scene(context):
+def export_scene(context, path=None):
     """Writes the .glb. Returns its path."""
     scene = context.scene
     settings = scene.farhorizon
-    path = export_path(scene)
+    path = path or export_path(scene)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     marker = None
     if settings.mode == "MAP":

@@ -68,7 +68,7 @@ Use normal Blender lights.
 | **Spot** | Currently drawn as a Point light |
 | **Area** | Does not export. The Check warns you |
 
-The 4 nearest lights cast shadows and up to 8 light a surface at once, so a big map can have many lights
+Up to 16 lights are on at once and all of them cast shadows. Beyond 16, the ones that matter most where the player stands are used, so a big map can have many lights
 as long as they are spread out. For a failing lamp, select it and press **Make It Flicker**. A lamp does
 not glow by itself: give its fixture an emissive material.
 
@@ -76,10 +76,11 @@ not glow by itself: give its fixture an emissive material.
 A material with Emission lights its surroundings in its own colour, so a screen or a glowing strip needs
 no extra lamp. Brightness comes from **Emission Strength** and the surface's size, as in Blender: strength
 1 to 10 suits screens and panels, and a bigger surface gives more light. Long strips become several lights.
-Very small ones only glow and light nothing, so indicator lights do not use up the 8 lights.
+Very small ones only glow and light nothing, so indicator lights do not use up the 16 lights.
 
-If a fixture already has a real lamp, select it and turn off **Emission Lights the Room** in the
-**Selected** section, or you get twice the light. A flat panel set against a wall lights the room but not
+A surface within 1.5 m of a real lamp counts as that lamp's fixture and adds no light. For a fixture further
+from its lamp, select it and turn off **Emission Lights the Room** in the **Selected** section, or you get
+twice the light. A flat panel set against a wall lights the room but not
 that wall, which is also what a real one does.
 
 ### Map Settings

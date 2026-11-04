@@ -1572,12 +1572,24 @@ int GameApp::run() {
         for (const auto& l : idef->lights) {
           const float k = l.intensityAt(t);
           if (k > 0) glows.push_back({Vec4(l.position - view.position, l.size), Vec4(l.color * k, 0)});
-          if (l.range > 0 && k > 0) params.pointLights.push_back({l.position - view.position, l.range, l.color * (k * l.intensity)});
         }
-        // Nearest lamps win the 8 shading slots.
-        std::sort(params.pointLights.begin(), params.pointLights.end(), [](const PointLight& a, const PointLight& b) {
-          return dot(a.position, a.position) < dot(b.position, b.position);
-        });
+        // The lamps that matter most here get the shading slots. Flicker does not affect the choice,
+        // so a failing lamp keeps its slot while it stutters.
+        if (lampSelectorScene_ != sceneId) {
+          lampSelector_.reset();
+          lampSelectorScene_ = sceneId;
+        }
+        std::vector<LampCandidate> lamps;
+        for (std::uint32_t i = 0; i < idef->lights.size(); ++i) {
+          const LightDef& l = idef->lights[i];
+          if (l.range > 0)
+            lamps.push_back({i, l.position - view.position, l.intensity * std::max({l.color.x, l.color.y, l.color.z})});
+        }
+        for (const ActiveLamp& a : lampSelector_.update(lamps, simPaused ? 0.0f : float(dt))) {
+          const LightDef& l = idef->lights[a.id];
+          const float k = l.intensityAt(t) * a.strength;
+          if (k > 0) params.pointLights.push_back({l.position - view.position, l.range, l.color * (k * l.intensity)});
+        }
       }
     }
 

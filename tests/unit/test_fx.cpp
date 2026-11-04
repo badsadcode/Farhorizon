@@ -1,9 +1,11 @@
 // Particle system, procedural atlas, and the flight behaviour behind the full-stop hold.
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <vector>
 
 #include "engine/render/particle_atlas.h"
+#include "game/fx/light_selector.h"
 #include "game/fx/particles.h"
 #include "game/ships/flight_model.h"
 #include "test_framework.h"
@@ -320,4 +322,86 @@ TEST(full_stop_input_stops_a_tumbling_drifting_ship_in_any_direction) {
   const Vec3 parked = s.position;
   for (int i = 0; i < 600; ++i) stepFlight(s, hold, p, kFrame);
   CHECK(length(s.position - parked) < 1e-3f);  // and it stays put
+}
+
+// ---- Choosing lamps ------------------------------------------------------------------------------
+
+namespace {
+bool isLit(const std::vector<ActiveLamp>& lit, std::uint32_t id) {
+  for (const ActiveLamp& a : lit)
+    if (a.id == id && a.strength > 0.99f) return true;
+  return false;
+}
+}  // namespace
+
+TEST(lamps_a_big_lamp_beats_small_ones_right_next_to_the_viewer) {
+  LightSelector s(8);
+  std::vector<LampCandidate> c;
+  for (std::uint32_t i = 0; i < 12; ++i) c.push_back({i, {float(i) * 0.1f, 0, 1.0f}, 0.05f});  // small and close
+  c.push_back({100, {0, 0, 6.0f}, 5.5f});  // a real lamp, six metres away
+  CHECK(isLit(s.update(c, 0.016f), 100));
+}
+
+TEST(lamps_starts_fully_lit_and_never_exceeds_the_slots) {
+  LightSelector s(8);
+  std::vector<LampCandidate> c;
+  for (std::uint32_t i = 0; i < 20; ++i) c.push_back({i, {float(i), 0, 0}, 1.0f});
+  const auto& lit = s.update(c, 0.016f);
+  CHECK(lit.size() == 8);
+  for (const ActiveLamp& a : lit) CHECK(a.strength > 0.99f);
+  for (int f = 0; f < 200; ++f) {
+    for (LampCandidate& l : c) l.position.x -= 0.1f;
+    CHECK(s.update(c, 0.016f).size() <= 8);
+  }
+}
+
+TEST(lamps_change_gradually_as_the_viewer_walks) {
+  LightSelector s(2);
+  // Three lamps along a corridor, walked past at running speed.
+  const float at[3] = {0, 8, 16};
+  std::map<std::uint32_t, float> last;
+  float biggest = 0;
+  for (int f = 0; f < 60 * 6; ++f) {
+    const float z = float(f) / 60.0f * 5.5f - 8.0f;
+    std::vector<LampCandidate> c;
+    for (std::uint32_t i = 0; i < 3; ++i) c.push_back({i, {0, 0, at[i] - z}, 5.0f});
+    std::map<std::uint32_t, float> now;
+    for (const ActiveLamp& a : s.update(c, 1.0f / 60.0f)) now[a.id] = a.strength;
+    if (f > 0)
+      for (std::uint32_t i = 0; i < 3; ++i) biggest = std::max(biggest, std::fabs(now[i] - last[i]));
+    last = now;
+  }
+  CHECK(biggest > 0.0f);   // the choice did change
+  CHECK(biggest < 0.12f);  // and no frame jumped
+}
+
+TEST(lamps_similar_ones_do_not_keep_trading_places) {
+  LightSelector s(1);
+  int changes = 0;
+  std::uint32_t current = 99;
+  for (int f = 0; f < 600; ++f) {
+    const float wobble = std::sin(float(f) * 0.2f) * 0.1f;  // standing between two equal lamps, swaying
+    const std::vector<LampCandidate> c{{0, {0, 0, 4.0f + wobble}, 5.0f}, {1, {0, 0, -4.0f + wobble}, 5.0f}};
+    const auto& lit = s.update(c, 1.0f / 60.0f);
+    if (!lit.empty() && lit.front().id != current) {
+      current = lit.front().id;
+      ++changes;
+    }
+  }
+  CHECK(changes <= 1);
+}
+
+TEST(lamps_reset_for_a_new_scene_has_no_fade) {
+  LightSelector s(2);
+  s.update({{0, {0, 0, 1}, 1.0f}}, 0.016f);
+  s.reset();
+  CHECK(isLit(s.update({{7, {0, 0, 1}, 1.0f}}, 0.016f), 7));
+}
+
+TEST(lamps_removed_from_the_scene_leave_at_once) {
+  LightSelector s(2);
+  s.update({{0, {0, 0, 1}, 1.0f}, {1, {0, 0, 2}, 1.0f}}, 0.016f);
+  const auto& lit = s.update({{1, {0, 0, 2}, 1.0f}}, 0.016f);
+  CHECK(lit.size() == 1);
+  CHECK(lit.front().id == 1);
 }

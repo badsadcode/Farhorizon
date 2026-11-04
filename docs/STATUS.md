@@ -104,7 +104,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 ## Atmosphere
 | Item | State | Notes |
 |---|---|---|
-| Point lights + fog + flicker | ✅ | 8 lights/frame, per-interior fog, failing lamps |
+| Point lights + fog + flicker | ✅ | 16 lights/frame, all shadowed, per-interior fog, failing lamps |
 | "Used Future" look | ✅ | default; amber/phosphor CRT HUD |
 | Audio | 🟡 | mixer, device, data-driven director with original synthesised placeholders. Nobody has listened yet. |
 
