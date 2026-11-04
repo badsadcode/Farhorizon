@@ -124,6 +124,7 @@ class Combat {
 
   const std::vector<NpcShip>& npcs() const { return npcs_; }
   NpcShip* npc(std::uint32_t id);
+  const NpcShip* npc(std::uint32_t id) const;
   const std::vector<Projectile>& projectiles() const { return projectiles_; }
   const std::vector<Explosion>& explosions() const { return explosions_; }
   std::vector<CombatEvent> takeEvents() { return std::exchange(events_, {}); }

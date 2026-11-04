@@ -223,6 +223,10 @@
     "missions.contracts": {
       "type": "contracts",
       "source": "missions/contracts.json"
+    },
+    "bench.combat_skirmish": {
+      "type": "benchmark",
+      "source": "benchmarks/combat_skirmish.json"
     }
   }
 }

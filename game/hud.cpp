@@ -82,6 +82,137 @@ std::string formatDistance(double metres) {
   return std::format("{:.0f} m", metres);
 }
 
+namespace {
+void triangle(OverlayBuilder& o, Vec2 p, float r, OverlayColor col) {
+  const Vec2 a{p.x, p.y - r}, b{p.x + r * 0.9f, p.y + r * 0.6f}, d{p.x - r * 0.9f, p.y + r * 0.6f};
+  o.line(a.x, a.y, b.x, b.y, 2, col);
+  o.line(b.x, b.y, d.x, d.y, 2, col);
+  o.line(d.x, d.y, a.x, a.y, 2, col);
+}
+
+void square(OverlayBuilder& o, Vec2 p, float r, OverlayColor col) {
+  o.line(p.x - r, p.y - r, p.x + r, p.y - r, 2, col);
+  o.line(p.x + r, p.y - r, p.x + r, p.y + r, 2, col);
+  o.line(p.x + r, p.y + r, p.x - r, p.y + r, 2, col);
+  o.line(p.x - r, p.y + r, p.x - r, p.y - r, 2, col);
+}
+
+void meter(OverlayBuilder& o, float x, float y, float w, float h, float frac, OverlayColor col) {
+  o.rect(x, y, w, h, {20, 16, 10, 150});
+  o.rect(x, y, w * std::clamp(frac, 0.0f, 1.0f), h, col);
+}
+
+void drawCombatHud(OverlayBuilder& o, const HudContext& c, const Projector& proj) {
+  const GameSession& gs = *c.session;
+  const Combat& cb = gs.combat();
+  const FlightState& fs = c.world.player().state;
+  const float cx = c.width * 0.5f;
+  const OverlayColor kShield{110, 200, 230, 255};
+  const bool flying = gs.combatActive();
+
+  // Edge flashes: shields (cyan) and hull (red) - with text cues for colour-blind players below.
+  auto edges = [&](OverlayColor col, float k) {
+    if (k <= 0) return;
+    const std::uint8_t a = std::uint8_t(std::clamp(k, 0.0f, 1.0f) * 120.0f);
+    const OverlayColor ca{col.r, col.g, col.b, a};
+    const float t = std::min(c.width, c.height) * 0.05f;
+    o.rect(0, 0, c.width, t, ca);
+    o.rect(0, c.height - t, c.width, t, ca);
+    o.rect(0, t, t, c.height - 2 * t, ca);
+    o.rect(c.width - t, t, t, c.height - 2 * t, ca);
+  };
+  edges(kShield, c.shieldFlash);
+  edges(OverlayColor{220, 40, 25, 255}, c.damageFlash);
+
+  // Ship markers: hostiles are triangles, civilians squares.
+  for (const auto& n : cb.npcs()) {
+    const ShipType* t = cb.shipType(n.shipDef);
+    if (!t) continue;
+    const bool hostile = n.hostile || t->def.ai.role == "pirate";
+    const float d = length(n.state.position - fs.position);
+    if (d > 8000.0f) continue;
+    const bool isTarget = c.world.target() && c.world.target()->kind == TargetRef::Kind::Ship &&
+                          c.world.target()->index == n.id;
+    if (isTarget) continue;  // drawn with the target bracket
+    const OverlayColor col = hostile ? kWarn : kNav;
+    if (auto s = proj.point(n.state.position); s && proj.onScreen(*s)) {
+      if (hostile) triangle(o, *s, 9, col);
+      else square(o, *s, 7, col);
+      shadowText(o, s->x + 13, s->y - 6, formatDistance(d), col);
+    } else if (hostile && d < 3000.0f) {
+      edgeArrow(o, c, n.state.position, col, "HOSTILE " + formatDistance(d));
+    }
+  }
+
+  // Target ship: shield/hull bars and the lead pip.
+  if (const auto& tr = c.world.target(); tr && tr->kind == TargetRef::Kind::Ship) {
+    if (const NpcShip* n = cb.npc(tr->index)) {
+      if (auto s = proj.point(n->state.position); s && proj.onScreen(*s, 20)) {
+        const float w = 90, x = s->x - w * 0.5f, y = s->y + 46;
+        meter(o, x, y, w, 4, n->dur.maxShield > 0 ? n->dur.shield / n->dur.maxShield : 0, kShield);
+        meter(o, x, y + 7, w, 4, n->dur.hullFraction(), n->hostile ? kWarn : kNav);
+      }
+      if (!c.miningMode)
+        if (auto lead = cb.leadPoint(c.world, n->id))
+          if (auto lp = proj.point(*lead); lp && proj.onScreen(*lp)) {
+            o.circle(lp->x, lp->y, 6, 2, kWarn, 12);
+            o.line(lp->x - 10, lp->y, lp->x - 4, lp->y, 2, kWarn);
+            o.line(lp->x + 4, lp->y, lp->x + 10, lp->y, 2, kWarn);
+          }
+    }
+  }
+
+  // Own systems: bottom-left block.
+  const Durability& d = cb.player();
+  const Armament& arm = cb.playerArms();
+  const float x = 24, y = c.height - 128, w = 180;
+  shadowText(o, x, y, "SHD", kShield);
+  meter(o, x + 48, y + 3, w, 8, d.maxShield > 0 ? d.shield / d.maxShield : 0, kShield);
+  const float hull = d.hullFraction();
+  shadowText(o, x, y + 22, "HULL", hull < 0.3f ? kWarn : kPrimary);
+  meter(o, x + 48, y + 25, w, 8, hull, hull < 0.3f ? kWarn : kPrimary);
+  shadowText(o, x, y + 44, "HEAT", arm.overheated ? kWarn : kDim);
+  meter(o, x + 48, y + 47, w, 8, arm.heatFraction(), arm.overheated ? kWarn : kDim);
+  if (c.miningMode) {
+    shadowText(o, x, y + 68, "[2] MINING LASER", kPrimary);
+    shadowText(o, x, y + 90, "1 guns", kDim);
+  } else {
+    const std::string guns = arm.primary.empty() ? std::string("[1] NO GUNS")
+                                                 : std::format("[1] {} x{}", arm.primary.front().def->name, arm.primary.size());
+    shadowText(o, x, y + 68, guns, arm.overheated ? kWarn : kPrimary);
+    shadowText(o, x, y + 90, arm.secondary.empty() ? std::string("2 mining") : "RMB " + arm.secondary.front().def->name + "   2 mining",
+               kDim);
+  }
+
+  // Warnings (text + blink, never colour alone).
+  const bool blink = std::fmod(c.time, 0.5) < 0.3;
+  if (flying && c.missileWarning && blink) centeredText(o, cx, c.height * 0.27f, "MISSILE INBOUND", kWarn, 3.0f);
+  else if (flying && hull < 0.25f && blink) centeredText(o, cx, c.height * 0.27f, "HULL CRITICAL", kWarn, 3.0f);
+  else if (flying && arm.overheated) centeredText(o, cx, c.height * 0.27f, "WEAPONS OVERHEATED", kWarn, 2.0f);
+
+  // Contract tracker: top-left.
+  const auto& active = gs.contracts().active();
+  float ty = 60;
+  if (!active.empty()) shadowText(o, 24, ty, "CONTRACTS", kDim);
+  for (const auto& k : active) {
+    ty += 20;
+    std::string line = k.title;
+    const auto& locs = gs.contractLocations();
+    switch (k.kind) {
+      case ContractKind::Courier: line += "  -> " + locationDisplayName(locs, k.destination); break;
+      case ContractKind::Procurement:
+        line += std::format("  ({}/{})  -> {}", gs.cargo().units(k.commodity), k.units, locationDisplayName(locs, k.issuer));
+        break;
+      case ContractKind::Bounty:
+        line += k.ready() ? "  DONE -> " + locationDisplayName(locs, k.issuer)
+                          : std::format("  ({}/{})", k.kills, k.killsRequired);
+        break;
+    }
+    shadowText(o, 24, ty, line, k.ready() ? kField : kPrimary);
+  }
+}
+}  // namespace
+
 void drawHud(OverlayBuilder& o, const HudContext& c) {
   kPrimary = toColor(c.palette.primary);
   kDim = toColor(c.palette.primary, 0.5f);
@@ -131,7 +262,7 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
 
   // ---- Target ----
   if (auto t = c.world.targetInfo()) {
-    const OverlayColor col = t->marker == "asteroid" ? kField : kNav;
+    const OverlayColor col = t->marker == "asteroid" ? kField : (t->marker == "hostile" ? kWarn : kNav);
     auto s = proj.point(t->local);
     if (s && proj.onScreen(*s, 20)) {
       // Bracket sized to the target's apparent radius.
@@ -259,6 +390,8 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
         }
       }
     }
+    // Message line: above the speed panel even on short screens.
+    const float msgY = std::min(c.height * 0.78f, c.height - 200.0f);
     // Docking state + context hints.
     std::string hint;
     switch (dk.state()) {
@@ -276,7 +409,7 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
                               : "Land on the pad: slow, level, nose forward   K autopilot   L cancel";
         break;
       case DockState::Capture: hint = "Clamps engaging..."; break;
-      case DockState::Docked: hint = "DOCKED   M market   F leave seat   L undock   F7 save"; break;
+      case DockState::Docked: hint = "DOCKED   M terminal   F leave seat   L undock   F7 save"; break;
       case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
     }
     // Travel drive and landing take precedence over docking hints.
@@ -312,9 +445,9 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
       centeredText(o, cx, c.height * 0.70f, "COMMS  " + ld.message(), kNav);
     // Radio chatter subtitles (accessibility, doc 11).
     if (simT - dk.messageTime() < 6.0 && !dk.message().empty())
-      centeredText(o, cx, c.height * 0.78f, "COMMS  " + dk.message(), kNav);
+      centeredText(o, cx, msgY, "COMMS  " + dk.message(), kNav);
     else if (simT - gs.noticeTime() < 4.0 && !gs.notice().empty())
-      centeredText(o, cx, c.height * 0.78f, gs.notice(), kPrimary);
+      centeredText(o, cx, msgY, gs.notice(), kPrimary);
   }
 
   // ---- Economy + mining ----
@@ -356,6 +489,9 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
     if (gs.lastMiningEvents().cargoFull || (!mn.chunks().empty() && gs.cargo().freeTons() < 1.0f))
       centeredText(o, cx, c.height * 0.66f, "CARGO HOLD FULL - sell at a station (M when docked)", kWarn);
   }
+
+  // ---- Combat ----
+  if (c.session) drawCombatHud(o, c, proj);
 
   // ---- Status line ----
   std::string status = cameraModeName(c.cameraMode);

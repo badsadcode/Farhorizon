@@ -191,6 +191,16 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
         if (!md) return false;
         marketDefs.emplace(site.market, std::move(*md));
       }
+  // Stage 6: weapons, NPC ship types, upgrades and contracts.
+  auto progression = loadProgression(*manifest, *scene, *commodityDb, &errors);
+  if (!progression) return false;
+  auto newProgression = std::make_unique<ProgressionContent>(std::move(*progression));
+  std::map<AssetID, LoadedMesh> npcMeshes;
+  for (const auto& [nid, ndef] : newProgression->npcShips) {
+    auto m = loadMesh(ndef.mesh, ndef.materialOverrides, "ship '" + nid + "'", ndef.meshScale, ndef.meshRotationDeg, true);
+    if (!m) return false;
+    npcMeshes.emplace(nid, std::move(*m));
+  }
   for (auto& w : errors) log::warn("content", "{}", w);  // only non-fatal warnings remain here
 
   // ---- Commit. Hot reload and save loading share one path: snapshot -> rebuild -> apply. ----
@@ -224,6 +234,12 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   newSession->setShipInterior(shipDef->interior);
   newSession->setEconomy(*commodityDb, scene->startingCredits);
   for (const auto& [mid, md] : marketDefs) newSession->addMarket(mid, md);
+  installProgression(*newSession, *scene, *newProgression, [&](const ShipDef& def, ShipType& t) {
+    const LoadedMesh& m = npcMeshes.at(def.id);
+    t.visual = renderer_->uploadMesh(m.data);
+    t.meshFix = m.meshFix;
+    if (def.collisionRadius <= 0) t.radius = m.data.boundsRadius() * def.meshScale;
+  });
   interiorPieces_.clear();
   for (auto& [iid, def] : interiors) {
     std::map<std::string, std::uint32_t> handles;
@@ -265,7 +281,8 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   manifest_ = std::move(manifest);
   benchmark_ = bench;
   scene_ = std::move(*scene);
-  session_ = std::move(newSession);
+  session_ = std::move(newSession);   // the old session dies before the old content below
+  progression_ = std::move(newProgression);
   lastDockState_ = session_->docking().state();
   if (firstLoad) {
     camera_.configureDev(scene_.camera.fovDeg, scene_.camera.orbitDistance, scene_.camera.yawDeg,
@@ -274,7 +291,8 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     if (benchmark_) mode = benchmark_->camera;
     if (options_.cameraOverride) mode = *options_.cameraOverride;
     camera_.setMode(cameraModeFromString(mode), world().playerRenderTransform(1.0f));
-    if (benchmark_ && !benchmark_->autoDock && !benchmark_->mine && benchmark_->startIn.empty() && !benchmark_->startLanded &&
+    if (benchmark_ && !benchmark_->autoDock && !benchmark_->mine && !benchmark_->combat && benchmark_->startIn.empty() &&
+        !benchmark_->startLanded &&
         !benchmark_->autoLand)
       controller_.setAutofly(true, benchmark_->throttle, benchmark_->rotation);
     else if (options_.autofly) controller_.setAutofly(true, 0.4f, {0.0f, 0.08f, 0.0f});
@@ -286,8 +304,8 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
 }
 
 void GameApp::openMarket() {
-  if (!session_->dockedMarket() || market_.isOpen()) return;
-  market_.open();
+  if (!MarketPanel::available(*session_) || market_.isOpen()) return;
+  market_.open(*session_);
   mouseWasCaptured_ = mouseCaptured_;
   setMouseCapture(false);
 }
@@ -358,6 +376,60 @@ void GameApp::updateAudio(float dt, float engineDemand, float speedFraction) {
     w.collisions = p.collisions;
   }
   for (int i = 0; i < session_->lastMiningEvents().collected; ++i) audio_.event("scoop", 0.8f, 0.9f + 0.05f * float(i));
+  // Combat: positional one-shots (the cockpit "hears" what its sensors pick up), flashes, shake.
+  {
+    const Vec3 me = p.state.position;
+    const Vec3 right = p.state.orientation.right();
+    int shots = 0;
+    for (const auto& e : session_->takeCombatEvents()) {
+      const Vec3 rel = e.where - me;
+      const float dist = length(rel);
+      const float pan = dist > 1.0f ? std::clamp(dot(rel / dist, right) * 0.8f, -0.8f, 0.8f) : 0.0f;
+      const float near = std::clamp(1.0f - dist / 2500.0f, 0.0f, 1.0f);
+      switch (e.type) {
+        case CombatEvent::Type::ShotFired:
+          if (++shots > 6) break;  // a volley is one sound, not twelve
+          if (e.byPlayer) audio_.event(e.sound, 0.8f, 0.95f + 0.1f * float(shots % 3) * 0.5f, pan * 0.3f);
+          else if (near > 0) audio_.event(e.sound, 0.6f * near, 0.9f, pan);
+          break;
+        case CombatEvent::Type::PlayerHit:
+          audio_.event(e.sound, 1.0f, 0.9f + 0.2f * float(e.amount > 0), pan);
+          if (e.amount > 0) {
+            damageFlashUntil_ = runTime_ + 0.35;
+            combatShake_ = std::min(1.0f, combatShake_ + 0.25f + e.amount / 30.0f);
+          } else {
+            shieldFlashUntil_ = runTime_ + 0.25;
+            combatShake_ = std::min(1.0f, combatShake_ + 0.08f);
+          }
+          break;
+        case CombatEvent::Type::NpcHit:
+          if (near > 0) audio_.event(e.sound, 0.5f * near, 1.15f, pan);
+          break;
+        case CombatEvent::Type::ShipDestroyed:
+          audio_.event("explosion", 0.35f + 0.65f * near, 0.9f, pan);
+          if (dist < 400.0f) combatShake_ = std::min(1.0f, combatShake_ + 0.4f * (1.0f - dist / 400.0f));
+          break;
+        case CombatEvent::Type::PlayerDestroyed:
+          audio_.event("explosion", 1.0f, 0.7f);
+          combatShake_ = 1.0f;
+          break;
+        case CombatEvent::Type::Engaged:
+          audio_.event("alarm", 0.7f);
+          audio_.event("radio");
+          break;
+        case CombatEvent::Type::Escaped: break;
+      }
+    }
+    // Missile lock warning: an incoming homing rocket close by.
+    bool incoming = false;
+    for (const auto& pr : session_->combat().projectiles())
+      incoming |= pr.homingTarget && *pr.homingTarget == kPlayerId && length(pr.pos - me) < 1200.0f;
+    if (incoming && runTime_ > missileWarnUntil_) {
+      audio_.event("warning", 0.8f, 1.3f);
+      missileWarnUntil_ = runTime_ + 0.6;
+    }
+    combatShake_ = std::max(0.0f, combatShake_ - dt * 2.5f);
+  }
   if (market_.isOpen() != w.marketOpen) {
     audio_.event("ui", 1.0f, market_.isOpen() ? 1.0f : 0.8f);
     w.marketOpen = market_.isOpen();
@@ -419,8 +491,8 @@ void GameApp::handleAppInput() {
   if (input_.pressed("interact")) session_->interact();
   if (session_->consumeMarketRequest()) openMarket();
   if (input_.pressed("ui.market") && cockpit) {
-    if (session_->dockedMarket()) openMarket();
-    else session_->notify("Market terminals are available while docked");
+    if (MarketPanel::available(*session_)) openMarket();
+    else session_->notify("Terminals are available while docked or landed");
   }
   if (cockpit) {
     if (input_.pressed("camera.cycle")) camera_.cycleShipCamera(ship);
@@ -429,6 +501,16 @@ void GameApp::handleAppInput() {
     if (input_.pressed("target.next")) world().cycleTarget();
     if (input_.pressed("target.nearestAsteroid")) world().targetNearestAsteroid();
     if (input_.pressed("target.clear")) world().clearTarget();
+    if (input_.pressed("target.nearestHostile") && !session_->combat().targetNearestHostile(world()))
+      session_->notify("No ships on scope");
+    if (input_.pressed("weapon.guns") && miningMode_) {
+      miningMode_ = false;
+      session_->notify("Weapons: PULSE LASERS");
+    }
+    if (input_.pressed("weapon.mining") && !miningMode_) {
+      miningMode_ = true;
+      session_->notify("Weapons: MINING LASER");
+    }
     if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
     if (input_.pressed("nav.next")) {
       const auto dests = world().navDestinations();
@@ -516,7 +598,7 @@ void GameApp::buildDevOverlay() {
   const VkExtent2D ext = renderer_->extent();
   const OverlayColor normal{205, 215, 225, 230}, dim{140, 150, 165, 230}, bad{255, 110, 100, 255};
   std::vector<std::pair<std::string, OverlayColor>> lines;
-  lines.push_back({std::format("FARHORIZON 0.4  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
+  lines.push_back({std::format("FARHORIZON 0.6  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
                                ctx_->vsync() ? "on" : "off", ctx_->validationEnabled() ? "on" : "off"),
                    dim});
   lines.push_back({std::format("FPS {:5.1f}  CPU {:5.2f} ms (max {:5.2f})  GPU {}", s.avgFps, s.avgCpuMs, s.maxCpuMs,
@@ -537,7 +619,8 @@ void GameApp::buildDevOverlay() {
                    vkMsgs > 0 ? bad : dim});
   for (const auto& e : contentErrors_) lines.push_back({e, bad});
   lines.push_back({"W/S throttle  mouse/arrows steer  A/D Space/Ctrl strafe  Q/E roll  Shift boost", dim});
-  lines.push_back({"LMB/Alt mine  R scan  M market (docked)  L dock  K autopilot  F use  F7 save  F8 load", dim});
+  lines.push_back({"LMB fire/mine  RMB rocket  1/2 guns/mining  Y nearest hostile  Alt mine  R scan", dim});
+  lines.push_back({"M terminal  L dock  K autopilot  F use  F7 save  F8 load", dim});
   lines.push_back({"Z assist  B precision  C recenter  T target  G nearest rock  V camera  F2 dev cam", dim});
   lines.push_back({"Esc mouse  F1 info  F3 autofly  F4 look  F5 reload  F11 fullscreen  F12 shot  F10 quit", dim});
 
@@ -563,6 +646,10 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   hc.lookName = look.name;
   hc.lookShownUntil = lookShownUntil_;
   hc.session = session_.get();
+  hc.miningMode = miningMode_;
+  hc.damageFlash = float(std::clamp((damageFlashUntil_ - runTime_) / 0.35, 0.0, 1.0));
+  hc.shieldFlash = float(std::clamp((shieldFlashUntil_ - runTime_) / 0.25, 0.0, 1.0)) * 0.6f;
+  hc.missileWarning = runTime_ < missileWarnUntil_ + 0.3;
   if (market_.isOpen()) {  // the terminal takes the whole screen's attention
     market_.draw(overlay_, *session_, look.hud, float(ext.width), float(ext.height), runTime_);
     return;
@@ -621,8 +708,14 @@ int GameApp::run() {
       world().player().input = hold;
     }
 
-    session_->setMiningTrigger(cockpit && !market_.isOpen() && !devCam &&
-                               ((mouseCaptured_ && input_.mouseLeft()) || input_.down("ship.mine")));
+    {  // Triggers: LMB fires the selected system (guns or mining laser), RMB rockets.
+      const bool controls = cockpit && !market_.isOpen() && !devCam;
+      const bool lmb = mouseCaptured_ && input_.mouseLeft();
+      const bool rmb = mouseCaptured_ && input_.mouseRight();
+      session_->setMiningTrigger(controls && ((miningMode_ && lmb) || input_.down("ship.mine")));
+      session_->setFireTriggers(controls && ((!miningMode_ && lmb) || input_.down("ship.firePrimary")),
+                                controls && (rmb || input_.down("ship.fireSecondary")));
+    }
     if (benchmark_ && benchmark_->mine && cockpit) {  // scripted mining run: face the nearest rock and cut
       if (!world().target()) world().targetNearestAsteroid();
       if (const auto& t = world().target(); t && t->kind == TargetRef::Kind::Asteroid) {
@@ -636,6 +729,26 @@ int GameApp::run() {
           session_->mining().startScan(t->index, world().simulationTime());
       }
       session_->setMiningTrigger(true);
+    }
+    if (benchmark_ && benchmark_->combat && cockpit) {  // scripted skirmish: perfect aim at the nearest hostile
+      Combat& cb = session_->combat();
+      const auto& t = world().target();
+      if (!t || t->kind != TargetRef::Kind::Ship || !cb.npc(t->index)) cb.targetNearestHostile(world());
+      bool fire = false, rockets = false;
+      if (const auto& t2 = world().target(); t2 && t2->kind == TargetRef::Kind::Ship)
+        if (auto lead = cb.leadPoint(world(), t2->index)) {
+          auto& st = world().player().state;
+          const Vec3 f = normalize(*lead - st.position);
+          const Vec3 axis = cross(Vec3{0, 0, -1}, f);
+          const float ang = std::acos(std::clamp(dot(Vec3{0, 0, -1}, f), -1.0f, 1.0f));
+          st.orientation = length(axis) > 1e-5f ? Quat::fromAxisAngle(normalize(axis), ang) : Quat{};
+          st.angularVelocity = {};
+          const float d = length(*lead - st.position);
+          fire = d < 1000.0f && !cb.playerArms().overheated;
+          rockets = d < 1400.0f;
+          controller_.setThrottle(d > 700.0f ? 0.6f : 0.0f);  // close in, then hold
+        }
+      session_->setFireTriggers(fire, rockets);
     }
     const int steps = clock_.advance(dt);
     for (int i = 0; i < steps; ++i) {
@@ -673,7 +786,7 @@ int GameApp::run() {
     {  // re-entry / touchdown shake and transit field-of-view stretch
       const float heat = session_->landing().heat();
       const bool approach = session_->landing().state() == LandState::SurfaceApproach;
-      const float shake = heat * 0.012f + (approach ? 0.004f : 0.0f);
+      const float shake = heat * 0.012f + (approach ? 0.004f : 0.0f) + combatShake_ * combatShake_ * 0.02f;
       if (shake > 0) {
         const float t = float(runTime_);
         view.rotation = normalize(view.rotation * Quat::fromAxisAngle({1, 0, 0}, shake * std::sin(t * 41.0f)) *
@@ -836,7 +949,83 @@ int GameApp::run() {
         if (!frustum.sphereVisible(rel, 2.0f)) continue;
         const Quat spin = Quat::fromAxisAngle(normalize(Vec3{0.3f, 1.0f, 0.2f}), float(t - c.spawnTime) * 1.7f);
         items.push_back({chunkMesh, Mat4::translation(rel) * Mat4::rotation(spin) * Mat4::scale({0.8f, 0.8f, 0.8f})});
-        glows.push_back({Vec4(rel, 1.0f), Vec4(1.4f, 0.7f, 0.25f, 0)});
+        const bool salvage = c.commodity.rfind("goods.", 0) == 0;  // canisters from wrecks blink cyan
+        const float blink = salvage ? 0.6f + 0.4f * std::sin(float(t) * 6.0f + float(c.spawnTime)) : 1.0f;
+        glows.push_back({Vec4(rel, salvage ? 1.4f : 1.0f),
+                         salvage ? Vec4(Vec3{0.3f, 1.3f, 1.6f} * blink, 0) : Vec4(1.4f, 0.7f, 0.25f, 0)});
+      }
+    }
+
+    // ---- Combat: other ships, bolts, rockets, explosions and debris ----
+    if (cockpit && !surface) {
+      const Combat& combat = session_->combat();
+      const float alpha = float(clock_.alpha());
+      const double t = world().simulationTime();
+      for (const auto& n : combat.npcs()) {
+        const ShipType* type = combat.shipType(n.shipDef);
+        if (!type) continue;
+        const Vec3 pos = lerp(n.previous.position, n.state.position, alpha);
+        const Quat rot = nlerp(n.previous.orientation, n.state.orientation, alpha);
+        const Vec3 rel = pos - view.position;
+        if (!frustum.sphereVisible(rel, type->radius * 2.0f)) continue;
+        if (type->visual) items.push_back({type->visual, Mat4::translation(rel) * Mat4::rotation(rot) * type->meshFix});
+        const EngineGlowDef& eg = type->def.engineGlow;
+        const float demand = n.state.boosting ? 1.0f : std::clamp(n.input.throttle, 0.0f, 1.0f);
+        const Vec3 col = n.state.boosting ? eg.boostColor : eg.color;
+        for (const auto& sname : eg.sockets)
+          if (auto it = type->def.sockets.find(sname); it != type->def.sockets.end())
+            glows.push_back({Vec4(rel + rot.rotate(it->second.position), eg.idleSize + (eg.thrustSize - eg.idleSize) * demand),
+                             Vec4(col * (eg.idleIntensity + (eg.thrustIntensity - eg.idleIntensity) * demand), 0)});
+        for (const auto& l : type->def.lights) {
+          const float k = l.intensityAt(t + double(n.id) * 0.37);
+          if (k > 0) glows.push_back({Vec4(rel + rot.rotate(l.position), l.size), Vec4(l.color * k, 0)});
+        }
+      }
+      for (const auto& pr : combat.projectiles()) {
+        const Vec3 rel = pr.pos - view.position;
+        if (!frustum.sphereVisible(rel, pr.def->boltLength + 2.0f)) continue;
+        const float speed = length(pr.vel);
+        const Vec3 back = speed > 1e-3f ? -pr.vel / speed : Vec3{0, 0, 1};
+        if (pr.def->homing > 0) {  // rocket: hot head + fading exhaust trail
+          glows.push_back({Vec4(rel, 1.6f), Vec4(pr.def->color * 1.5f, 0)});
+          for (int k = 1; k <= 8; ++k)
+            glows.push_back({Vec4(rel + back * (float(k) * 2.2f), 0.9f + 0.18f * float(k)),
+                             Vec4(Vec3{1.2f, 0.8f, 0.5f} * (0.5f / float(k)), 0)});
+          params.pointLights.push_back({rel, 40.0f, Vec3{300.0f, 200.0f, 120.0f}});
+        } else {  // bolt: a short bright streak
+          const int n = 6;
+          for (int k = 0; k < n; ++k) {
+            const float f = float(k) / float(n - 1);
+            glows.push_back({Vec4(rel + back * (f * pr.def->boltLength), 0.55f - 0.25f * f),
+                             Vec4(pr.def->color * (1.0f - 0.6f * f), 0)});
+          }
+        }
+      }
+      for (const auto& e : combat.explosions()) {
+        const float age = float(t - e.time);
+        if (age < 0) continue;
+        const float fade = std::exp(-age * 2.2f);
+        const Vec3 rel = e.pos - view.position;
+        if (!frustum.sphereVisible(rel, e.size * 3.0f)) continue;
+        glows.push_back({Vec4(rel, e.size * (0.35f + age * 1.2f)), Vec4(Vec3{5.0f, 2.2f, 0.7f} * fade, 0)});
+        glows.push_back({Vec4(rel, e.size * 0.25f), Vec4(Vec3{6.0f, 5.0f, 4.0f} * std::exp(-age * 6.0f), 0)});
+        params.pointLights.push_back({rel, e.size * 10.0f, Vec3{2500.0f, 1100.0f, 350.0f} * (fade * e.size / 20.0f)});
+        if (e.size >= 8.0f) {  // hull debris: sparks flung outward, cooling to red
+          std::uint32_t h = std::uint32_t(e.time * 1000.0) * 2654435761u;
+          for (int k = 0; k < 18; ++k) {
+            auto rnd = [&] {
+              h ^= h << 13;
+              h ^= h >> 17;
+              h ^= h << 5;
+              return float(h & 0xFFFF) / 65535.0f - 0.5f;
+            };
+            const Vec3 dir = normalize(Vec3{rnd(), rnd(), rnd()} + Vec3{1e-3f, 0, 0});
+            const float speed = e.size * (1.5f + 2.5f * (rnd() + 0.5f));
+            const float cool = std::exp(-age * 1.1f);
+            glows.push_back({Vec4(rel + dir * (speed * age), 0.5f + 0.4f * cool),
+                             Vec4(Vec3{3.0f * cool + 0.4f, 1.1f * cool * cool, 0.25f * cool * cool * cool} * cool, 0)});
+          }
+        }
       }
     }
 

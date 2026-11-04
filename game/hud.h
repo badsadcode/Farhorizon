@@ -27,6 +27,11 @@ struct HudContext {
   std::string lookName;      // active visual profile, shown briefly after switching
   double lookShownUntil = 0;
   const GameSession* session = nullptr;  // docking state, notices
+  // Stage 6.
+  bool miningMode = false;   // weapon selector
+  float damageFlash = 0;     // 0..1 red edge flash (hull hit)
+  float shieldFlash = 0;     // 0..1 cyan edge flash (shield hit)
+  bool missileWarning = false;
 };
 
 struct InteriorHudContext {

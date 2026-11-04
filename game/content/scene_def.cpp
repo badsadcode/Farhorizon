@@ -333,6 +333,7 @@ std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, cons
   b.mine = j.value("mine", false);
   b.startLanded = j.value("startLanded", false);
   b.autoLand = j.value("autoLand", false);
+  b.combat = j.value("combat", false);
   if (!b.startIn.empty() && b.startIn != "ship" && b.startIn != "station" && b.startIn != "surface") b.startIn = "?";
   b.lookTurnDegPerSec = float(r.num(j, "lookTurnDegPerSec", false, 0.0));
   if (b.startIn == "?") r.error("startIn must be ship, station or surface");

@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 5 (travel drive, planet, landing site)._
+_Last updated: 2026-11-04 · Stage 6 (combat, contracts, upgrades)._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -10,7 +10,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
-| Test harness | ✅ | 59 tests (incl. headless Stage 3, 4 and 5 exit criteria) + content validation (CTest) |
+| Test harness | ✅ | 70 tests (incl. headless Stage 3, 4, 5 and 6 exit criteria) + content validation (CTest) |
 | CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
@@ -83,6 +83,24 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Repeated cycles incl. after reload, no jitter | ✅ | headless CTest (3 trade cycles, reload while landed) + in-app run (1,564 rebases, 0 errors) |
 | Manual surface landing | ⬜ | approach is scripted (ISSUES #24) |
 
+## Stage 6 — combat and contracts
+| Item | State | Notes |
+|---|---|---|
+| Ship weapons | ✅ | twin pulse lasers (projectile, heat), seeker rockets (homing); data-driven; ADR 0009 |
+| Shields and hull | ✅ | shields first with delayed recharge; collision damage; unit-tested |
+| Basic AI pilots | ✅ | pirate (patrol/intercept/attack/evade/retreat) and trader (route/flee) on the player's flight model |
+| Encounter + traffic spawning | ✅ | Rust Jackal pack on the deep side of the Cinder Drift; Ossa Co-op hauler route near Kestrel |
+| Targeting + combat HUD | ✅ | Y nearest hostile; lead pip; shield/hull/heat; triangle/square markers; flashes; text warnings |
+| Explosions, debris, salvage | ✅ | bloom flash + point light + sparks; wrecks drop scoopable canisters |
+| Defeat / insurance | ✅ | towed to the nearest repair station, cargo lost, deductible; unit-tested |
+| Contracts | ✅ | courier / procurement / bounty; deterministic daily boards; turn-in on arrival |
+| Upgrades + repair | ✅ | 6 shipyard upgrades on a derived ship def; hull repair service |
+| Terminal tabs | ✅ | MARKET / SERVICES / CONTRACTS, keyboard + mouse |
+| Saves v3 | ✅ | durability, upgrades, contracts; v2 → v3 migration; byte-identical round trip |
+| Exit: choose combat or trade, complete a contract, buy an upgrade | ✅ | headless CTest: bounty route (kills, turn-in) + reload + mining procurement + upgrade |
+| Reputation / factions standing | ⬜ | factions exist in data only (ISSUES #31) |
+| Balance verified by a human | ⬜ | tuned via tests and benchmark runs only |
+
 ## Atmosphere
 | Item | State | Notes |
 |---|---|---|
@@ -103,4 +121,4 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
 
 ## Later stages
-Not started: combat/contracts (6), polish (7).
+Not started: polish (7).

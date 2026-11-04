@@ -28,3 +28,9 @@
 | 24 | open | landing | The descent and approach are scripted (no manual landing on the surface yet), and the speed readout shows the cinematic plunge rate. |
 | 25 | open | planets | Planets do not rotate or orbit; site lighting is fixed (dusk at Gale Ridge). |
 | 26 | open | travel | Transit ignores collisions; a jump through an asteroid field passes straight through. |
+| 27 | open | combat | NPC ships only collide with asteroids; they can pass through stations and each other. Projectiles also pass through stations. |
+| 28 | open | combat | AI steering is direct (no obstacle avoidance), so raiders sometimes ram rocks inside dense clusters and bounce. |
+| 29 | open | combat | Balance (damage, heat, pirate accuracy, rewards) is tuned only by tests and benchmark runs. It needs a human play session. |
+| 30 | open | combat | Salvage canisters reuse the asteroid chunk mesh (tinted cyan glow); there is no dedicated canister model. |
+| 31 | open | contracts | No reputation or faction standing; contracts have no deadlines; bounties count any kill of the faction, even outside the contract area. |
+| 32 | open | combat | The raider and hauler are Kenney CC0 placeholders (`craft_speederA`, `craft_miner`). At combat range they are a few pixels, so the HUD markers do most of the work. |

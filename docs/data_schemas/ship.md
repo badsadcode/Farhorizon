@@ -22,6 +22,8 @@
 | `sockets` | `{ name: { position, rotationDeg } }` | | ship-space fallbacks. glTF nodes named `socket_*` / `hardpoint_*` take precedence. |
 | `engineGlow` | `{ sockets[], color, boostColor, idleSize, thrustSize, idleIntensity, thrustIntensity }` | | additive exhaust sprites; colours are linear HDR (>1 blooms) |
 | `lights[]` | `{ position, color, size, blinkHz, phase, duty }` | | ship-space running lights |
-| `mounts` | string[] | | hardpoint names (weapons arrive in Stage 6) |
+| `mounts` | string[] | | hardpoint names (mining beam origins) |
 | `travelDrive` | `{ maxSpeed, acceleration, spoolSeconds, alignToleranceDeg, alignRateDegPerSec, massLockRange, exitSpeed, minDistance }` | | in-system travel drive |
 | `mining` | `{ range, unitsPerSecond, coneDeg, scoopRadius, maxChunks, chunkLifetime, chunkSpeed, scanSeconds }` | | mining laser and scoop |
+| `combat` | `{ shieldRegen, shieldDelay, heatCapacity, heatDissipation, collisionDamagePerMs, primary: [ { mount, weapon } ], secondary: [ … ] }` | | durability recharge, weapon heat and fitted weapons (`mount` = socket name, `weapon` = id in a `weapons` asset; checked by the validator) |
+| `ai` | `{ faction, role (pirate \| trader), detectionRange, attackRange, preferredRange, fleeHullFraction, aimToleranceDeg, lootCommodity, lootMin, lootMax, bounty }` | | NPC behaviour (ignored for the player ship). `bounty` credits are paid on a player kill |

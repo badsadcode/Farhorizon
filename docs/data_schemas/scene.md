@@ -15,3 +15,7 @@
 | `asteroidFields[]` | `{ id, name, systemPosition, seed, count ≤ 20000, radius, thickness, clusters, minScale, maxScale, variants 1–16, detail 0–4, roughness, color }`. Rock meshes and placement are generated deterministically from the seed. |
 | `planets[]` | `{ id, name, systemPosition, radius, colorA, colorB, seed, craters, atmosphereColor, atmosphereThickness (fraction of radius), orbitAltitude, landingSites: [ { id, name, latDeg, lonDeg, interior, market } ] }`. Impostor-rendered; the site's surface scene is an `interior` of kind `surface` |
 | `startingCredits` | credits for a new game |
+| `insuranceDeductible` | credits charged when the ship is lost (default 250; capped at the balance) |
+| `docking.services[]`, `landingSites[].services[]` | terminal services offered there: `repair`, `upgrades`, `contracts` (Stage 6) |
+| `encounters[]` | `{ id, ship, systemPosition, radius, triggerRange, spawnMinDistance, count 0–8, respawnSeconds }`. The zone fills to `count` ships when the player is within `triggerRange` of the centre; losses restart `respawnSeconds`. `triggerRange` must exceed `radius`. |
+| `traffic[]` | `{ id, ship, waypoints: [[x,y,z], …] (≥ 2, system metres), count, triggerRange, respawnSeconds }`. Civilian ships loop the waypoints while the player is within range of the first one. |

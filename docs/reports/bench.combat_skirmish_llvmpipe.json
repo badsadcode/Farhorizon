@@ -1,0 +1,14 @@
+{
+  "avgCpuMs": 112.10269316104862,
+  "avgFps": 8.920392292122573,
+  "avgGpuMs": 109.06878380149816,
+  "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "drawCalls": 49,
+  "frames": 267,
+  "maxCpuMs": 153.53654699999998,
+  "maxGpuMs": 174.364273,
+  "minCpuMs": 87.293387,
+  "p99CpuMs": 149.124856,
+  "scenario": "bench.combat_skirmish",
+  "triangles": 125203
+}

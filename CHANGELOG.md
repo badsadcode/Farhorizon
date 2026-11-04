@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.0 — Stage 6: combat, contracts and upgrades (2026-11-04)
+* **Combat:** shields and hull with delayed recharge, collision damage, weapon heat and
+  overheat lock. Twin **pulse lasers** (simulated bolts, lead pip) and homing **seeker rockets**
+  (RMB). Weapon selector: **1** guns / **2** mining laser. LMB fires the selected system.
+* **AI pilots** fly the same flight model as you. **Rust Jackal raiders** patrol the deep side
+  of the Cinder Drift and intercept, attack, evade and retreat. **Ossa Freight Co-op haulers**
+  run a route past Kestrel and flee when shot.
+* Explosions with bloom flash, point light and spark debris. Wrecks drop salvage canisters
+  the scoop collects. Bounties pay on the kill.
+* **Defeat:** the insurer tows you to Kestrel. Cargo and courier jobs are lost, and a 250 cr
+  deductible is charged.
+* **Contracts:** courier (sealed crates), procurement (ore for the Kestrel refinery, spares for
+  Gale Ridge), bounty (Rust Jackals). Boards refresh each world day, you can hold 3 jobs, and
+  jobs are paid when you arrive at the right place with the goods.
+* **Shipyard:** 6 upgrades (cargo rack, hull plating, shield booster, thruster re-jetting,
+  mining laser Mk II, weapon capacitors) and hull repair.
+* The terminal now has tabs: **MARKET / SERVICES / CONTRACTS**.
+* Combat HUD: shield, hull and heat meters, ship markers (triangle hostile, square civilian),
+  target health, lead pip, cyan and red edge flashes, MISSILE INBOUND / HULL CRITICAL /
+  OVERHEATED warnings, contract tracker.
+* New synthesised sounds: laser shot, slug cannon, rocket launch, shield hit, hull clang,
+  explosion, klaxon. Combat camera shake.
+* Saves **v3** with **v2 → v3 migration**.
+* **Stage 6 exit test in CTest:** take a bounty and a procurement job, fight raiders until the
+  bounty is met, dock and get paid, save/reload, mine and deliver the ore, buy an upgrade.
+  Tests: 70.
+* Benchmark `bench.combat_skirmish`. The validator checks weapons, upgrades, contracts and
+  weapon mounts.
+
 ## 0.5.0 — Stage 5: travel drive, planet and landing site (2026-11-04)
 * In-system **travel drive** (N select, J engage): align, spool, transit, decelerate; exact
   double-precision arrival; mass lock; FOV stretch and engine howl in transit.

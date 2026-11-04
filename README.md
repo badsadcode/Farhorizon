@@ -3,6 +3,13 @@
 A compact, atmospheric 3D space sandbox running on a **purpose-built engine** (C++20, SDL3, Vulkan 1.3).
 It does not use an existing game engine. See `docs/STATUS.md` for what works today.
 
+**Stage 6: combat and contracts.** Rust Jackal raiders hunt the deep side of the Cinder Drift.
+Take a bounty, a courier run or a refinery order, then spend the pay at the shipyard.
+
+| Skirmish in the Cinder Drift (cockpit) | Contract board | Shipyard |
+|---|---|---|
+| ![](docs/screenshots/stage6_combat_cockpit.jpg) | ![](docs/screenshots/stage6_terminal_contracts.jpg) | ![](docs/screenshots/stage6_terminal_services.jpg) |
+
 ![Landed at Gale Ridge Outpost on Varga](docs/screenshots/stage5_gale_ridge_landed.jpg)
 
 | Varga from orbit | Re-entry | On foot at Gale Ridge |
@@ -41,7 +48,7 @@ ctest --test-dir build -C Release
 Run `build/farhorizon` (on Windows: `build\Release\farhorizon.exe`). Full instructions,
 including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDING.md).
 
-## Controls (Stage 2 flight)
+## Controls
 
 | Key | Action |
 |---|---|
@@ -56,9 +63,12 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | B | precision (docking) speed mode |
 | C | recentre the virtual stick |
 | T / G / Backspace | next target / nearest asteroid / clear target |
-| LMB (or Left Alt) | mining laser (target an asteroid with G, aim at it) |
+| 1 / 2 | weapon selector: guns / mining laser |
+| LMB | fire the selected system (guns, or the mining laser; Left Alt always mines) |
+| RMB (or H) | seeker rocket (homes on your locked ship target) |
+| Y | target the nearest hostile ship (lead pip shows where to aim) |
 | R | scan the targeted asteroid (resource, yield, hardness) |
-| M | station market terminal while docked (also F at the hangar terminal) |
+| M | terminal while docked or landed (also F at a terminal): MARKET / SERVICES / CONTRACTS, Tab switches |
 | F7 / F8 | quicksave / load (`saves/`); autosave on every docking |
 | N / J | next nav destination / travel drive engage-abort |
 | L | contextual: request docking, begin descent (near a site's orbit), launch, undock, cancel |

@@ -219,6 +219,69 @@ def wind():
     return normalize(loopable((body + whistle * gust) * gust + grit * gust), 0.6)
 
 
+def laser_shot():
+    # Tired capacitor discharge: a falling square sweep, filtered so it thuds more than it zaps.
+    tt = t(0.28)
+    f = 1400 * np.exp(-tt * 14) + 160
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    tone = np.sign(np.sin(phase)) * 0.6 + np.sin(phase * 0.5) * 0.4
+    hiss = highpass(rng.standard_normal(len(tt)), 2500) * np.exp(-tt * 40) * 0.4
+    return normalize(lowpass_fast(tone, 3000) * np.exp(-tt * 13) + hiss, 0.55)
+
+
+def cannon_shot():
+    tt = t(0.45)
+    thump = np.sin(2 * np.pi * (90 * np.exp(-tt * 6) + 40) * tt) * np.exp(-tt * 11)
+    crack = lowpass_fast(rng.standard_normal(len(tt)), 2200) * np.exp(-tt * 35)
+    return normalize(thump + crack * 0.8, 0.7)
+
+
+def rocket_launch():
+    tt = t(1.4)
+    n = rng.standard_normal(len(tt))
+    roar = lowpass_fast(n, 700, passes=2) * 3.0
+    hiss = highpass(n, 2000) * 0.5
+    e = np.minimum(1.0, tt / 0.05) * np.exp(-tt * 2.2)
+    pop = np.sin(2 * np.pi * 55 * tt) * np.exp(-tt * 18)
+    return normalize((roar + hiss) * e + pop, 0.65)
+
+
+def shield_hit():
+    # Electrical fizz with a ringing emitter tone.
+    tt = t(0.5)
+    fizz = highpass(rng.standard_normal(len(tt)), 1800) * ((rng.random(len(tt)) < 0.25) * 1.0)
+    ring = np.sin(2 * np.pi * 820 * tt + 3 * np.sin(2 * np.pi * 37 * tt)) * 0.5
+    return normalize((lowpass_fast(fizz, 6000) * 0.8 + ring) * np.exp(-tt * 9), 0.55)
+
+
+def hull_hit():
+    # Something heavy hits a steel bulkhead: inharmonic clang plus a dull body knock.
+    tt = t(1.1)
+    partials = [(173, 1.0, 5), (411, 0.6, 7), (697, 0.4, 9), (1123, 0.25, 12)]
+    clang = sum(a * np.sin(2 * np.pi * f * tt) * np.exp(-tt * d) for f, a, d in partials)
+    knock = lowpass_fast(rng.standard_normal(len(tt)), 400) * np.exp(-tt * 25) * 3
+    return normalize(clang * 0.6 + knock, 0.8)
+
+
+def explosion():
+    tt = t(3.2)
+    n = rng.standard_normal(len(tt))
+    body = lowpass_fast(n, 180, passes=2) * 6
+    crackle = highpass(n, 900) * (rng.random(len(tt)) < 0.04) * 1.5
+    e = np.minimum(1.0, tt / 0.01) * np.exp(-tt * 1.6)
+    boom = np.sin(2 * np.pi * (48 * np.exp(-tt * 2) + 22) * tt) * np.exp(-tt * 3)
+    return normalize((body + crackle * np.exp(-tt * 3)) * e + boom, 0.9)
+
+
+def alarm():
+    # Old klaxon: two alternating detuned square tones through a cheap speaker.
+    tt = t(1.2)
+    f = np.where((tt % 0.4) < 0.2, 620, 520)
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    tone = np.sign(np.sin(phase)) + 0.5 * np.sign(np.sin(phase * 1.01))
+    return normalize(highpass(lowpass_fast(tone, 1800), 300) * env(len(tt), 0.01, 0.1), 0.4)
+
+
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -237,6 +300,14 @@ def main(out):
     write(out / "radio_blip.wav", radio_blip())
     write(out / "warning.wav", warning())
     write(out / "wind.wav", wind())
+    # Stage 6 (appended so earlier files keep their random streams).
+    write(out / "laser_shot.wav", laser_shot())
+    write(out / "cannon_shot.wav", cannon_shot())
+    write(out / "rocket_launch.wav", rocket_launch())
+    write(out / "shield_hit.wav", shield_hit())
+    write(out / "hull_hit.wav", hull_hit())
+    write(out / "explosion.wav", explosion())
+    write(out / "alarm.wav", alarm())
 
 
 if __name__ == "__main__":

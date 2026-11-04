@@ -129,6 +129,12 @@ NpcShip* Combat::npc(std::uint32_t id) {
   return nullptr;
 }
 
+const NpcShip* Combat::npc(std::uint32_t id) const {
+  for (const auto& n : npcs_)
+    if (n.id == id) return &n;
+  return nullptr;
+}
+
 std::uint32_t Combat::spawn(SpaceWorld& world, const AssetID& shipDef, const Vec3& local, int encounter, int traffic) {
   const ShipType* t = shipType(shipDef);
   if (!t) {
@@ -149,6 +155,7 @@ std::uint32_t Combat::spawn(SpaceWorld& world, const AssetID& shipDef, const Vec
   n.ai = t->def.ai.role == "pirate" ? AiState::Patrol : AiState::Route;
   n.goal = local;
   (void)world;
+  log::info("combat", "spawned {} #{} ({})", shipDef, n.id, t->def.ai.role);
   npcs_.push_back(n);
   return n.id;
 }
@@ -162,16 +169,17 @@ void Combat::updateSpawns(SpaceWorld& world, bool playerActive, float dt) {
     if (!playerActive || length(centre - me) > ed.triggerRange) continue;
     const int alive = int(std::count_if(npcs_.begin(), npcs_.end(), [&](const NpcShip& n) { return n.encounter == int(e); }));
     if (alive >= ed.count || encounterTimers_[e] > 0) continue;
-    // Spawn somewhere in the zone, never right next to the player.
-    for (int tries = 0; tries < 8; ++tries) {
-      const Vec3 off = normalize(Vec3{rand01() - 0.5f, (rand01() - 0.5f) * 0.4f, rand01() - 0.5f}) * (ed.radius * rand01());
-      const Vec3 p = centre + off;
-      if (length(p - me) >= ed.spawnMinDistance) {
-        spawn(world, ed.ship, p, int(e), -1);
-        encounterTimers_[e] = ed.respawnSeconds / float(std::max(1, ed.count));
-        break;
+    // Fill the zone (a pack arrives together), never right next to the player. Losses start the
+    // respawn timer (destroyNpc / retreat).
+    for (int k = alive; k < ed.count; ++k)
+      for (int tries = 0; tries < 8; ++tries) {
+        const Vec3 off = normalize(Vec3{rand01() - 0.5f, (rand01() - 0.5f) * 0.4f, rand01() - 0.5f}) * (ed.radius * rand01());
+        const Vec3 p = centre + off;
+        if (length(p - me) >= ed.spawnMinDistance) {
+          spawn(world, ed.ship, p, int(e), -1);
+          break;
+        }
       }
-    }
   }
   for (size_t t = 0; t < traffic_.size(); ++t) {
     trafficTimers_[t] = std::max(0.0, trafficTimers_[t] - dt);
@@ -405,6 +413,8 @@ void Combat::moveProjectiles(SpaceWorld& world, Mining& mining, float dt) {
 void Combat::destroyNpc(size_t index, SpaceWorld& world, Mining& mining, bool byPlayer) {
   NpcShip n = npcs_[index];
   npcs_.erase(npcs_.begin() + std::ptrdiff_t(index));
+  if (n.encounter >= 0) encounterTimers_[size_t(n.encounter)] = encounters_[size_t(n.encounter)].respawnSeconds;
+  if (n.traffic >= 0) trafficTimers_[size_t(n.traffic)] = traffic_[size_t(n.traffic)].respawnSeconds;
   const ShipType& t = types_.at(n.shipDef);
   explosions_.push_back({n.state.position, time_, t.radius * 4.0f});
   events_.push_back({CombatEvent::Type::ShipDestroyed, t.def.ai.faction, n.shipDef, "explosion", n.state.position, byPlayer, 0});
@@ -466,6 +476,8 @@ void Combat::fixedUpdate(SpaceWorld& world, Mining& mining, bool firePrimary, bo
 
   for (size_t i = 0; i < npcs_.size();) {
     if (npcs_[i].dur.hull < 0) {  // escaped (retreat) -> vanish quietly
+      if (npcs_[i].encounter >= 0)
+        encounterTimers_[size_t(npcs_[i].encounter)] = encounters_[size_t(npcs_[i].encounter)].respawnSeconds;
       npcs_.erase(npcs_.begin() + std::ptrdiff_t(i));
     } else if (npcs_[i].dur.dead()) {
       destroyNpc(i, world, mining, time_ - npcs_[i].lastHitByPlayer < 1.0);

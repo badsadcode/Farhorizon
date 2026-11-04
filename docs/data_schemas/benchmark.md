@@ -24,6 +24,7 @@ Optional fields:
 
 `"startLanded": true` starts landed at the first site; `"autoLand": true` requests a landing immediately; `"startIn": "surface"` starts on foot at the site.
 `"mine": true` targets the nearest asteroid, faces it and holds the laser.
+`"combat": true` targets the nearest hostile, closes in, aims at the lead point and fires (guns < 1 km, rockets < 1.4 km).
 
-Shipped benchmarks: `bench.planet_orbit`, `bench.landing`, `bench.surface_landed`, `bench.surface_outpost`, `bench.mining`, `bench.empty_space_cockpit`, `bench.asteroid_field_chase`,
+Shipped benchmarks: `bench.combat_skirmish`, `bench.planet_orbit`, `bench.landing`, `bench.surface_landed`, `bench.surface_outpost`, `bench.mining`, `bench.empty_space_cockpit`, `bench.asteroid_field_chase`,
 `bench.station_approach`, `bench.docking_autopilot`, `bench.ship_interior`, `bench.station_hangar`.

@@ -21,6 +21,7 @@
 #include "game/market_ui.h"
 #include "game/persistence/save_game.h"
 #include "game/session/game_session.h"
+#include "game/session/progression_setup.h"
 #include "game/ship_controller.h"
 #include "game/world/space_world.h"
 
@@ -84,7 +85,14 @@ class GameApp {
   VisualProfileSet looks_;
   int activeLook_ = 0;
   double lookShownUntil_ = 0;
+  std::unique_ptr<ProgressionContent> progression_;  // outlives session_ (declared first)
   std::unique_ptr<GameSession> session_;
+  // Stage 6 presentation state.
+  bool miningMode_ = false;        // weapon selector: false = guns, true = mining laser
+  double damageFlashUntil_ = 0;    // red edge flash after a hull hit
+  double shieldFlashUntil_ = 0;
+  float combatShake_ = 0;
+  double missileWarnUntil_ = 0;
   struct PieceInstance {
     std::uint32_t mesh;
     Mat4 model;  // interior space

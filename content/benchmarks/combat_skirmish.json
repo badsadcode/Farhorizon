@@ -1,0 +1,19 @@
+{
+  "id": "bench.combat_skirmish",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 30,
+  "camera": "chase",
+  "player": {
+    "systemPosition": [
+      149597864198.0,
+      11999974.0,
+      -3500005031.0
+    ],
+    "rotationDeg": [
+      0,
+      -75,
+      0
+    ]
+  },
+  "combat": true
+}

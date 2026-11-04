@@ -19,6 +19,7 @@ build/content_validator content
 | Interiors | `content/interiors/*.interior.json` | [interior.md](interior.md) |
 | Economy (commodities, markets, mining, saves) | `content/economy/` | [economy.md](economy.md) |
 | Audio | `content/audio/audio.json` | [audio.md](audio.md) |
+| Weapons, upgrades, contracts | `content/combat/`, `content/economy/upgrades.json`, `content/missions/` | [combat.md](combat.md) |
 
 Conventions: metres, seconds, tons, degrees in data (radians only in code), linear RGB for
 colours unless stated, right-handed +Y up with −Z forward.

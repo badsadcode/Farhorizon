@@ -309,6 +309,7 @@ void GameSession::handleCombatEvents() {
       notify("Contact: hostile ships closing");
     }
     const bool defeat = e.type == CombatEvent::Type::PlayerDestroyed;
+    if (combatEvents_.size() >= 512) combatEvents_.erase(combatEvents_.begin(), combatEvents_.begin() + 256);  // unread
     combatEvents_.push_back(std::move(e));
     if (defeat) {
       handleDefeat();

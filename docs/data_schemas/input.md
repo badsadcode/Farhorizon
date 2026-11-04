@@ -18,3 +18,7 @@ Actions: `nav.next`, `travel.engage`, `ship.mine`, `ship.scan`, `ui.market`, `ui
 `target.clear`, `camera.cycle`, `camera.dev`, `camera.forward/back/left/right/up/down/boost`,
 `camera.autoRotate`, `app.toggleMouse`, `app.quit`, `debug.overlay`, `debug.autofly`,
 `visual.cycleLook`, `debug.reloadAssets`, `debug.screenshot`, `window.fullscreen`.
+
+Stage 6 actions: `ship.firePrimary` (keyboard alternative to LMB in guns mode), `ship.fireSecondary`
+(alternative to RMB), `weapon.guns` (1), `weapon.mining` (2), `target.nearestHostile` (Y), and the
+terminal keys `ui.tabNext` (Tab), `ui.accept` (Enter), `ui.abandon` (Delete). `ui.close` is Escape only.

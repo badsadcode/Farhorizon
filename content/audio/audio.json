@@ -84,6 +84,41 @@
       "file": "audio/wind.wav",
       "bus": "ambience",
       "gain": 0.7
+    },
+    "laser_shot": {
+      "file": "audio/laser_shot.wav",
+      "bus": "effects",
+      "gain": 0.45
+    },
+    "cannon_shot": {
+      "file": "audio/cannon_shot.wav",
+      "bus": "effects",
+      "gain": 0.6
+    },
+    "rocket_launch": {
+      "file": "audio/rocket_launch.wav",
+      "bus": "effects",
+      "gain": 0.6
+    },
+    "shield_hit": {
+      "file": "audio/shield_hit.wav",
+      "bus": "effects",
+      "gain": 0.55
+    },
+    "hull_hit": {
+      "file": "audio/hull_hit.wav",
+      "bus": "effects",
+      "gain": 0.8
+    },
+    "explosion": {
+      "file": "audio/explosion.wav",
+      "bus": "effects",
+      "gain": 0.9
+    },
+    "alarm": {
+      "file": "audio/alarm.wav",
+      "bus": "effects",
+      "gain": 0.45
     }
   },
   "events": {
@@ -93,7 +128,14 @@
     "ui": "ui_beep",
     "radio": "radio_blip",
     "scoop": "scoop",
-    "warning": "warning"
+    "warning": "warning",
+    "laser_shot": "laser_shot",
+    "cannon_shot": "cannon_shot",
+    "rocket_launch": "rocket_launch",
+    "shield_hit": "shield_hit",
+    "hull_hit": "hull_hit",
+    "explosion": "explosion",
+    "alarm": "alarm"
   },
   "locations": {
     "space": {

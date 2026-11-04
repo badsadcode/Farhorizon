@@ -213,6 +213,7 @@ struct BenchmarkDef {
   bool mine = false;       // target the nearest asteroid, face it and hold the mining laser
   bool startLanded = false;  // start landed at the first landing site
   bool autoLand = false;     // request a landing at the nearest site immediately
+  bool combat = false;       // auto-target the nearest hostile, aim at its lead point and fire
 };
 
 std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, const AssetID& id,
