@@ -25,12 +25,21 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Unit + content tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package playable build
+        shell: pwsh
+        run: |
+          $d = "dist\FARHORIZON"
+          New-Item -ItemType Directory -Force -Path "$d\shaders" | Out-Null
+          Copy-Item build\Release\farhorizon.exe $d
+          Copy-Item build\shaders\*.spv "$d\shaders"
+          Copy-Item -Recurse content "$d\content"
+          Copy-Item packaging\PLAY.txt $d
+          Copy-Item docs\DEPENDENCIES.md "$d\THIRD_PARTY.md"
+          Get-ChildItem -Recurse $d | Measure-Object -Property Length -Sum
       - uses: actions/upload-artifact@v4
         with:
-          name: farhorizon-windows-x64
-          path: |
-            build/Release/farhorizon.exe
-            build/shaders/*.spv
+          name: FARHORIZON-windows-x64
+          path: dist/
 
   linux:
     runs-on: ubuntu-24.04

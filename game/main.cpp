@@ -6,7 +6,9 @@
 #include <string>
 
 #define SDL_MAIN_HANDLED
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_main.h>
+#include <filesystem>
 
 #include "engine/core/log.h"
 #include "game/game_app.h"
@@ -43,6 +45,18 @@ int main(int argc, char** argv) {
   fh::AppOptions o;
   o.contentDir = FH_DEFAULT_CONTENT_DIR;
   o.shaderDir = FH_DEFAULT_SHADER_DIR;
+  // Packaged build: content/ and shaders/ sit next to the executable. Prefer them, and keep
+  // saves, screenshots and the log beside the game too (whatever the launch directory).
+  if (const char* base = SDL_GetBasePath()) {
+    const std::filesystem::path root = std::filesystem::path(base);
+    std::error_code ec;
+    if (std::filesystem::exists(root / "content" / "asset_manifest.json", ec) &&
+        std::filesystem::exists(root / "shaders", ec)) {
+      o.contentDir = root / "content";
+      o.shaderDir = root / "shaders";
+      std::filesystem::current_path(root, ec);
+    }
+  }
 #ifndef NDEBUG
   o.validation = true;
 #endif

@@ -1,0 +1,37 @@
+FARHORIZON 0.6 - test build (Stage 6: combat, contracts, upgrades)
+====================================================================
+
+Run farhorizon.exe. Keep the "content" and "shaders" folders next to it.
+Saves (saves\), screenshots (screenshots\) and the log (farhorizon.log) are written here too.
+
+Needs: Windows 10/11 x64 and a GPU driver with Vulkan 1.3 (any recent NVIDIA, AMD or Intel
+driver). If the window does not open, update your graphics driver and check farhorizon.log.
+A console window shows the log; that's normal for test builds.
+
+Getting started
+---------------
+* You start in space near Kestrel Station. Press Esc to capture the mouse and steer with it.
+* W/S throttle, A/D/Space/Ctrl strafe, Q/E roll, Shift boost.
+* L near Kestrel: request docking, K: docking autopilot. When docked, M opens the terminal
+  (MARKET / SERVICES / CONTRACTS, Tab switches, Enter takes a job / fits an upgrade).
+* Try a bounty: take it at Kestrel, fly to the deep side of the Cinder Drift (N selects
+  destinations, J travel drive), press Y to target a raider, aim at the red lead pip, LMB to
+  fire, RMB for rockets. Watch the HEAT bar. Then dock at Kestrel to get paid.
+* Or mine: 2 selects the mining laser, G targets a rock, R scans it, LMB cuts; sell or deliver
+  the ore at Kestrel. Varga's Gale Ridge outpost (land with L near its orbit marker) pays well
+  for supplies.
+
+Keys
+----
+1 / 2      guns / mining laser          Y           nearest hostile
+LMB        fire selected system         RMB / H     seeker rocket
+T / G      next target / nearest rock   Backspace   clear target
+N / J      nav destination / travel     L           dock / land / launch / undock
+F          leave seat, airlock, use     V           chase / cockpit camera
+F7 / F8    quicksave / quickload        F4          change look (Used Future / Retro 80s / Clean)
+F1         developer info               F11 / F12   fullscreen / screenshot      F10 quit
+
+Command line: farhorizon.exe --continue (load quicksave), --size 1920x1080, --no-vsync.
+
+This is an early test build. Placeholder art (Kenney CC0), synthesised placeholder sounds.
+Feedback on feel, difficulty and anything broken is very welcome!
