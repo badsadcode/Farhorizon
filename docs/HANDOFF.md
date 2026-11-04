@@ -28,7 +28,7 @@ milestone. How to add one is in the comment at the top of its styles.
 ## Next steps
 **See `docs/ROADMAP.md` for the agreed order.** UI (0.7.0, ADR 0010) and lighting (0.7.1, ADR 0011) are
 done in code and waiting for the owner's playtest. Feedback may send work back there. Next is
-**points of interest**: reach a Blender map in the game world, then FPS exploration. The Blender editor
+**points of interest**: The Ash Wren can be flown to and explored (0.8.2). Next is first-person weapons, enemies and loot. The Blender editor
 itself is done (0.8.0, ADR 0012, `docs/BLENDER_GUIDE.md`). Rebuild the sample with
 `blender -b --factory-startup --python tools/blender/build_sample_derelict.py`.
 

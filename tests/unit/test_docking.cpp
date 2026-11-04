@@ -30,7 +30,7 @@ std::optional<Fixture> makeFixture(const DVec3& startOffsetFromStation) {
   if (!scene || !ship) return std::nullopt;
   const PropDef* station = nullptr;
   for (const auto& p : scene->props)
-    if (p.docking) station = &p;
+    if (p.docking && p.id == "station.kestrel") station = &p;
   if (!station) return std::nullopt;
   Fixture f{*m, *scene, *ship, nullptr};
   const SystemPosition start{station->position.metres + startOffsetFromStation};

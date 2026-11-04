@@ -583,8 +583,12 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
         break;
       case DockState::Capture: hint = "Clamps engaging..."; break;
       case DockState::Docked:
-        hint = std::format("DOCKED   {} terminal   {} leave seat   {} undock   {} save", key("ui.market"), key("interact"),
-                           dockKey, key("game.save"));
+        {
+          const auto& dockDef = gs.world().props().at(*dk.station()).def.docking;
+          const bool hasTerminal = dockDef && (!dockDef->market.empty() || !dockDef->services.empty());
+          hint = std::format("DOCKED   {}{} leave seat   {} undock   {} save", hasTerminal ? key("ui.market") + " terminal   " : std::string(),
+                             key("interact"), dockKey, key("game.save"));
+        }
         break;
       case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
     }

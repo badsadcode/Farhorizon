@@ -23,14 +23,26 @@
     "galacticPlaneTiltDeg": 28.0
   },
   "ambient": {
-    "skyColor": [0.0352, 0.0416, 0.048],
-    "groundColor": [0.016, 0.016, 0.0144],
+    "skyColor": [
+      0.0352,
+      0.0416,
+      0.048
+    ],
+    "groundColor": [
+      0.016,
+      0.016,
+      0.0144
+    ],
     "fillDirection": [
       0.55,
       0.45,
       0.7
     ],
-    "fillColor": [0.048, 0.072, 0.0672],
+    "fillColor": [
+      0.048,
+      0.072,
+      0.0672
+    ],
     "rimColor": [
       0.07,
       0.085,
@@ -476,6 +488,92 @@
           "duty": 0.3
         }
       ]
+    },
+    {
+      "id": "station.derelict",
+      "name": "The Ash Wren",
+      "mesh": "mesh.derelict_sample",
+      "scale": 1.0,
+      "systemPosition": [
+        149597850700.0,
+        12006000.0,
+        -3500036000.0
+      ],
+      "rotationDeg": [
+        6,
+        40,
+        35
+      ],
+      "collisionRadius": 26.0,
+      "marker": "station",
+      "colliders": [
+        {
+          "center": [
+            0,
+            0,
+            -9
+          ],
+          "halfExtents": [
+            8.2,
+            4.2,
+            9.2
+          ]
+        },
+        {
+          "center": [
+            0,
+            -2.5,
+            9
+          ],
+          "halfExtents": [
+            2.2,
+            1.7,
+            9.2
+          ]
+        }
+      ],
+      "lights": [
+        {
+          "position": [
+            8.2,
+            4.4,
+            -18
+          ],
+          "color": [
+            3.2,
+            0.5,
+            0.25
+          ],
+          "size": 0.9,
+          "blinkHz": 0.35,
+          "phase": 0.0,
+          "duty": 0.25
+        }
+      ],
+      "docking": {
+        "interior": "map.derelict_sample",
+        "clearanceRange": 2500,
+        "captureDistance": 10,
+        "captureSpeed": 6,
+        "captureAngleDeg": 20,
+        "approachHeight": 40,
+        "bays": [
+          {
+            "id": "hull",
+            "name": "Hull",
+            "position": [
+              0,
+              8.1,
+              -9
+            ],
+            "rotationDeg": [
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      }
     }
   ],
   "asteroidFields": [
@@ -533,9 +631,21 @@
       0.015
     ],
     "bandIntensity": 0.9,
-    "nebulaColor": [0.05, 0.016, 0.075],
-    "nebulaColorB": [0.012, 0.05, 0.075],
-    "nebulaColorC": [0.11, 0.05, 0.045],
+    "nebulaColor": [
+      0.05,
+      0.016,
+      0.075
+    ],
+    "nebulaColorB": [
+      0.012,
+      0.05,
+      0.075
+    ],
+    "nebulaColorC": [
+      0.11,
+      0.05,
+      0.045
+    ],
     "nebulaStrength": 1.0
   },
   "clouds": [

@@ -7,6 +7,8 @@
 
 #include "game/content/map_def.h"
 #include "game/player/character_controller.h"
+#include "game/session/game_session.h"
+#include "game/session/world_builder.h"
 #include "test_framework.h"
 
 using namespace fh;
@@ -233,4 +235,73 @@ TEST(map_without_a_player_start_is_a_clear_error) {
   CHECK(!map.has_value());
   CHECK(!errors.empty());
   CHECK(errors.front().find("Player Start") != std::string::npos);
+}
+
+TEST(map_emissive_surface_lights_the_room_but_a_fixture_with_its_own_lamp_does_not) {
+  const auto map = loadMap(std::filesystem::path(FH_TEST_CONTENT_DIR) / "maps" / "derelict_sample.glb", nullptr);
+  CHECK(map.has_value());
+  if (!map) return;
+  int lit = 0, green = 0;
+  for (const auto& l : map->def.lights) {
+    if (l.range <= 0) continue;
+    ++lit;
+    if (l.color.y > l.color.x * 2.0f && l.color.y > l.color.z) ++green;
+  }
+  CHECK(green >= 1);  // the console's screen, in its own colour
+  CHECK(lit == 4 + green);  // four real lamps; their glow-only fixtures add nothing
+}
+
+TEST(derelict_full_visit_dock_walk_in_return_undock) {
+  std::vector<std::string> errors;
+  auto m = AssetManifest::load(FH_TEST_CONTENT_DIR, &errors);
+  CHECK(m.has_value());
+  if (!m) return;
+  auto scene = loadSceneDef(*m, "scene.stage2_flight", &errors);
+  auto ship = loadShipDef(*m, "ship.sparrow", &errors);
+  for (const auto& e : errors) fhtest::reportFailure(__FILE__, __LINE__, e);
+  CHECK(scene.has_value() && ship.has_value());
+  if (!scene || !ship) return;
+  const PropDef* derelict = nullptr;
+  for (const auto& p : scene->props)
+    if (p.id == "station.derelict") derelict = &p;
+  CHECK(derelict != nullptr);
+  if (!derelict) return;
+  CHECK(derelict->docking.has_value());
+  GameSession s(buildSpaceWorld(*scene, *ship, {}, SystemPosition{derelict->position.metres + DVec3{0, 90, 260}}));
+  s.setShipInterior(ship->interior);
+  for (const AssetID id : {AssetID("interior.sparrow"), derelict->docking->interior}) {
+    auto def = loadInteriorDef(*m, id, &errors);
+    CHECK(def.has_value());
+    if (def) s.addInterior(id, *def);
+  }
+  // Fly in with the same docking approach the player gets.
+  CHECK(s.docking().request(s.world()));
+  for (int i = 0; i < 60 * 20 && s.docking().state() != DockState::ApproachAuthorized; ++i) s.fixedUpdate(kDt);
+  CHECK(s.docking().state() == DockState::ApproachAuthorized);
+  s.docking().toggleAutopilot();
+  for (int i = 0; i < 60 * 240 && s.docking().state() != DockState::Docked; ++i) s.fixedUpdate(kDt);
+  CHECK(s.docking().state() == DockState::Docked);
+  if (s.docking().state() != DockState::Docked) return;
+  CHECK(s.world().props()[*s.docking().station()].def.id == "station.derelict");
+
+  CHECK(s.leaveSeat().ok);
+  CHECK(s.perform("exitShip").ok);
+  CHECK(s.location() == Location::StationInterior);
+  CHECK(s.activeInteriorId() == derelict->docking->interior);
+  // Solid floor, and a walk down the corridor.
+  for (int i = 0; i < 60; ++i) s.fixedUpdate(kDt);
+  CHECK(s.character().grounded);
+  const Vec3 standing = s.character().feet;
+  s.characterInput().move = {0, 1};
+  for (int i = 0; i < 120; ++i) s.fixedUpdate(kDt);
+  s.characterInput().move = {0, 0};
+  CHECK(length(s.character().feet - standing) > 2.0f);
+  // The Exit returns to the ship, and it does not ask to quit the game.
+  CHECK(s.perform("leaveMap").ok);
+  CHECK(s.location() == Location::ShipInterior);
+  CHECK(!s.consumeMapExit());
+  CHECK(s.perform("takeSeat").ok);
+  CHECK(s.docking().undock(s.world()));
+  for (int i = 0; i < 60 * 30 && s.docking().state() != DockState::Undocked; ++i) s.fixedUpdate(kDt);
+  CHECK(s.docking().state() == DockState::Undocked);
 }

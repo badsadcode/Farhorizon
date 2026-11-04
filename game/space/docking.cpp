@@ -49,6 +49,11 @@ const DockingDef* Docking::def(const SpaceWorld& world) const {
   return d ? &*d : nullptr;
 }
 
+namespace {
+// A wreck: nobody there to answer the radio.
+bool isUnmanned(const Prop& p) { return p.def.docking && p.def.docking->market.empty() && p.def.docking->services.empty(); }
+}  // namespace
+
 void Docking::say(const std::string& text, const SpaceWorld& world) {
   message_ = text;
   messageTime_ = world.simulationTime();
@@ -103,7 +108,8 @@ bool Docking::request(SpaceWorld& world) {
   prop_ = best;
   bay_ = 0;
   setState(DockState::RequestingClearance, world);
-  say(std::format("{} Control, requesting docking clearance.", world.props()[*best].def.name), world);
+  if (isUnmanned(world.props()[*best])) say(std::format("Hailing {}. No answer.", world.props()[*best].def.name), world);
+  else say(std::format("{} Control, requesting docking clearance.", world.props()[*best].def.name), world);
   return true;
 }
 
@@ -223,6 +229,9 @@ void Docking::postStep(SpaceWorld& world, float /*dt*/) {
         setState(DockState::Undocked, world);
       } else if (stateTime_ >= kClearanceDelay) {
         setState(DockState::ApproachAuthorized, world);
+        if (isUnmanned(world.props()[*prop_]))
+          say(std::format("Nobody aboard {} is answering. Set down on the hull, carefully.", world.props()[*prop_].def.name), world);
+        else
         say(std::format("{} Control: cleared to {}. Watch your speed on final.", world.props()[*prop_].def.name,
                         d->bays[bay_].name),
             world);
@@ -258,6 +267,9 @@ void Docking::postStep(SpaceWorld& world, float /*dt*/) {
       p.state.orientation = nlerp(captureStart_.rotation, bay.rotation, t);
       if (stateTime_ >= kCaptureDuration) {
         setState(DockState::Docked, world);
+        if (isUnmanned(world.props()[*prop_]))
+          say(std::format("Clamped to the hull of {}. Airlock holds pressure.", world.props()[*prop_].def.name), world);
+        else
         say(std::format("Welcome to {}. You are docked at {}.", world.props()[*prop_].def.name, d->bays[bay_].name),
             world);
       }

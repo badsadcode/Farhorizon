@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "farhorizon_editor"
-version = "0.8.1"
+version = "0.8.2"
 name = "FARHORIZON Editor"
 tagline = "Build maps and ships for FARHORIZON and play them with one button"
 maintainer = "FARHORIZON"

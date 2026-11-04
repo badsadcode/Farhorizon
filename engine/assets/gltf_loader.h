@@ -29,7 +29,16 @@ struct GltfLightInfo {
   float intensity = 1;
   float range = 0;           // 0 = not set
 };
+// Part of an emissive surface, no bigger than a few metres, so a long strip becomes several lights.
+struct GltfEmitterInfo {
+  std::string name;
+  Vec3 centroid{};
+  Vec3 normalArea{};     // sum of face normal x area: its length is the flat-facing area
+  float area = 0;        // m^2
+  Vec3 radiance{};       // emission colour x strength, including the average of any emissive image
+};
 struct GltfSceneInfo {
+  std::vector<GltfEmitterInfo> emitters;
   std::vector<GltfNodeInfo> nodes;  // nodes with custom properties
   std::vector<GltfLightInfo> lights;
   MeshData collision;               // triangles the player collides with (positions and indices)

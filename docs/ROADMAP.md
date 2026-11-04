@@ -10,8 +10,8 @@ status lives in `STATUS.md`._
      occlusion. Lights via `KHR_lights_punctual`.
    * Whole maps as `.glb` files, with entities placed through the add-on and solid meshes by default.
    * A scale reference (1.8 m player, doorway) and an artist guide: `docs/BLENDER_GUIDE.md`.
-3. **Points of interest and FPS gameplay.** Dock with or land near a site, explore it on foot, fight
-   and loot. For example a derelict in space. Needs first-person weapons, a damage model on foot,
+3. **Points of interest and FPS gameplay.** Docking with a derelict and exploring it works (0.8.2). Next:
+   fight and loot. For example a derelict in space. Needs first-person weapons, a damage model on foot,
    enemy AI with navigation, and loot tables.
 4. **Co-op, 1-4 players.**
    1. Multi-player simulation: separate players from the world; separate ship reference frames;

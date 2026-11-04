@@ -31,5 +31,7 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
 
 // Blender watts to the game's light units. See docs/BLENDER_GUIDE.md.
 constexpr float kBlenderWattsToLight = 0.05f;
+// An emissive surface's light: radiance x facing area is the physically correct strength.
+constexpr float kEmissionLightGain = 1.0f;
 
 }  // namespace fh

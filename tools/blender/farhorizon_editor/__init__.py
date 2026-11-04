@@ -8,7 +8,7 @@
 bl_info = {
     "name": "FARHORIZON Editor",
     "author": "FARHORIZON",
-    "version": (0, 8, 1),
+    "version": (0, 8, 2),
     "blender": (4, 2, 0),
     "location": "3D Viewport > Sidebar (N) > FARHORIZON",
     "description": "Build maps and ships for FARHORIZON and play them with one button",
@@ -688,6 +688,8 @@ class FH_PT_selected(bpy.types.Panel):
             for value, label in (("both", "Solid"), ("none", "See Only (walk through)"), ("only", "Invisible Wall")):
                 op = col.operator("farhorizon.set_collision", text=label, depress=current == value)
                 op.value = value
+            if has_emission(obj):
+                layout.operator("farhorizon.toggle_glow", text="Emission Lights the Room", depress="fh_glow_only" not in obj)
         elif obj.type == "LIGHT":
             layout.prop(obj.data, "energy", text="Power (W)")
             layout.prop(obj.data, "color")
@@ -703,6 +705,36 @@ class FH_PT_selected(bpy.types.Panel):
                     layout.prop(obj, f'["{key}"]', text=label)
         else:
             layout.label(text="No game settings on this object")
+
+
+def has_emission(obj):
+    for slot in obj.material_slots:
+        tree = slot.material.node_tree if slot.material else None
+        bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None) if tree else None
+        if bsdf:
+            strength = bsdf.inputs["Emission Strength"]
+            color = bsdf.inputs["Emission Color"]
+            if (strength.default_value > 0 or strength.is_linked) and (max(color.default_value[:3]) > 0 or color.is_linked):
+                return True
+    return False
+
+
+class FH_OT_toggle_glow(bpy.types.Operator):
+    bl_idname = "farhorizon.toggle_glow"
+    bl_label = "Emission Lights the Room"
+    bl_description = "On: this emissive surface lights its surroundings. Off: it only glows, for a fixture that has a lamp of its own"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        turn_off = "fh_glow_only" not in context.active_object
+        for obj in context.selected_objects:
+            if obj.type != "MESH":
+                continue
+            if turn_off:
+                obj["fh_glow_only"] = 1
+            elif "fh_glow_only" in obj:
+                del obj["fh_glow_only"]
+        return {"FINISHED"}
 
 
 class FH_OT_add_flicker(bpy.types.Operator):
@@ -752,7 +784,7 @@ class FH_MT_add(bpy.types.Menu):
 
 
 CLASSES = (FH_Settings, FH_Preferences, FH_OT_check, FH_OT_export, FH_OT_play, FH_OT_add_entity, FH_OT_add_socket, FH_OT_add_reference,
-           FH_OT_set_collision, FH_OT_add_flicker, FH_PT_main, FH_PT_entities, FH_PT_selected, FH_PT_map, FH_MT_add)
+           FH_OT_set_collision, FH_OT_toggle_glow, FH_OT_add_flicker, FH_PT_main, FH_PT_entities, FH_PT_selected, FH_PT_map, FH_MT_add)
 _handlers = []
 
 

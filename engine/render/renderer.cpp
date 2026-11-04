@@ -963,7 +963,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.skyBase = Vec4(p.skyBase, p.sunGlare);
   u.skyBand = Vec4(p.skyBand, p.skyBandIntensity);
   u.skyNebula = Vec4(p.skyNebula, p.skyNebulaStrength);
-  u.skyNebulaB = Vec4(p.skyNebulaB, 0);
+  u.skyNebulaB = Vec4(p.skyNebulaB, p.liveAmbient ? 1.0f : 0.0f);
   u.skyNebulaC = Vec4(p.skyNebulaC, 0);
   u.fillDir = Vec4(normalize(p.fillDirection), 0);
   u.fillColor = Vec4(p.fillColor, 0);

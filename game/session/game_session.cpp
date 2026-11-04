@@ -23,7 +23,8 @@ GameSession::GameSession(std::unique_ptr<SpaceWorld> world) : world_(std::move(w
   lastCollisions_ = world_->player().collisions;
   // Locations for contracts: every dockable station and landing site.
   for (const auto& p : world_->props())
-    if (p.def.docking) locations_.push_back({p.def.id, p.def.name});
+    if (p.def.docking && (!p.def.docking->market.empty() || !p.def.docking->services.empty()))  // somewhere with people
+      locations_.push_back({p.def.id, p.def.name});
   for (const auto& pl : world_->planets())
     for (const auto& site : pl.def.sites) locations_.push_back({site.id, site.name});
 }
@@ -110,7 +111,11 @@ ActionResult GameSession::perform(const std::string& action) {
     return {true, notice_};
   }
   if (action == "leaveMap") {
-    mapExitRequested_ = true;
+    if (docking_.state() == DockState::Docked && docking_.station()) {
+      const auto& dock = world_->props().at(*docking_.station()).def.docking;
+      if (dock && dock->interior == activeInteriorId_) return enterInterior(shipInterior_, "airlock", Location::ShipInterior);
+    }
+    mapExitRequested_ = true;  // played straight from Blender: nothing to go back to
     return {true, ""};
   }
   if (action == "takeSeat") {

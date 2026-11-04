@@ -142,7 +142,8 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | PBR textures, mips, lights from Blender | ✅ | sample map; normal mapping checked by eye |
 | Mesh collision | ✅ | floors, walls, ramps, stairs, closed rooms; unit tests + scripted walk |
 | Ship exterior preview | 🟡 | exports and flies; making a ship permanent still needs a JSON file by hand |
-| Maps reachable in the game world | ⬜ | `--map` and Play only, for now |
+| Maps reachable in the game world | ✅ | The Ash Wren: flown, docked, walked and returned from in a scripted run; unit test of the visit |
+| Emissive surfaces cast light | ✅ | checked by measurement and by eye; not yet judged in play |
 | Placed reflection probes | ✅ | sample map; checked by eye, not yet judged in play |
 | Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
 

@@ -126,6 +126,7 @@ struct RenderFrameParams {
   bool pointShadows = false;       // the nearest lamps cast shadows
   bool ambientOcclusion = false;
   float reflections = 0.0f;        // live reflection probe strength; 0 disables it
+  bool liveAmbient = true;         // the live probe also supplies ambient light (not in Blender maps)
   std::vector<CloudDraw> clouds;   // drawn in order: far to near
   std::vector<RibbonVertex> ribbons;  // exhaust trails, triangle list
   TunnelDraw tunnel;

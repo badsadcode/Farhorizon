@@ -1,0 +1,25 @@
+# Walk into the derelict from a docked ship, save and load there, and return to the ship.
+# Start with: --start-at station.derelict --start-in station
+wait 20
+expect-docked
+expect-location station
+hold 90 W
+wait 10
+shot d01_inside.png
+key F7
+wait 10
+hold 60 W
+wait 5
+# Loading puts the player back where the save was made, still inside.
+key F8
+wait 20
+expect-docked
+expect-location station
+# Back to the Exit on the wall behind the Player Start.
+hold 150 S
+wait 10
+key F
+wait 20
+expect-location ship
+expect-docked
+quit

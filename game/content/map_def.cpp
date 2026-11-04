@@ -140,6 +140,23 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
     d.lights.push_back(def);
   }
 
+  // Emissive surfaces light the room around them, in their own colour.
+  for (const GltfEmitterInfo& e : info.emitters) {
+    const float facing = length(e.normalArea);
+    const bool flat = facing > 0.5f * e.area;
+    const float effective = std::max(facing, e.area * 0.25f);  // a closed shape shows a quarter of its area
+    LightDef def;
+    def.color = e.radiance;
+    def.intensity = effective * kEmissionLightGain;
+    // Off the surface by about its own size, so it spreads like a panel rather than a point on a wall.
+    def.position = flat ? e.centroid + (e.normalArea / facing) * (0.3f * std::sqrt(effective)) : e.centroid;
+    const float brightness = def.intensity * std::max({def.color.x, def.color.y, def.color.z});
+    if (brightness < 0.03f) continue;  // a tiny indicator: it glows, but lights nothing
+    def.range = std::clamp(std::sqrt(brightness / 0.01f), 2.0f, 40.0f);
+    def.size = 0.0f;
+    d.lights.push_back(def);
+  }
+
   if (!info.collision.indices.empty()) {
     auto collider = std::make_shared<TriangleCollider>();
     collider->build(info.collision.vertices, info.collision.indices);

@@ -79,6 +79,8 @@ int main(int argc, char** argv) {
           fh::loadMarketDef(*manifest, id, *db, &errors);
       } else if (entry.type == "interior") {
         fh::loadInteriorDef(*manifest, id, &errors);
+      } else if (entry.type == "map") {
+        fh::loadInteriorDef(*manifest, id, &errors);
       } else if (entry.type == "visuals") {
         fh::loadVisualProfiles(*manifest, id, &errors);
       } else if (entry.type == "benchmark") {

@@ -228,6 +228,14 @@
       "type": "benchmark",
       "source": "benchmarks/combat_skirmish.json"
     },
+    "map.derelict_sample": {
+      "type": "map",
+      "source": "maps/derelict_sample.glb"
+    },
+    "mesh.derelict_sample": {
+      "type": "mesh",
+      "source": "maps/derelict_sample.glb"
+    },
     "ui.theme": {
       "type": "ui_theme",
       "source": "ui/theme.json"

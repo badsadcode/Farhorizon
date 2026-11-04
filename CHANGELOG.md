@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.2 — The Ash Wren: a derelict you can fly to (2026-11-04)
+* **The sample derelict is in the world.** The Ash Wren drifts about 42 km from Kestrel. Select it with N,
+  take the travel drive, set down on its hull, walk through your airlock and explore. Its Exit takes you
+  back to your ship. Saving and loading inside it work.
+* **Any Blender map can be a place in the world:** a manifest entry and a scene object. See the guide.
+* **Emission now lights the room.** Emissive surfaces cast real local light in their own colour, with
+  strength from Emission Strength and the surface's size. Long strips become several lights. A fixture
+  with its own lamp can be set to only glow, in the add-on's Selected panel.
+* **Maps no longer get ambient light that follows the camera.** It made rooms change as you walked around.
+  Ambient in a map comes from Ambient Light and Reflection Probes.
+* Radio chatter fits a wreck: nobody answers. Places with no market or services are not offered as
+  contract destinations, and the docked hint offers a terminal only where there is one.
+* Invisible Walls are never drawn, even when the map is used as a ship's exterior.
+* New `--start-at <object>` debug flag, and UI script checks for location and docking. Tests: 136.
+
 ## 0.8.1 — Reflections you can place (2026-11-04)
 * **Reflection Probe entity:** place it in a room and scale its box to fit. Shiny surfaces inside reflect
   that room, sharper than before and lined up with the walls. Up to 8 per map, captured once at load.

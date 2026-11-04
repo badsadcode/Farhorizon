@@ -190,6 +190,11 @@ void UiScript::step(const UiScriptHost& host) {
     in >> limit;
     const float value = cmd == "expect-spin-below" ? host.shipSpin() : host.shipSpeed();
     if (cmd == "expect-speed-above" ? value <= limit : value >= limit) fail(std::format("value is {:.3f}", value));
+  } else if (cmd == "expect-location") {
+    const std::string want = rest(in), got = host.location();
+    if (want != got) fail("location is '" + got + "'");
+  } else if (cmd == "expect-docked") {
+    if (!host.docked()) fail("not docked");
   } else if (cmd == "quit") {
     next_ = lines_.size();
     host.quit();

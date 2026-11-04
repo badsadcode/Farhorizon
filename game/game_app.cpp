@@ -63,6 +63,15 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     }
   }
   if (benchmark_ && !benchmark_->startIn.empty()) options_.startIn = benchmark_->startIn;
+  if (!options_.startAt.empty()) {
+    bool found = false;
+    for (const auto& p : world().props())
+      if (p.def.id == options_.startAt) {
+        world().player().state.position = p.local + Vec3{0, 22, 150};
+        found = true;
+      }
+    if (!found) throw std::runtime_error("--start-at: no object called '" + options_.startAt + "'");
+  }
   {
     std::vector<std::string> audioErrors;
     if (!audio_.load(*manifest_, "audio.config", &audioErrors))
@@ -102,7 +111,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
   applySettings();
   const bool directStart = options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
                            !options_.loadPath.empty() || options_.autofly || !options_.mapPath.empty() ||
-                           !options_.shipMesh.empty();
+                           !options_.shipMesh.empty() || !options_.startAt.empty();
   if (!scripted_ && !directStart) openMenu(MenuSystem::Screen::Main);
   else if (!scripted_) setMouseCapture(true);
 }
@@ -427,8 +436,17 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   for (const auto& pl : scene->planets)
     for (const auto& site : pl.sites) interiorIds.push_back(site.interior);
   std::map<std::pair<AssetID, std::string>, LoadedMesh> pieceMeshes;  // (interior, template) -> mesh
+  std::map<AssetID, MeshData> mapMeshes;  // interiors built in Blender
   for (const auto& iid : interiorIds) {
     if (interiors.count(iid)) continue;
+    if (const AssetEntry* entry = manifest->find(iid); entry && entry->type == "map") {
+      auto map = loadMap(manifest->contentRoot() / entry->source, &errors);
+      if (!map) return false;
+      for (const auto& w : map->warnings) log::warn("map", "{}: {}", iid, w);
+      mapMeshes.emplace(iid, std::move(map->mesh));
+      interiors.emplace(iid, std::move(map->def));
+      continue;
+    }
     auto def = loadInteriorDef(*manifest, iid, &errors);
     if (!def) return false;
     for (const auto& [tname, t] : def->templates) {
@@ -533,6 +551,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
       list.push_back({handles.at(piece.templ), model});
     }
     if (def.terrain) list.push_back({renderer_->uploadMesh(HeightField(*def.terrain).buildMesh()), Mat4::identity()});
+    if (auto it = mapMeshes.find(iid); it != mapMeshes.end()) list.push_back({renderer_->uploadMesh(it->second), Mat4::identity()});
     newSession->addInterior(iid, std::move(def));
   }
   if (restore) {
@@ -1024,6 +1043,11 @@ int GameApp::run() {
                       [this] { return market_.isOpen(); },
                       [this] { return length(world().player().state.velocity); },
                       [this] { return length(world().player().state.angularVelocity); },
+                      [this] {
+                        const Location l = session_->location();
+                        return std::string(l == Location::Cockpit ? "cockpit" : l == Location::ShipInterior ? "ship" : "station");
+                      },
+                      [this] { return session_->docking().state() == DockState::Docked; },
                       [this] { quit_ = true; }});
     }
     if (!window_->pollEvents(input_)) break;
@@ -1566,8 +1590,9 @@ int GameApp::run() {
     params.ambientOcclusion = settings_.ambientOcclusion;
     params.reflections = settings_.reflections ? 1.0f : 0.0f;
     params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
+    params.liveAmbient = !(localScene && localScene->meshCollider);
     if (localScene && !localScene->reflectionProbes.empty() && !surface) {
-      params.probeGeneration = 1;
+      params.probeGeneration = 1 + std::uint32_t(std::hash<std::string>{}(session_->activeInteriorId()) & 0xFFFFFFu);
       for (const ReflectionProbeDef& pr : localScene->reflectionProbes)
         params.reflectionProbes.push_back({pr.position - view.position, pr.boxMin - view.position, pr.boxMax - view.position});
       for (const auto& l : localScene->lights)

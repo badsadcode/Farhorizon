@@ -305,7 +305,10 @@ std::optional<SceneDef> loadSceneDef(const AssetManifest& manifest, const AssetI
   need(scene->player.ship, "ship", "player");
   for (const auto& p : scene->props) {
     need(p.mesh, "mesh", "prop '" + p.id + "'");
-    if (p.docking) need(p.docking->interior, "interior", "prop '" + p.id + "' docking");
+    if (p.docking) {
+      const AssetEntry* interior = manifest.find(p.docking->interior);
+      if (!interior || interior->type != "map") need(p.docking->interior, "interior", "prop '" + p.id + "' docking");
+    }
     if (p.docking && !p.docking->market.empty()) need(p.docking->market, "market", "prop '" + p.id + "' docking");
   }
   for (const auto& pl : scene->planets)

@@ -204,7 +204,8 @@ def lamp(name, location, watts, color=(1.0, 0.75, 0.5), flicker=0.0):
     if flicker > 0:
         obj["fh_flicker"] = flicker
     bpy.context.scene.collection.objects.link(obj)
-    box(name + "_fixture", (location[0], location[1], location[2] + 0.1), (0.9, 0.22, 0.05), lamp_on, solid=False)
+    fixture = box(name + "_fixture", (location[0], location[1], location[2] + 0.1), (0.9, 0.22, 0.05), lamp_on, solid=False)
+    fixture["fh_glow_only"] = 1  # the lamp above does the lighting
     return obj
 
 

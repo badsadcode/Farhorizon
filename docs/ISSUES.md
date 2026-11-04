@@ -48,9 +48,13 @@
 | 44 | open | fx | Particle tuning for the travel drive is in code, not data. Particle textures are generated, with no way to supply your own image yet. |
 | 45 | open | fx | An exhaust ribbon disappears at once when an NPC ship is destroyed or despawns, instead of fading. The explosion usually covers it. |
 | 46 | open | fx | Tunnel, dust and ribbon strengths are in shaders and code, not data. There is no option to turn off the tunnel for motion-sensitive players yet. |
-| 47 | open | maps | Maps open only with `--map` or the add-on's Play. Nothing in the game world leads to one yet. |
+| 47 | fixed (0.8.2) | maps | Maps can be docked with in the game world. Adding one still takes two hand edits (#53). |
 | 48 | open | render | No transparency in materials: everything is opaque. Spot lights act as point lights, and Area lights do not export. |
 | 49 | open | maps | A map's visible geometry merges into one mesh, with no per-object culling, and each lamp's shadow pass redraws it. Very large maps will need splitting. |
 | 50 | info | blender | The add-on was run in Blender 5.1 only. It declares 4.2 as the minimum, untested there. |
 | 51 | open | render | Placed probes are captured once at load: moving things and the player never appear in them, and they are not recaptured when a save or hot reload changes the map. |
 | 52 | open | render | Probe mips are a plain box filter, so glossy reflections are less accurate than a prefiltered probe, and the first frames of a map use the live view until each probe is ready. Glow sprites, particles, clouds and stars are not in any probe. |
+| 53 | open | maps | Placing a map in the world means editing the manifest and scene JSON by hand. The add-on could do it. |
+| 54 | open | maps | The Ash Wren's exterior is the interior model seen from outside, and shows its map name, "Derelict Sample", on entry. It has no hull markings where you land. |
+| 55 | open | render | Emissive surfaces are approximated by point lights, so light has no true panel shape, and a light offset from a flat panel can look slightly off up close. Nothing is emitted in reflections beyond the surface itself. |
+| 56 | open | render | Lights are chosen nearest-first per frame, so a room with more than 8 can pop as you walk. Emissive surfaces make this easier to hit. |

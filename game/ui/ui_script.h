@@ -15,6 +15,8 @@
 //   expect-screen <name>     none | main | pause | options | load | save | confirm
 //   expect-terminal <open|closed>
 //   expect-speed-above <m/s>, expect-speed-below <m/s>, expect-spin-below <rad/s>   (player ship)
+//   expect-location <cockpit|ship|station>
+//   expect-docked
 //   quit
 // Failed expectations are logged and make the process exit with code 3.
 #include <filesystem>
@@ -31,6 +33,8 @@ struct UiScriptHost {
   std::function<bool()> terminalOpen;
   std::function<float()> shipSpeed;
   std::function<float()> shipSpin;
+  std::function<std::string()> location;
+  std::function<bool()> docked;
   std::function<void()> quit;
 };
 

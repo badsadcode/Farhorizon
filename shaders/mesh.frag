@@ -53,8 +53,8 @@ vec3 envBrdfApprox(vec3 f0, float rough, float NoV) {
 // Reflections: the live view around the camera, or a placed probe for surfaces inside its box. A probe's
 // lookup is corrected for the surface's position: follow the ray to the box wall it hits, and look that
 // way from where the snapshot was taken. `blur` is 0 (sharp) to 1 (the room's average colour).
-vec3 sampleEnv(vec3 dir, float blur) {
-  vec3 live = textureLod(envMap, dir, blur * (frame.lighting.w - 1.0)).rgb;
+vec3 sampleEnv(vec3 dir, float blur, float liveWeight) {
+  vec3 live = textureLod(envMap, dir, blur * (frame.lighting.w - 1.0)).rgb * liveWeight;
   int count = int(frame.viewOrigin.w);
   int best = -1;
   float bestWeight = 0.0;
@@ -240,9 +240,9 @@ void main() {
   vec3 envDiffuse = vec3(0.0);
   vec3 envSpec;
   if (frame.lighting.y > 0.0) {
-    envDiffuse = min(sampleEnv(N, 1.0), vec3(4.0)) * frame.lighting.y;
+    envDiffuse = min(sampleEnv(N, 1.0, frame.skyNebulaB.a), vec3(4.0)) * frame.lighting.y;
     vec3 R = reflect(-V, N);
-    vec3 env = min(sampleEnv(R, rough), vec3(12.0)) * frame.lighting.y;
+    vec3 env = min(sampleEnv(R, rough, 1.0), vec3(12.0)) * frame.lighting.y;
     envSpec = env * envBrdfApprox(f0, rough, NoV);
   } else {
     envSpec = F_Schlick(NoV, f0) * ambient * (1.0 - rough * 0.7);

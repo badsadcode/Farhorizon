@@ -4,6 +4,8 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <map>
+#include <tuple>
 #include <string_view>
 
 #include "engine/assets/image_io.h"
@@ -184,6 +186,51 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
     return true;
   };
 
+  // Splits an emissive primitive into cells of a few metres, each a candidate light.
+  auto collectEmitters = [&](const cgltf_primitive& prim, const Mat4& world, const std::string& name) {
+    if (!prim.material || prim.type != cgltf_primitive_type_triangles) return;
+    const MaterialData& m = mesh.materials[size_t(prim.material - data->materials)];
+    Vec3 radiance = m.emissive;
+    if (radiance.x + radiance.y + radiance.z <= 0.001f) return;
+    if (m.emissiveImage >= 0 && size_t(m.emissiveImage) < mesh.images.size()) {
+      const ImageRGBA8& img = mesh.images[size_t(m.emissiveImage)];
+      Vec3 sum{};
+      float count = 0;
+      for (size_t i = 0; i + 3 < img.pixels.size(); i += 4 * 17) {
+        for (int k = 0; k < 3; ++k) sum[k] += std::pow(float(img.pixels[i + size_t(k)]) / 255.0f, 2.2f);
+        count += 1;
+      }
+      if (count > 0) radiance = {radiance.x * sum.x / count, radiance.y * sum.y / count, radiance.z * sum.z / count};
+    }
+    const cgltf_accessor* pos = findAttribute(prim, cgltf_attribute_type_position);
+    if (!pos) return;
+    constexpr float kCell = 3.0f;
+    std::map<std::tuple<int, int, int>, GltfEmitterInfo> cells;
+    const cgltf_size count = prim.indices ? prim.indices->count : pos->count;
+    for (cgltf_size t = 0; t + 2 < count; t += 3) {
+      Vec3 corner[3];
+      for (int k = 0; k < 3; ++k) {
+        float tmp[3] = {0, 0, 0};
+        cgltf_accessor_read_float(pos, prim.indices ? cgltf_accessor_read_index(prim.indices, t + cgltf_size(k)) : t + cgltf_size(k), tmp, 3);
+        corner[k] = world.transformPoint({tmp[0], tmp[1], tmp[2]});
+      }
+      const Vec3 n = cross(corner[1] - corner[0], corner[2] - corner[0]) * 0.5f;
+      const float a = length(n);
+      if (a < 1e-7f) continue;
+      const Vec3 c = (corner[0] + corner[1] + corner[2]) / 3.0f;
+      GltfEmitterInfo& e = cells[{int(std::floor(c.x / kCell)), int(std::floor(c.y / kCell)), int(std::floor(c.z / kCell))}];
+      e.centroid += c * a;  // weighted: divided by the area below
+      e.normalArea += n;
+      e.area += a;
+    }
+    for (auto& [cell, e] : cells) {
+      e.name = name;
+      e.centroid = e.centroid / e.area;
+      e.radiance = radiance;
+      sceneInfo->emitters.push_back(std::move(e));
+    }
+  };
+
   std::function<bool(const cgltf_node*, const Mat4&)> visit = [&](const cgltf_node* node, const Mat4& parent) {
     float local[16];
     cgltf_node_transform_local(node, local);
@@ -194,14 +241,13 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
         mesh.sockets.push_back({std::string(n), world.transformPoint({0, 0, 0}), quatFromMatrix(world)});
     }
     std::string_view collide;
+    const std::string extras = node->extras.data ? node->extras.data : "";
+    if (const auto found = extras.find("\"fh_collide\""); found != std::string::npos) {
+      if (extras.find("\"none\"", found) != std::string::npos) collide = "none";
+      else if (extras.find("\"only\"", found) != std::string::npos) collide = "only";
+    }
     if (sceneInfo) {
       const std::string name = node->name ? node->name : "";
-      const std::string extras = node->extras.data ? node->extras.data : "";
-      const auto found = extras.find("\"fh_collide\"");
-      if (found != std::string::npos) {
-        if (extras.find("\"none\"", found) != std::string::npos) collide = "none";
-        else if (extras.find("\"only\"", found) != std::string::npos) collide = "only";
-      }
       if (node->light) {
         const cgltf_light& l = *node->light;
         GltfLightInfo li;
@@ -228,6 +274,8 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
     if (node->mesh)
       for (cgltf_size p = 0; p < node->mesh->primitives_count; ++p) {
         if (collide != "only" && !appendPrimitive(mesh, node->mesh->primitives[p], world)) return false;
+        if (sceneInfo && collide != "only" && extras.find("\"fh_glow_only\"") == std::string::npos)
+          collectEmitters(node->mesh->primitives[p], world, node->name ? node->name : "");
         if (sceneInfo && collide != "none" && !appendPrimitive(sceneInfo->collision, node->mesh->primitives[p], world))
           return false;
       }

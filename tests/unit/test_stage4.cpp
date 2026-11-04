@@ -142,7 +142,7 @@ TEST(stage4_profitable_mining_trip_save_reload) {
   // Back to the station: autopilot docking from nearby.
   const Prop* station = nullptr;
   for (const auto& p : w.props())
-    if (p.def.docking) station = &p;
+    if (p.def.docking && p.def.id == "station.kestrel") station = &p;
   CHECK(station != nullptr);
   w.player().state.position = station->local + Vec3{300, 250, 400};
   w.player().state.velocity = {};

@@ -46,10 +46,18 @@ textures and entities, rather than learn a separate tool.
 * **Materials from Blender skip procedural grime,** with or without textures, because authored values
   must survive: the grime clamped roughness to at least 0.3.
 
+* **Emissive surfaces become point lights when a map loads** (0.8.2): cells of up to 3 m, strength =
+  radiance x facing area (a closed shape counts a quarter of its area), set off the surface by about its
+  own size. Rejected: real area lights, too costly for what they add here. `fh_glow_only` opts a fixture out.
+* **The live camera probe gives no ambient in maps** (0.8.2). It made room lighting depend on where the
+  camera stood. It still gives reflections when no placed probe covers a surface.
+* **A map is an interior type** (0.8.2): `loadInteriorDef` accepts a `map` asset, so docking, sessions, saves
+  and tests needed no special cases. Its Exit returns to the ship when docked at that map, and otherwise
+  ends the run, which is the Blender Play case.
+
 ## Limits
 * Everything visible merges into one mesh, so there is no per-object culling. Fine at this scale; big
   maps will want splitting.
-* Maps run through `--map` and the add-on's Play. Nothing in the game world leads to one yet.
 * No transparency. Spot lights act as point lights. Area lights do not export.
 * Ship preview uses the Sparrow's flight data, and a ship made permanent needs a JSON file by hand.
 * Triangle collision is not continuous: the character is sub-stepped, so very thin walls hold at normal

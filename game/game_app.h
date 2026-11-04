@@ -62,6 +62,7 @@ struct AppOptions {
   std::filesystem::path uiScript;                // developer test driver (game/ui/ui_script.h)
   std::filesystem::path mapPath;                 // start on foot in this map (Blender add-on's Play)
   std::filesystem::path shipMesh;                // fly this .glb instead of the ship's own model
+  std::string startAt;                           // debug: start next to this prop (use with --start-in etc.)
 };
 
 class GameApp {

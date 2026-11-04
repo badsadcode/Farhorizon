@@ -68,9 +68,19 @@ Use normal Blender lights.
 | **Spot** | Currently drawn as a Point light |
 | **Area** | Does not export. The Check warns you |
 
-The 4 nearest lamps cast shadows and up to 8 light a surface at once, so a big map can have many lamps
-as long as they are spread out. For a failing lamp, select it and press **Make It Flicker**. A light
-does not glow by itself: give the fixture an emissive material.
+The 4 nearest lights cast shadows and up to 8 light a surface at once, so a big map can have many lights
+as long as they are spread out. For a failing lamp, select it and press **Make It Flicker**. A lamp does
+not glow by itself: give its fixture an emissive material.
+
+### Emissive surfaces light the room
+A material with Emission lights its surroundings in its own colour, so a screen or a glowing strip needs
+no extra lamp. Brightness comes from **Emission Strength** and the surface's size, as in Blender: strength
+1 to 10 suits screens and panels, and a bigger surface gives more light. Long strips become several lights.
+Very small ones only glow and light nothing, so indicator lights do not use up the 8 lights.
+
+If a fixture already has a real lamp, select it and turn off **Emission Lights the Room** in the
+**Selected** section, or you get twice the light. A flat panel set against a wall lights the room but not
+that wall, which is also what a real one does.
 
 ### Map Settings
 Gravity, ambient light, exposure, fog, and **Space Outside** (stars through any openings).
@@ -129,6 +139,27 @@ round rooms. They are not true mirrors:
 3. Press **Play in Game** to fly it straight away. For now this is a preview: it replaces the Sparrow's
    model for that one run, with the Sparrow's flight handling. Making a ship permanent still means
    pointing its ship data file (`content/ships/`) at the exported model.
+
+## Putting a map in the game world
+For now this takes two small hand edits. Press Export first, so the `.glb` is in `content/maps/`.
+
+1. In `content/asset_manifest.json`, add the map twice, once as the place to walk and once as what you see
+   from outside:
+   ```json
+   "map.my_wreck":  { "type": "map",  "source": "maps/my_wreck.glb" },
+   "mesh.my_wreck": { "type": "mesh", "source": "maps/my_wreck.glb" }
+   ```
+2. In `content/scenes/stage2_flight.scene.json`, add an object to `props`. Copy `station.derelict`, then set
+   `id`, `name`, `mesh`, `systemPosition`, and `docking.interior`.
+
+Things to know:
+* `colliders` and the docking `bays` position are relative to the **centre of the model's bounding box**,
+  with Blender's Z as up and Blender's Y as minus Z. `colliders` are simple boxes that stop ships, and
+  the bay is where the ship sits, about 4 m above the surface it lands on.
+* With no `market` or `services` in `docking`, the place is treated as a wreck: nobody answers the radio.
+* From outside you see the same model as inside. An exterior model of its own also works: point `mesh` at it.
+* The Player Start is where you arrive from your airlock, and an **Exit** returns you to the ship.
+* `--start-at my_id` starts the game next to it, for testing.
 
 ## Ship interiors
 An interior is a **Map** with a **Pilot Seat** and an **Airlock**. Build it now and walk it with Play in

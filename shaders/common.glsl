@@ -28,7 +28,7 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 shadowInfo;       // xyz world size of a texel per cascade, w number of shadowed point lights
   vec4 lighting;         // x AO on, y reflection strength (0 = off), z surface detail, w env mip count
   vec4 viewForward;      // xyz camera forward in render space
-  vec4 skyNebulaB;       // rgb second nebula colour
+  vec4 skyNebulaB;       // rgb second nebula colour, a: the live probe supplies ambient light
   vec4 skyNebulaC;       // rgb nebula core colour
   vec4 viewOrigin;       // xyz the viewpoint in render space (0 except for probes), w placed probes in use
   vec4 probePos[8];      // placed reflection probes: snapshot position

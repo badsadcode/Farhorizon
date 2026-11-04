@@ -1,5 +1,7 @@
 #include "game/content/interior_def.h"
 
+#include "game/content/map_def.h"
+
 #include "engine/core/file_io.h"
 #include "game/content/json_util.h"
 
@@ -147,6 +149,11 @@ std::optional<InteriorDef> parseInteriorDef(const std::string& json, const std::
 
 std::optional<InteriorDef> loadInteriorDef(const AssetManifest& manifest, const AssetID& id,
                                            std::vector<std::string>* errors) {
+  if (const AssetEntry* entry = manifest.find(id); entry && entry->type == "map") {
+    auto map = loadMap(manifest.contentRoot() / entry->source, errors);
+    if (!map) return std::nullopt;
+    return std::move(map->def);
+  }
   auto path = manifest.resolve(id, "interior");
   if (!path) {
     if (errors) errors->push_back("interior '" + id + "': not in manifest or wrong type");
