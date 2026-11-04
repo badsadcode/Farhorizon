@@ -2,7 +2,7 @@
 
 | # | Status | Area | Description |
 |---|---|---|---|
-| 1 | open | build | Windows build not yet confirmed green. The first CI run failed inside the third-party Vulkan SDK action before compiling our code; the job now uses the official LunarG installer. |
+| 1 | fixed (0.2) | build | Windows MSVC build + tests green in CI (official LunarG SDK installer). The game has not yet been *run* on a Windows GPU, since CI has no GPU. |
 | 2 | fixed (0.2) | render | HDR target + tonemap pass + bloom (ADR 0004). |
 | 3 | open | render | No image-based lighting. The shadow side of ships relies on a hemispheric ambient approximation. |
 | 4 | open | render | One device allocation per buffer/image. Fine for Stage 1, needs a sub-allocator before asset counts grow. |

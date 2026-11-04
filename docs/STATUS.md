@@ -11,7 +11,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
 | Test harness | ✅ | 36 unit tests + content validation (CTest) |
-| CI | 🟡 | Linux job (sanitizers + headless render) green. Windows job fixed to use the official LunarG SDK installer; awaiting its first green run |
+| CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
 | Item | State | Notes |
