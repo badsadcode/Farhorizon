@@ -26,6 +26,7 @@ TEST(settings_round_trip_keeps_every_field) {
   a.shadows = false;
   a.ambientOcclusion = false;
   a.reflections = false;
+  a.volumetricClouds = false;
   a.masterVolume = 0.5f;
   a.ambienceVolume = 0.25f;
   a.effectsVolume = 0.75f;
@@ -51,6 +52,7 @@ TEST(settings_round_trip_keeps_every_field) {
   CHECK(!b->shadows);
   CHECK(!b->ambientOcclusion);
   CHECK(!b->reflections);
+  CHECK(!b->volumetricClouds);
   CHECK_NEAR(b->masterVolume, 0.5, 1e-5);
   CHECK_NEAR(b->ambienceVolume, 0.25, 1e-5);
   CHECK_NEAR(b->effectsVolume, 0.75, 1e-5);

@@ -41,8 +41,10 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 shadowInfo;
   Vec4 lighting;
   Vec4 viewForward;
+  Vec4 skyNebulaB;
+  Vec4 skyNebulaC;
 };
-static_assert(sizeof(FrameUniforms) == 928);
+static_assert(sizeof(FrameUniforms) == 960);
 
 // Vulkan cube map table: sc, tc and ma for each face, as row vectors over (x, y, z).
 struct CubeFace {
@@ -205,6 +207,11 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
   const std::uint8_t white[4] = {255, 255, 255, 255};
   whiteTexture_ = gpu::createTextureRGBA8(ctx_, white, 1, 1);
   createLightingResources();
+  {
+    const ImageRGBA8 atlas = generateParticleAtlas();
+    particleAtlas_ = gpu::createTextureRGBA8(ctx_, atlas.pixels.data(), std::uint32_t(atlas.width), std::uint32_t(atlas.height));
+    particleAtlasSet_ = allocateMaterialSet(particleAtlas_.view, clampSampler_);
+  }
 
   for (auto& f : frames_) {
     f.uniforms = gpu::createBuffer(ctx_, sizeof(FrameUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, true);
@@ -248,11 +255,14 @@ Renderer::~Renderer() {
     gpu::destroy(ctx_, f.overlayVertices);
     gpu::destroy(ctx_, f.instances);
     gpu::destroy(ctx_, f.glows);
+    gpu::destroy(ctx_, f.particles);
+    gpu::destroy(ctx_, f.ribbons);
   }
   gpu::destroy(ctx_, hdr_);
   gpu::destroy(ctx_, bloomA_);
   gpu::destroy(ctx_, bloomB_);
   gpu::destroy(ctx_, whiteTexture_);
+  gpu::destroy(ctx_, particleAtlas_);
   gpu::destroy(ctx_, uiAtlas_);
   gpu::destroy(ctx_, depth_);
   destroyLightingResources();
@@ -262,10 +272,10 @@ Renderer::~Renderer() {
   vkDestroySampler(d, clampSampler_, nullptr);
   for (VkPipeline p : {skyPipeline_, starPipeline_, meshPipeline_, overlayPipeline_, tonemapPipeline_,
                        bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_, planetPipeline_, sunShadowPipeline_,
-                       pointShadowPipeline_, depthPrepassPipeline_, meshProbePipeline_, ssaoPipeline_, ssaoBlurPipeline_})
+                       pointShadowPipeline_, depthPrepassPipeline_, meshProbePipeline_, ssaoPipeline_, ssaoBlurPipeline_, particlePipeline_, cloudPipeline_, cloudCompositePipeline_, ribbonPipeline_, tunnelPipeline_})
     vkDestroyPipeline(d, p, nullptr);
   for (VkPipelineLayout l : {scenePipelineLayout_, meshPipelineLayout_, overlayPipelineLayout_, tonemapPipelineLayout_,
-                             bloomPipelineLayout_, planetPipelineLayout_, shadowPipelineLayout_, ssaoPipelineLayout_})
+                             bloomPipelineLayout_, planetPipelineLayout_, shadowPipelineLayout_, ssaoPipelineLayout_, particlePipelineLayout_, cloudPipelineLayout_})
     vkDestroyPipelineLayout(d, l, nullptr);
   vkDestroyDescriptorPool(d, descriptorPool_, nullptr);
   vkDestroyDescriptorSetLayout(d, frameLayout_, nullptr);
@@ -363,6 +373,21 @@ void Renderer::createPipelines() {
     sl.pushConstantRangeCount = 1;
     sl.pPushConstantRanges = &bloomPush;
     VK_CHECK(vkCreatePipelineLayout(d, &sl, nullptr, &ssaoPipelineLayout_));
+    const VkDescriptorSetLayout particleSets[] = {frameLayout_, materialLayout_, materialLayout_};  // frame, atlas, depth
+    VkPipelineLayoutCreateInfo pal{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pal.setLayoutCount = 3;
+    pal.pSetLayouts = particleSets;
+    pal.pushConstantRangeCount = 1;
+    pal.pPushConstantRanges = &bloomPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &pal, nullptr, &particlePipelineLayout_));
+    const VkDescriptorSetLayout cloudSets[] = {frameLayout_, materialLayout_};  // frame, depth
+    VkPushConstantRange cloudPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Vec4) * 4};
+    VkPipelineLayoutCreateInfo cll{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    cll.setLayoutCount = 2;
+    cll.pSetLayouts = cloudSets;
+    cll.pushConstantRangeCount = 1;
+    cll.pPushConstantRanges = &cloudPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &cll, nullptr, &cloudPipelineLayout_));
     VkPushConstantRange shadowPush{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Mat4)};
     VkPipelineLayoutCreateInfo shl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     shl.pushConstantRangeCount = 1;
@@ -401,6 +426,13 @@ void Renderer::createPipelines() {
   planet.blend = Blend::Premultiplied;
   planetPipeline_ = buildPipeline(d, planet, color, kDepthFormat);
 
+  PipelineDesc cloud;
+  cloud.vert = sky.vert;
+  cloud.frag = load("cloud.frag");
+  cloud.layout = cloudPipelineLayout_;
+  cloud.blend = Blend::Premultiplied;
+  cloudPipeline_ = buildPipeline(d, cloud, color, VK_FORMAT_UNDEFINED);
+
   PipelineDesc stars;
   stars.vert = load("stars.vert");
   stars.frag = load("stars.frag");
@@ -419,6 +451,31 @@ void Renderer::createPipelines() {
   glow.bindings = {{0, sizeof(GlowSprite), VK_VERTEX_INPUT_RATE_INSTANCE}};
   glow.attributes = {{0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0}, {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16}};
   glowPipeline_ = buildPipeline(d, glow, color, kDepthFormat);
+
+  PipelineDesc particle;
+  particle.vert = load("particle.vert");
+  particle.frag = load("particle.frag");
+  particle.layout = particlePipelineLayout_;
+  particle.blend = Blend::Premultiplied;
+  particle.depthTest = true;  // occluded by hulls, but never writes depth
+  particle.bindings = {{0, sizeof(ParticleSprite), VK_VERTEX_INPUT_RATE_INSTANCE}};
+  particle.attributes = {{0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
+                         {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+                         {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 32},
+                         {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 48}};
+  particlePipeline_ = buildPipeline(d, particle, color, kDepthFormat);
+
+  PipelineDesc ribbon;
+  ribbon.vert = load("ribbon.vert");
+  ribbon.frag = load("ribbon.frag");
+  ribbon.layout = particlePipelineLayout_;
+  ribbon.blend = Blend::Premultiplied;
+  ribbon.depthTest = true;
+  ribbon.bindings = {{0, sizeof(RibbonVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
+  ribbon.attributes = {{0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
+                       {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+                       {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 32}};
+  ribbonPipeline_ = buildPipeline(d, ribbon, color, kDepthFormat);
 
   PipelineDesc mesh;
   mesh.vert = load("mesh.vert");
@@ -480,6 +537,20 @@ void Renderer::createPipelines() {
   tonemap.layout = tonemapPipelineLayout_;
   tonemapPipeline_ = buildPipeline(d, tonemap, swap, VK_FORMAT_UNDEFINED);
 
+  PipelineDesc tunnelDesc;
+  tunnelDesc.vert = sky.vert;
+  tunnelDesc.frag = load("tunnel.frag");
+  tunnelDesc.layout = cloudPipelineLayout_;
+  tunnelDesc.blend = Blend::Additive;
+  tunnelPipeline_ = buildPipeline(d, tunnelDesc, color, kDepthFormat);
+
+  PipelineDesc cloudComposite;
+  cloudComposite.vert = tonemap.vert;
+  cloudComposite.frag = load("cloud_composite.frag");
+  cloudComposite.layout = bloomPipelineLayout_;
+  cloudComposite.blend = Blend::Premultiplied;
+  cloudCompositePipeline_ = buildPipeline(d, cloudComposite, color, kDepthFormat);
+
   PipelineDesc bloomDown;
   bloomDown.vert = tonemap.vert;
   bloomDown.frag = load("bloom_down.frag");
@@ -527,21 +598,25 @@ void Renderer::ensureTargets() {
   // Ambient occlusion targets, half resolution.
   gpu::destroy(ctx_, aoRaw_);
   gpu::destroy(ctx_, ao_);
+  gpu::destroy(ctx_, cloudTarget_);
   const VkExtent2D ae{std::max(1u, e.width / 2), std::max(1u, e.height / 2)};
   aoRaw_ = gpu::createImage(ctx_, ae, kAoFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                             VK_IMAGE_ASPECT_COLOR_BIT);
   ao_ = gpu::createImage(ctx_, ae, kAoFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                          VK_IMAGE_ASPECT_COLOR_BIT);
+  cloudTarget_ = gpu::createImage(ctx_, ae, kHdrFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                  VK_IMAGE_ASPECT_COLOR_BIT);
   ctx_.immediateSubmit([&](VkCommandBuffer cmd) {
-    for (GpuImage* img : {&aoRaw_, &ao_})
+    for (GpuImage* img : {&aoRaw_, &ao_, &cloudTarget_})
       gpu::imageBarrier(cmd, img->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   });
-  for (VkDescriptorSet* set : {&aoDepthSet_, &aoRawSet_})
+  for (VkDescriptorSet* set : {&aoDepthSet_, &aoRawSet_, &cloudSet_})
     if (*set) vkFreeDescriptorSets(ctx_.device(), descriptorPool_, 1, set);
   aoDepthSet_ = allocateMaterialSet(depth_.view, nearestSampler_, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
   aoRawSet_ = allocateMaterialSet(aoRaw_.view, clampSampler_);
+  cloudSet_ = allocateMaterialSet(cloudTarget_.view, clampSampler_);
   VkDescriptorImageInfo aoInfo{clampSampler_, ao_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkWriteDescriptorSet aoWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
   aoWrite.dstSet = lightingSet_;
@@ -659,7 +734,7 @@ void Renderer::destroyLightingResources() {
   for (VkImageView v : sunLayerViews_) vkDestroyImageView(d, v, nullptr);
   for (VkImageView v : pointFaceViews_) vkDestroyImageView(d, v, nullptr);
   for (VkImageView v : probeFaceViews_) vkDestroyImageView(d, v, nullptr);
-  for (GpuImage* img : {&sunShadow_, &pointShadow_, &probe_, &probeDepth_, &blackCube_, &aoRaw_, &ao_})
+  for (GpuImage* img : {&sunShadow_, &pointShadow_, &probe_, &probeDepth_, &blackCube_, &aoRaw_, &ao_, &cloudTarget_})
     gpu::destroy(ctx_, *img);
   vkDestroySampler(d, shadowSampler_, nullptr);
   vkDestroySampler(d, nearestSampler_, nullptr);
@@ -745,7 +820,8 @@ void Renderer::setStarfield(const std::vector<StarInstance>& stars) {
 }
 
 bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem>& items,
-                      const std::vector<GlowSprite>& glows, const std::vector<OverlayVertex>& overlay,
+                      const std::vector<GlowSprite>& glows, const std::vector<ParticleSprite>& particles,
+                      const std::vector<OverlayVertex>& overlay,
                       const std::filesystem::path* screenshotPath) {
   std::uint32_t imageIndex = 0;
   if (!ctx_.beginFrame(imageIndex)) return false;
@@ -779,6 +855,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.skyBase = Vec4(p.skyBase, p.sunGlare);
   u.skyBand = Vec4(p.skyBand, p.skyBandIntensity);
   u.skyNebula = Vec4(p.skyNebula, p.skyNebulaStrength);
+  u.skyNebulaB = Vec4(p.skyNebulaB, 0);
+  u.skyNebulaC = Vec4(p.skyNebulaC, 0);
   u.fillDir = Vec4(normalize(p.fillDirection), 0);
   u.fillColor = Vec4(p.fillColor, 0);
   u.rimColorPower = Vec4(p.rimColor, p.rimPower);
@@ -868,6 +946,20 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
   }
   if (glowBytes) std::memcpy(fr.glows.mapped, glows.data(), glowBytes);
+  const VkDeviceSize particleBytes = particles.size() * sizeof(ParticleSprite);
+  if (particleBytes > fr.particles.size) {
+    gpu::destroy(ctx_, fr.particles);
+    fr.particles = gpu::createBuffer(ctx_, std::max<VkDeviceSize>(particleBytes * 2, 64 * 1024),
+                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
+  }
+  if (particleBytes) std::memcpy(fr.particles.mapped, particles.data(), particleBytes);
+  const VkDeviceSize ribbonBytes = p.ribbons.size() * sizeof(RibbonVertex);
+  if (ribbonBytes > fr.ribbons.size) {
+    gpu::destroy(ctx_, fr.ribbons);
+    fr.ribbons = gpu::createBuffer(ctx_, std::max<VkDeviceSize>(ribbonBytes * 2, 256 * 1024),
+                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, true);
+  }
+  if (ribbonBytes) std::memcpy(fr.ribbons.mapped, p.ribbons.data(), ribbonBytes);
 
   const bool wantShot = screenshotPath && ctx_.swapchainSupportsTransferSrc();
   if (screenshotPath && !wantShot) log::warn("render", "screenshot unsupported: swapchain lacks TRANSFER_SRC usage");
@@ -1259,6 +1351,43 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     });
   }
 
+  // ---- Volumetric clouds: ray marched at half resolution, stopping at the prepass depth ----
+  if (!p.clouds.empty()) {
+    gpu::imageBarrier(cmd, cloudTarget_.image, kShaderRead, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    att.imageView = cloudTarget_.view;
+    att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    att.clearValue.color = {{0, 0, 0, 0}};
+    VkRenderingInfo info{VK_STRUCTURE_TYPE_RENDERING_INFO};
+    info.renderArea = {{0, 0}, cloudTarget_.extent};
+    info.layerCount = 1;
+    info.colorAttachmentCount = 1;
+    info.pColorAttachments = &att;
+    vkCmdBeginRendering(cmd, &info);
+    const VkViewport v{0, 0, float(cloudTarget_.extent.width), float(cloudTarget_.extent.height), 0.0f, 1.0f};
+    const VkRect2D r{{0, 0}, cloudTarget_.extent};
+    vkCmdSetViewport(cmd, 0, 1, &v);
+    vkCmdSetScissor(cmd, 0, 1, &r);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, cloudPipeline_);
+    const VkDescriptorSet sets[2] = {fr.frameSet, aoDepthSet_};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, cloudPipelineLayout_, 0, 2, sets, 0, nullptr);
+    for (const CloudDraw& c : p.clouds) {
+      const Vec4 push[4] = {Vec4(c.center, c.radius), Vec4(c.colorA, c.density), Vec4(c.colorB, c.seed),
+                            Vec4(p.nearPlane, 0, 0, 0)};
+      vkCmdPushConstants(cmd, cloudPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), push);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      ++st.drawCalls;
+    }
+    vkCmdEndRendering(cmd);
+    gpu::imageBarrier(cmd, cloudTarget_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, kShaderRead,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  }
+
   gpu::imageBarrier(cmd, hdr_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -1291,6 +1420,28 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
 
   drawMeshes(meshPipeline_, fr.frameSet, lightingSet_);
 
+  // Volumetric clouds, over opaque geometry.
+  if (!p.clouds.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, cloudCompositePipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloomPipelineLayout_, 0, 1, &cloudSet_, 0, nullptr);
+    const Vec4 push(1.0f / float(cloudTarget_.extent.width), 1.0f / float(cloudTarget_.extent.height), 0.0f, 0.0f);
+    vkCmdPushConstants(cmd, bloomPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+    ++st.drawCalls;
+  }
+
+  // Travel drive tunnel: behind the ship, over the distant sky.
+  if (p.tunnel.amount > 0.001f) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tunnelPipeline_);
+    const VkDescriptorSet sets[2] = {fr.frameSet, aoDepthSet_};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, cloudPipelineLayout_, 0, 2, sets, 0, nullptr);
+    const Vec4 push[4] = {Vec4(normalize(p.tunnel.forward), p.tunnel.amount), Vec4(p.tunnel.colorA, 0),
+                          Vec4(p.tunnel.colorB, 0), Vec4(0, 0, 0, 0)};
+    vkCmdPushConstants(cmd, cloudPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), push);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+    ++st.drawCalls;
+  }
+
   // Glow sprites (additive, depth-tested against hulls, after opaque geometry)
   if (!glows.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, glowPipeline_);
@@ -1298,6 +1449,33 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &fr.glows.buffer, &off);
     vkCmdDraw(cmd, 6, static_cast<std::uint32_t>(glows.size()), 0, 0);
+    ++st.drawCalls;
+  }
+
+  // Exhaust ribbons.
+  if (!p.ribbons.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ribbonPipeline_);
+    const VkDescriptorSet sets[3] = {fr.frameSet, particleAtlasSet_, aoDepthSet_};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout_, 0, 3, sets, 0, nullptr);
+    const Vec4 push(p.nearPlane, 0.0f, 0.0f, 0.0f);
+    vkCmdPushConstants(cmd, particlePipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &fr.ribbons.buffer, &off);
+    vkCmdDraw(cmd, static_cast<std::uint32_t>(p.ribbons.size()), 1, 0, 0);
+    ++st.drawCalls;
+    st.triangles += p.ribbons.size() / 3;
+  }
+
+  // Particles: textured and soft against geometry (depth is read-only here, so it can be sampled).
+  if (!particles.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipeline_);
+    const VkDescriptorSet sets[3] = {fr.frameSet, particleAtlasSet_, aoDepthSet_};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout_, 0, 3, sets, 0, nullptr);
+    const Vec4 push(p.nearPlane, 0.0f, 0.0f, 0.0f);
+    vkCmdPushConstants(cmd, particlePipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &fr.particles.buffer, &off);
+    vkCmdDraw(cmd, 6, static_cast<std::uint32_t>(particles.size()), 0, 0);
     ++st.drawCalls;
   }
 

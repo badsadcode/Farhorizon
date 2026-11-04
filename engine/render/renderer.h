@@ -13,6 +13,7 @@
 #include "engine/assets/mesh_data.h"
 #include "engine/debug/overlay.h"
 #include "engine/render/gpu_resources.h"
+#include "engine/render/particle_atlas.h"
 #include "engine/render/starfield.h"
 #include "engine/render/vk_context.h"
 
@@ -60,6 +61,24 @@ struct PlanetDraw {
   float atmosphereThickness = 0;
 };
 
+// Volumetric gas cloud, ray marched in the world.
+struct CloudDraw {
+  Vec3 center{};            // camera-relative (m)
+  float radius = 1;         // m
+  Vec3 colorA{1, 1, 1};
+  float density = 1;        // optical depth per radius at full density
+  Vec3 colorB{1, 1, 1};
+  float seed = 1;
+};
+
+// Travel drive tunnel around the flight path; drawn when amount > 0.
+struct TunnelDraw {
+  Vec3 forward{0, 0, -1};
+  float amount = 0.0f;
+  Vec3 colorA{0.5f, 0.8f, 2.0f};
+  Vec3 colorB{0.8f, 0.4f, 1.6f};
+};
+
 struct RenderFrameParams {
   Mat4 viewRotation;               // world->view rotation only (no translation)
   float fovYRadians = 1.0f;
@@ -80,6 +99,7 @@ struct RenderFrameParams {
   float skyBandIntensity = 1.0f;
   Vec3 skyNebula{0.010f, 0.004f, 0.012f};
   float skyNebulaStrength = 1.0f;
+  Vec3 skyNebulaB{0, 0, 0}, skyNebulaC{0, 0, 0};
   Vec3 fillDirection{0, 1, 0};     // unit vector toward the fill light
   Vec3 fillColor{0, 0, 0};         // linear colour * intensity
   Vec3 rimColor{0, 0, 0};
@@ -100,6 +120,9 @@ struct RenderFrameParams {
   bool pointShadows = false;       // the nearest lamps cast shadows
   bool ambientOcclusion = false;
   float reflections = 0.0f;        // live reflection probe strength; 0 disables it
+  std::vector<CloudDraw> clouds;   // drawn in order: far to near
+  std::vector<RibbonVertex> ribbons;  // exhaust trails, triangle list
+  TunnelDraw tunnel;
 };
 
 struct GlowSprite {
@@ -138,7 +161,8 @@ class Renderer {
   // drawn instanced. Returns false if the frame was skipped (swapchain
   // recreated). If `screenshotPath` is set, the presented image is also written as PNG.
   bool render(const RenderFrameParams& params, const std::vector<MeshDrawItem>& items,
-              const std::vector<GlowSprite>& glows, const std::vector<OverlayVertex>& overlay,
+              const std::vector<GlowSprite>& glows, const std::vector<ParticleSprite>& particles,
+              const std::vector<OverlayVertex>& overlay,
               const std::filesystem::path* screenshotPath = nullptr);
 
   const RenderStats& stats() const { return stats_; }
@@ -168,6 +192,8 @@ class Renderer {
     GpuBuffer overlayVertices;
     GpuBuffer instances;  // per-instance model matrices
     GpuBuffer glows;      // glow sprite instances
+    GpuBuffer particles;  // particle sprite instances
+    GpuBuffer ribbons;    // exhaust ribbon vertices
     GpuBuffer probeUniforms;  // frame uniforms for the reflection probe's view
     VkDescriptorSet probeSet = VK_NULL_HANDLE;
     bool timestampsWritten = false;
@@ -244,6 +270,17 @@ class Renderer {
   VkPipeline meshProbePipeline_ = VK_NULL_HANDLE;
   VkPipeline ssaoPipeline_ = VK_NULL_HANDLE;
   VkPipeline ssaoBlurPipeline_ = VK_NULL_HANDLE;
+  VkPipeline particlePipeline_ = VK_NULL_HANDLE;
+  VkPipeline ribbonPipeline_ = VK_NULL_HANDLE;
+  VkPipeline tunnelPipeline_ = VK_NULL_HANDLE;
+  VkPipeline cloudPipeline_ = VK_NULL_HANDLE;
+  VkPipeline cloudCompositePipeline_ = VK_NULL_HANDLE;
+  GpuImage cloudTarget_;  // half resolution, premultiplied
+  VkDescriptorSet cloudSet_ = VK_NULL_HANDLE;
+  VkPipelineLayout cloudPipelineLayout_ = VK_NULL_HANDLE;
+  VkPipelineLayout particlePipelineLayout_ = VK_NULL_HANDLE;
+  GpuImage particleAtlas_;
+  VkDescriptorSet particleAtlasSet_ = VK_NULL_HANDLE;
   std::uint32_t probeFace_ = 0;
   bool probeFilled_ = false;
 

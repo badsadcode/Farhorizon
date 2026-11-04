@@ -1,0 +1,44 @@
+# End-to-end check of the one-button full stop, through the real input path, from a new game.
+wait 10
+expect-screen main
+key Return
+wait 10
+expect-screen none
+
+# Fly, then stop.
+hold 80 W
+wait 60
+expect-speed-above 20
+shot f01_flying.png
+key X
+wait 300
+expect-speed-below 0.05
+expect-spin-below 0.01
+shot f02_stopped.png
+
+# The hold survives time passing, and any flight control releases it.
+wait 60
+expect-speed-below 0.05
+hold 40 W
+wait 60
+expect-speed-above 5
+key X
+wait 200
+expect-speed-below 0.05
+
+# With flight assist off there is nothing else to stop the ship: the hold must still do it.
+key Z
+hold 90 W
+wait 10
+expect-speed-above 20
+shot f03_assist_off.png
+key X
+wait 300
+expect-speed-below 0.05
+expect-spin-below 0.01
+
+# It stayed in assist-off mode: thrusting again keeps speed after letting go.
+hold 40 W
+wait 60
+expect-speed-above 5
+quit

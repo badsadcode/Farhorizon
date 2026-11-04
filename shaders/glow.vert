@@ -3,10 +3,11 @@
 #include "common.glsl"
 // Camera-facing additive glow sprites (engine exhaust, running lights) in world space.
 layout(location = 0) in vec4 inPosSize;  // camera-relative position, world-space radius (m)
-layout(location = 1) in vec4 inColor;    // linear HDR colour
+layout(location = 1) in vec4 inColor;    // linear HDR colour, a = turbulence 0..1 (engines)
 layout(location = 0) out vec2 vCorner;
 layout(location = 1) out vec3 vColor;
 layout(location = 2) out float vDist;
+layout(location = 3) out vec2 vTurbSeed;
 void main() {
   const vec2 corners[6] = vec2[](vec2(-1, -1), vec2(1, -1), vec2(1, 1), vec2(-1, -1), vec2(1, 1), vec2(-1, 1));
   vec2 c = corners[gl_VertexIndex];
@@ -15,4 +16,5 @@ void main() {
   vCorner = c;
   vColor = inColor.rgb;
   vDist = length(inPosSize.xyz);
+  vTurbSeed = vec2(inColor.a, float(gl_InstanceIndex) * 7.3);
 }

@@ -135,6 +135,9 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Scripted UI tests | ✅ | `--ui-script`; on Windows here; in the Linux CI job, not yet run there |
 | Owner playtest of the UI | ⬜ | next |
 | Blender pipeline | ⬜ | PBR textures, `KHR_lights_punctual`, whole-level maps, scale reference scene, artist guide |
+| Exhaust ribbons, engine glow, speed dust, drive tunnel | ✅ | checked in screenshots; owner to judge in motion |
+| Nebula sky and volumetric clouds | 🟡 | look test at the owner's request; placement and colours are first guesses |
+| Full stop | ✅ | unit test + scripted run, assist on and off |
 | Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
 
 ## Later stages

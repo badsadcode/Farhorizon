@@ -18,6 +18,7 @@
 #include "game/content/visual_profile.h"
 #include "engine/audio/audio_device.h"
 #include "game/audio_director.h"
+#include "game/fx/particles.h"
 #include "game/market_ui.h"
 #include "game/persistence/save_game.h"
 #include "game/session/game_session.h"
@@ -151,6 +152,15 @@ class GameApp {
   std::filesystem::path settingsPath_;
   UiScript uiScript_;
   int lastMenuFocus_ = -1;
+  // Ship effects (presentation only).
+  ParticleSystem fx_;
+  std::vector<TrailEmitter> engineEmitters_;
+  std::map<std::uint32_t, TrailEmitter> npcEmitters_;
+  std::vector<ParticleSprite> particleSprites_;
+  TravelState lastTravelState_ = TravelState::Idle;
+  SpeedDust dust_;
+  float tunnelAmount_ = 0.0f;
+  std::vector<Vec3> travelNozzles_;  // relative to the ship
   int mouseSettleFrames_ = 0;  // a window resize moves the cursor without the player touching it
   std::uint64_t menuOpenedFrame_ = ~std::uint64_t(0);
   bool scripted_ = false;         // benchmarks / --frames: defaults, no menus, no settings file

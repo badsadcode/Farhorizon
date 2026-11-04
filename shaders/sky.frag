@@ -50,8 +50,17 @@ void main() {
   }
   vec3 col = frame.skyBase.rgb;
   col += band * frame.skyBand.rgb * frame.skyBand.a * (0.55 + 0.9 * dust);
-  float neb = smoothstep(0.45, 0.9, wisps) * (0.4 + band);
-  col += neb * frame.skyNebula.rgb * frame.skyNebula.a;                   // data-driven nebula tint
+  // Nebula: domain-warped noise makes the folded, billowing shapes. Large masks keep it to patches
+  // of sky, so most of space stays dark.
+  vec3 q = dir * 2.3 + vec3(4.1, 0.7, 2.2);
+  vec3 warp = vec3(fbm(q + vec3(1.7, 9.2, 3.1)), fbm(q + vec3(8.3, 2.8, 1.4)), fbm(q + vec3(4.0, 5.1, 7.7)));
+  float folds = fbm(q + warp * 1.9);
+  float patches = smoothstep(0.42, 0.68, fbm(dir * 1.25 + vec3(11.0, 3.0, 7.0)));
+  float neb = patches * smoothstep(0.34, 0.8, folds);
+  float hue = smoothstep(0.38, 0.62, fbm(dir * 1.7 + vec3(2.0, 13.0, 5.0)));
+  vec3 nebCol = mix(frame.skyNebula.rgb, frame.skyNebulaB.rgb, hue);
+  nebCol = mix(nebCol, frame.skyNebulaC.rgb, smoothstep(0.6, 0.85, folds));  // hotter where it is dense
+  col += neb * nebCol * frame.skyNebula.a * (0.65 + 0.7 * wisps);
   col *= 1.0 - 0.6 * band * smoothstep(0.55, 0.75, fbm(dir * 11.0));     // dark lanes
 
   // Star disc and glare.

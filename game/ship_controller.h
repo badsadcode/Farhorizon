@@ -18,6 +18,8 @@ class ShipController {
   Vec2 stick() const { return stick_; }
   float throttle() const { return throttle_; }
   bool assist() const { return assist_; }
+  // Full stop: brakes to a standstill and stays there until the pilot touches a flight control.
+  bool holding() const { return holding_; }
   SpeedMode mode() const { return mode_; }
 
   // Scripted input for benchmarks and smoke tests (overrides the player).
@@ -33,6 +35,7 @@ class ShipController {
   float throttle_ = 0.0f;
   bool assist_ = true;
   SpeedMode mode_ = SpeedMode::Cruise;
+  bool holding_ = false;
   bool autofly_ = false;
   float autoThrottle_ = 0.0f;
   Vec3 autoRotation_{};

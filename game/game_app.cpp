@@ -990,7 +990,10 @@ int GameApp::run() {
                           default: return std::string("confirm");
                         }
                       },
-                      [this] { return market_.isOpen(); }, [this] { quit_ = true; }});
+                      [this] { return market_.isOpen(); },
+                      [this] { return length(world().player().state.velocity); },
+                      [this] { return length(world().player().state.angularVelocity); },
+                      [this] { quit_ = true; }});
     }
     if (!window_->pollEvents(input_)) break;
     if (window_->isMinimized()) continue;  // keep pending resize until restored (no 0x0 swapchain)
@@ -1072,6 +1075,10 @@ int GameApp::run() {
       const auto delta = session_->fixedUpdate(float(clock_.step()));
       if (delta) {
         camera_.applyRebase(*delta);
+        fx_.shift(*delta);
+        for (auto& em : engineEmitters_) em.shift(*delta);
+        for (auto& [id, em] : npcEmitters_) em.shift(*delta);
+        dust_.shift(*delta);
         ++rebases_;
       }
       const DockState ds = session_->docking().state();
@@ -1136,6 +1143,8 @@ int GameApp::run() {
     params.skyBandIntensity = scene_.sky.bandIntensity;
     params.skyNebula = scene_.sky.nebulaColor;
     params.skyNebulaStrength = scene_.sky.nebulaStrength;
+    params.skyNebulaB = scene_.sky.nebulaColorB;
+    params.skyNebulaC = scene_.sky.nebulaColorC;
     params.fillDirection = scene_.ambient.fillDirection;
     params.fillColor = scene_.ambient.fillColor;
     params.rimColor = scene_.ambient.rimColor;
@@ -1212,6 +1221,95 @@ int GameApp::run() {
                                 : std::max(0.0f, fin.thrust.z);
       if (player.state.boosting) demand = 1.0f;
       engineDemandForAudio = demand;
+      if (session_->travel().active()) demand = 0.0f;  // the drive owns the ship: main engines rest
+      if (!simPaused) {
+        // Exhaust trails and travel drive effects.
+        fx_.update(float(dt));
+        const TravelDrive& travel = session_->travel();
+        const TravelState ts = travel.state();
+        const bool inTransit = ts == TravelState::Transit || ts == TravelState::Decelerating;
+        std::vector<Vec3> nozzles;
+        for (const auto& sname : eg.sockets)
+          if (auto it = player.sockets.find(sname); it != player.sockets.end())
+            nozzles.push_back(ship.rotation.rotate(it->second.position));
+        engineEmitters_.resize(nozzles.size());
+        const bool engineRuns = session_->docking().state() != DockState::Docked &&
+                                session_->landing().state() != LandState::Landed && !travel.active();
+        for (size_t i = 0; i < nozzles.size(); ++i) {
+          TrailEmitter& em = engineEmitters_[i];
+          if (!engineRuns || eg.trailRate <= 0) {
+            fx_.tickTrail(em, float(dt));
+            em.hasLast = false;
+            continue;
+          }
+          EngineFx e;
+          e.position = ship.position + nozzles[i];
+          e.back = -ship.rotation.forward();
+          e.shipVelocity = player.state.velocity;
+          e.color = player.state.boosting ? eg.boostColor : eg.color;
+          e.demand = demand;
+          e.boosting = player.state.boosting;
+          e.rate = eg.trailRate;
+          e.life = eg.trailLife;
+          e.size = eg.trailSize;
+          e.seed = float(i) * 17.3f + 1.0f;
+          fx_.emitEngine(em, e, float(dt));
+        }
+        TravelFx tf;
+        tf.phase = ts == TravelState::Spooling ? TravelFxPhase::Spooling : inTransit ? TravelFxPhase::Transit : TravelFxPhase::Idle;
+        tf.spool = travel.spoolProgress();
+        tf.speedFraction = std::clamp(travel.speed() / std::max(1.0f, player.def.travel.maxSpeed), 0.0f, 1.0f);
+        tf.forward = ship.rotation.forward();
+        tf.color = eg.color;
+        tf.nozzles = nozzles.data();
+        tf.nozzleCount = int(nozzles.size());
+        fx_.emitTravel(tf, float(dt));
+        if (ts == TravelState::Transit && lastTravelState_ == TravelState::Spooling)
+          fx_.emitBurst(tf.forward, eg.color, 1.0f);
+        if (ts == TravelState::Idle && lastTravelState_ == TravelState::Decelerating)
+          fx_.emitBurst(tf.forward, eg.color, 0.6f);
+        lastTravelState_ = ts;
+        travelNozzles_ = nozzles;
+        // The tunnel opens as the drive engages and closes as the ship slows.
+        const float tunnelTarget = ts == TravelState::Transit        ? 1.0f
+                                   : ts == TravelState::Decelerating ? std::clamp(tf.speedFraction * 4.0f, 0.0f, 1.0f)
+                                                                     : 0.0f;
+        const float tunnelRate = tunnelTarget > tunnelAmount_ ? 0.9f : 1.8f;
+        tunnelAmount_ += std::clamp(tunnelTarget - tunnelAmount_, -tunnelRate * float(dt), tunnelRate * float(dt));
+        dust_.wrap(view.position);
+        // Other ships, while near enough to see.
+        const Combat& combat = session_->combat();
+        std::erase_if(npcEmitters_, [&](const auto& kv) { return combat.npc(kv.first) == nullptr; });
+        for (const auto& n : combat.npcs()) {
+          const ShipType* type = combat.shipType(n.shipDef);
+          if (!type || length(n.state.position - ship.position) > 4000.0f) continue;
+          EngineFx e;
+          const Vec3 forward = n.state.orientation.forward();
+          e.position = n.state.position - forward * 4.0f;
+          e.back = -forward;
+          e.shipVelocity = n.state.velocity;
+          e.color = type->def.engineGlow.color;
+          e.demand = n.state.boosting ? 1.0f : std::clamp(n.input.throttle, 0.0f, 1.0f);
+          e.boosting = n.state.boosting;
+          e.rate = type->def.engineGlow.trailRate * 0.6f;
+          e.life = type->def.engineGlow.trailLife;
+          e.size = type->def.engineGlow.trailSize;
+          e.seed = float(n.id) * 3.7f;
+          fx_.emitEngine(npcEmitters_[n.id], e, float(dt));
+        }
+      }
+      // Built every frame, paused too: everything is relative to the camera, which can still move.
+      for (const auto& em : engineEmitters_) ParticleSystem::buildRibbon(em, view.position, params.ribbons);
+      for (const auto& [id, em] : npcEmitters_) ParticleSystem::buildRibbon(em, view.position, params.ribbons);
+      if (tunnelAmount_ > 0.001f) {
+        for (size_t i = 0; i < travelNozzles_.size(); ++i)
+          ParticleSystem::buildPlume(ship.position + travelNozzles_[i], ship.rotation.forward(), eg.color, tunnelAmount_,
+                                     float(i) * 11.0f + 2.0f, view.position, params.ribbons);
+        params.tunnel.forward = ship.rotation.forward();
+        params.tunnel.amount = tunnelAmount_;
+        params.tunnel.colorA = eg.color;
+        params.tunnel.colorB = eg.boostColor;
+      }
       speedFractionForAudio = std::clamp(length(player.state.velocity) / std::max(1.0f, cap), 0.0f, 2.0f);
       const Vec3 col = player.state.boosting ? eg.boostColor : eg.color;
       const float size = eg.idleSize + (eg.thrustSize - eg.idleSize) * demand * (player.state.boosting ? 1.4f : 1.0f);
@@ -1219,7 +1317,7 @@ int GameApp::run() {
       for (const auto& sname : eg.sockets)
         if (auto it = player.sockets.find(sname); it != player.sockets.end()) {
           const Vec3 wp = ship.position + ship.rotation.rotate(it->second.position) - view.position;
-          glows.push_back({Vec4(wp, size), Vec4(col * intensity, 0)});
+          glows.push_back({Vec4(wp, size), Vec4(col * intensity, 1.0f)});  // a = turbulence
         }
       for (const auto& l : player.def.lights) {
         const float k = l.intensityAt(t);
@@ -1437,6 +1535,18 @@ int GameApp::run() {
     params.ambientOcclusion = settings_.ambientOcclusion;
     params.reflections = settings_.reflections ? 1.0f : 0.0f;
     params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
+    params.clouds.clear();
+    if (settings_.volumetricClouds && !localScene) {
+      for (const CloudDef& c : scene_.clouds) {
+        const Vec3 rel = world().frame().toLocal(c.center) - view.position;
+        // Beyond this they are barely a few pixels of faint gas, and the sky has its own nebula.
+        if (length(rel) - c.radius < 600000.0f)
+          params.clouds.push_back({rel, c.radius, c.colorA, c.density, c.colorB, c.seed});
+      }
+      std::sort(params.clouds.begin(), params.clouds.end(), [](const CloudDraw& a, const CloudDraw& b) {
+        return dot(a.center, a.center) > dot(b.center, b.center);
+      });
+    }
 
     buildOverlay(view, viewProj, ship);
     updateAudio(float(dt), engineDemandForAudio, speedFractionForAudio);
@@ -1444,7 +1554,16 @@ int GameApp::run() {
     const bool lastFrame = options_.exitAfterFrames > 0 && frameCount_ + 1 >= std::uint64_t(options_.exitAfterFrames);
     if (lastFrame && options_.screenshotOnExit) pendingScreenshot_ = options_.screenshotOnExit;
     const std::filesystem::path* shot = pendingScreenshot_ ? &*pendingScreenshot_ : nullptr;
-    if (renderer_->render(params, items, glows, overlay_.vertices(), shot)) {
+    // Ship effects belong to open space; on foot and on a surface the local scene replaces it.
+    if (onFootOrSurface) {
+      particleSprites_.clear();
+      params.ribbons.clear();
+      params.tunnel.amount = 0.0f;
+    } else {
+      fx_.buildSprites(view.position, ship.position, particleSprites_);
+      dust_.buildSprites(view.position, player.state.velocity, particleSprites_);
+    }
+    if (renderer_->render(params, items, glows, particleSprites_, overlay_.vertices(), shot)) {
       pendingScreenshot_.reset();
       ++frameCount_;
     }

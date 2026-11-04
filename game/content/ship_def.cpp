@@ -169,6 +169,9 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
     d.engineGlow.thrustSize = float(r.num(g, "thrustSize", false, d.engineGlow.thrustSize));
     d.engineGlow.idleIntensity = float(r.num(g, "idleIntensity", false, d.engineGlow.idleIntensity));
     d.engineGlow.thrustIntensity = float(r.num(g, "thrustIntensity", false, d.engineGlow.thrustIntensity));
+    d.engineGlow.trailRate = float(r.num(g, "trailRate", false, d.engineGlow.trailRate));
+    d.engineGlow.trailLife = float(r.num(g, "trailLife", false, d.engineGlow.trailLife));
+    d.engineGlow.trailSize = float(r.num(g, "trailSize", false, d.engineGlow.trailSize));
   }
   if (!r.ok()) return std::nullopt;
   return d;

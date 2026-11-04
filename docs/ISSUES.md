@@ -43,3 +43,8 @@
 | 39 | open | content | Overlapping coplanar placeholder pieces show as stripes or moire, for example on the hangar's back wall near the terminals and on the station hull. Blender-built maps replace them. |
 | 40 | open | render | Reflections come from one probe at the camera: no parallax, and up to 6 frames of lag. Fast lighting changes may visibly trail. |
 | 41 | open | render | Procedural surface detail uses object-space coordinates, so identical pieces share a pattern, and it does not yet understand real textures. Revisit with the Blender pipeline. |
+| 42 | open | ui | There is no map. Fast travel is still N to cycle destinations and J to engage, with no galaxy or system map screen. |
+| 43 | open | render | Volumetric clouds cost about 2 ms on an RTX 3080 at 1600x900 and are drawn at half resolution, so hull edges can pick up a slight halo in thick gas. They do not light the ship or block sunlight, and do not appear in reflections. |
+| 44 | open | fx | Particle tuning for the travel drive is in code, not data. Particle textures are generated, with no way to supply your own image yet. |
+| 45 | open | fx | An exhaust ribbon disappears at once when an NPC ship is destroyed or despawns, instead of fading. The explosion usually covers it. |
+| 46 | open | fx | Tunnel, dust and ribbon strengths are in shaders and code, not data. There is no option to turn off the tunnel for motion-sensitive players yet. |

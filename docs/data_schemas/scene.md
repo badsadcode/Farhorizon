@@ -19,3 +19,19 @@
 | `docking.services[]`, `landingSites[].services[]` | terminal services offered there: `repair`, `upgrades`, `contracts` (Stage 6) |
 | `encounters[]` | `{ id, ship, systemPosition, radius, triggerRange, spawnMinDistance, count 0–8, respawnSeconds }`. The zone fills to `count` ships when the player is within `triggerRange` of the centre; losses restart `respawnSeconds`. `triggerRange` must exceed `radius`. |
 | `traffic[]` | `{ id, ship, waypoints: [[x,y,z], …] (≥ 2, system metres), count, triggerRange, respawnSeconds }`. Civilian ships loop the waypoints while the player is within range of the first one. |
+
+## Nebulae
+
+`sky.nebulaColor`, `sky.nebulaColorB` and `sky.nebulaColorC` (core) colour the nebula painted in the
+distant sky. `sky.nebulaStrength` scales it; 0 turns it off.
+
+`clouds` (optional) places volumetric gas clouds that ships can fly through:
+
+| Field | Meaning |
+|---|---|
+| `id` | Unique name |
+| `systemPosition` | Centre, metres in the system frame |
+| `radius` | Metres. The visible gas thins out well before this |
+| `colorA`, `colorB` | Linear colours it blends between. Keep them small: around 0.01-0.1 |
+| `density` | Optical depth per radius at full density. Around 1 is a soft haze |
+| `seed` | Shape |

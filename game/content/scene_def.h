@@ -40,6 +40,19 @@ struct SkyDef {
   float bandIntensity = 1.0f;
   Vec3 nebulaColor{0.010f, 0.004f, 0.012f};
   float nebulaStrength = 1.0f;
+  Vec3 nebulaColorB{0, 0, 0};
+  Vec3 nebulaColorC{0, 0, 0};
+};
+
+// A volumetric gas cloud placed in the system.
+struct CloudDef {
+  std::string id;
+  SystemPosition center;
+  float radius = 10000.0f;  // m
+  Vec3 colorA{0.03f, 0.02f, 0.04f};
+  Vec3 colorB{0.02f, 0.03f, 0.04f};
+  float density = 2.0f;     // optical depth per radius at full density
+  float seed = 1.0f;
 };
 
 struct PlayerStartDef {
@@ -189,6 +202,7 @@ struct SceneDef {
   std::vector<PropDef> props;
   std::vector<AsteroidFieldDef> asteroidFields;
   std::vector<PlanetDef> planets;
+  std::vector<CloudDef> clouds;
   std::vector<EncounterDef> encounters;
   std::vector<TrafficDef> traffic;
 };

@@ -5,7 +5,7 @@
   "bindings": {
     "ship.throttleUp":      ["W"],
     "ship.throttleDown":    ["S"],
-    "ship.throttleZero":    ["X"],
+    "ship.fullStop":        ["X"],
     "ship.strafeLeft":      ["A"],
     "ship.strafeRight":     ["D"],
     "ship.strafeUp":        ["Space"],

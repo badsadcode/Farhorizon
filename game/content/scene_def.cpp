@@ -84,6 +84,8 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
     s.sky.bandIntensity = float(r.num(k, "bandIntensity", false, s.sky.bandIntensity));
     s.sky.nebulaColor = r.vec3(k, "nebulaColor", false, s.sky.nebulaColor);
     s.sky.nebulaStrength = float(r.num(k, "nebulaStrength", false, s.sky.nebulaStrength));
+    s.sky.nebulaColorB = r.vec3(k, "nebulaColorB", false, s.sky.nebulaColorB);
+    s.sky.nebulaColorC = r.vec3(k, "nebulaColorC", false, s.sky.nebulaColorC);
   }
   if (j.contains("floatingOrigin"))
     s.rebaseDistance = r.num(j["floatingOrigin"], "rebaseDistance", false, s.rebaseDistance);
@@ -203,6 +205,20 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
         if (f.minScale <= 0 || f.maxScale < f.minScale) r.error("asteroid field '" + f.id + "': bad scale range");
         s.asteroidFields.push_back(f);
       }
+  }
+  if (j.contains("clouds") && j["clouds"].is_array()) {
+    for (const auto& cj : j["clouds"]) {
+      CloudDef c;
+      c.id = r.str(cj, "id");
+      c.center.metres = r.dvec3(cj, "systemPosition");
+      c.radius = float(r.num(cj, "radius"));
+      c.colorA = r.vec3(cj, "colorA", false, c.colorA);
+      c.colorB = r.vec3(cj, "colorB", false, c.colorB);
+      c.density = float(r.num(cj, "density", false, c.density));
+      c.seed = float(r.num(cj, "seed", false, c.seed));
+      if (c.radius <= 0.0f || c.density < 0.0f) r.error("cloud '" + c.id + "': radius must be > 0, density >= 0");
+      s.clouds.push_back(c);
+    }
   }
   if (j.contains("planets") && j["planets"].is_array()) {
     for (const auto& pj : j["planets"]) {

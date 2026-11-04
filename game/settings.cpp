@@ -42,6 +42,7 @@ std::optional<Settings> parseSettings(const std::string& text, std::string* erro
     flag(g, "shadows", s.shadows);
     flag(g, "ambientOcclusion", s.ambientOcclusion);
     flag(g, "reflections", s.reflections);
+    flag(g, "volumetricClouds", s.volumetricClouds);
   }
   if (auto a = j.value("audio", json::object()); a.is_object()) {
     num(a, "master", s.masterVolume);
@@ -77,7 +78,7 @@ std::string serializeSettings(const Settings& s) {
   j["graphics"] = {{"look", s.look},          {"vsync", s.vsync},     {"fullscreen", s.fullscreen},
                    {"fovOffsetDeg", s.fovOffsetDeg}, {"uiScale", s.uiScale}, {"cameraShake", s.cameraShake},
                    {"shadows", s.shadows},   {"ambientOcclusion", s.ambientOcclusion},
-                   {"reflections", s.reflections}};
+                   {"reflections", s.reflections}, {"volumetricClouds", s.volumetricClouds}};
   j["audio"] = {{"master", s.masterVolume},
                 {"ambience", s.ambienceVolume},
                 {"effects", s.effectsVolume},

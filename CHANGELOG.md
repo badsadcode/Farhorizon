@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.3 — Stage 7, part 4: exhaust, speed and the tunnel (2026-11-04)
+From the owner's first look at 0.7.2.
+* **Exhaust trails are now continuous ribbons of turbulent gas,** with wider billowing edges, so
+  there can be no gaps between particles. They fade out when the engine stops.
+* **Engine glow:** an irregular, breathing outline with wandering tongues of light and a gentle pulse.
+  Each engine has its own rhythm.
+* **Speed dust:** motes hang still in space around the ship and streak past as you move, in a mix of
+  widths. They show nothing at a standstill and hand over to the tunnel at drive speed.
+* **Travel drive tunnel:** streaks and gas on the inside of a slowly twisting tunnel around the flight
+  path, with the destination left clear in the middle. Streaks now range from slim to broad.
+* Tests: 123.
+
+## 0.7.2 — Stage 7, part 3: trails, drive effects, nebulae, full stop (2026-11-04)
+* **Full stop (X):** brakes on every axis and rotation to a standstill and holds there, with flight
+  assist on or off, until you touch a flight control. Your assist and precision settings come back
+  unchanged. The speed panel shows BRAKING, then HOLDING. Replaces "zero throttle".
+* **Engine trails:** textured particle exhaust that follows thrust, stays unbroken at high speed, and
+  gains sparks under boost. Other ships have them too. Per-ship `trailRate`, `trailLife`, `trailSize`.
+* **Travel drive effects:** sparks gather at the nozzles while spooling, a flash on engaging, streaks
+  racing past and long drive plumes in transit, another flash on arrival. Main engines rest while the
+  drive holds the ship.
+* **Nebulae (look test):** a colourful nebula painted in the distant sky, plus three real volumetric
+  clouds you can fly through: around the Cinder Drift, and two large ones nearby. New Options >
+  Graphics toggle, Volumetric clouds. Data: `sky.nebulaColorB`, `sky.nebulaColorC`, `clouds`.
+* Particle textures are generated at startup, so no art files are needed yet.
+* **Testing:** scripted full-stop run, including with assist off. Tests: 113.
+* **Dev log:** `docs/devlog/index.html`, the story of the game so far in plain language, with screenshots.
+
 ## 0.7.1 — Stage 7, part 2: lighting (2026-11-04)
 The first version that lights the world properly. Before and after:
 `docs/screenshots/stage7_lighting_before_after.jpg`.

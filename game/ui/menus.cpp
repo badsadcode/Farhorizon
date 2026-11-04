@@ -155,8 +155,8 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
   auto pct = [](float v) { return std::format("{:.0f}%", v * 100.0f); };
   switch (optionsTab_) {
     case 0: {
-      // Nine rows must clear the BACK button at any interface scale.
-      const float gRow = std::min(row, (py + ph - 84 - y) / 9.0f);
+      // All rows must clear the BACK button at any interface scale.
+      const float gRow = std::min(row, (py + ph - 84 - y) / 10.0f);
       int look = 0;
       for (size_t i = 0; i < env.lookIds.size(); ++i)
         if (env.lookIds[i] == s.look) look = int(i);
@@ -188,6 +188,8 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
       changed |= ui.toggleRow(rx, y, rw, "Ambient occlusion", s.ambientOcclusion);
       y += gRow;
       changed |= ui.toggleRow(rx, y, rw, "Reflections", s.reflections);
+      y += gRow;
+      changed |= ui.toggleRow(rx, y, rw, "Volumetric clouds", s.volumetricClouds);
       break;
     }
     case 1:

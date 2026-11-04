@@ -27,3 +27,6 @@
 | `mining` | `{ range, unitsPerSecond, coneDeg, scoopRadius, maxChunks, chunkLifetime, chunkSpeed, scanSeconds }` | | mining laser and scoop |
 | `combat` | `{ shieldRegen, shieldDelay, heatCapacity, heatDissipation, collisionDamagePerMs, primary: [ { mount, weapon } ], secondary: [ … ] }` | | durability recharge, weapon heat and fitted weapons (`mount` = socket name, `weapon` = id in a `weapons` asset; checked by the validator) |
 | `ai` | `{ faction, role (pirate \| trader), detectionRange, attackRange, preferredRange, fleeHullFraction, aimToleranceDeg, lootCommodity, lootMin, lootMax, bounty }` | | NPC behaviour (ignored for the player ship). `bounty` credits are paid on a player kill |
+
+`engineGlow` also takes optional `trailRate` (particles per second per nozzle at full thrust, 0 turns
+the trail off), `trailLife` (seconds) and `trailSize` (half width in metres).

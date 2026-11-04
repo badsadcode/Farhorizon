@@ -59,6 +59,10 @@ struct EngineGlowDef {
   float thrustSize = 3.0f;
   float idleIntensity = 0.4f;
   float thrustIntensity = 3.0f;
+  // Exhaust trail, per nozzle at full thrust.
+  float trailRate = 320.0f;   // particles per second; 0 turns the trail off
+  float trailLife = 1.4f;    // seconds
+  float trailSize = 0.7f;    // half width at the nozzle (m)
 };
 
 }  // namespace fh

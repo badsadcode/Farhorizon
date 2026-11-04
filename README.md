@@ -55,7 +55,7 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | Mouse (captured) | virtual stick: pitch / yaw. **Esc** frees or captures the mouse |
 | Arrow keys | pitch / yaw |
 | W / S | throttle up / down (assist on). Main engine / retro (assist off) |
-| X | zero throttle |
+| X | full stop: brakes to a standstill and holds there until you touch a flight control |
 | A / D, Space / Left Ctrl | strafe left / right, up / down |
 | Q / E | roll |
 | Left Shift | boost (energy limited; release and press again after it runs out) |

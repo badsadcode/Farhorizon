@@ -20,6 +20,7 @@ struct Settings {
   bool shadows = true;
   bool ambientOcclusion = true;
   bool reflections = true;
+  bool volumetricClouds = true;
   // Audio (0..1).
   float masterVolume = 0.9f;
   float ambienceVolume = 1.0f;

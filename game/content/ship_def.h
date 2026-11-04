@@ -49,7 +49,7 @@ struct ShipDef {
   ShipCameraDefs cameras;
   std::map<std::string, SocketDef> sockets;  // fallbacks when the mesh has no socket nodes
   std::vector<LightDef> lights;              // ship space
-  EngineGlowDef engineGlow;
+  EngineGlowDef engineGlow;  // also drives the exhaust particle trail
   MiningParams mining;
   TravelDriveParams travel;
   CombatParams combat;

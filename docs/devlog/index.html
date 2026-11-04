@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FARHORIZON Flight Log</title>
+<meta name="description" content="The development log of FARHORIZON, a lonely used-future space game.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;1,400&family=Share+Tech&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: a ship's log. Newest entry first, a mono log rail on the left, photos in the game's own
+   chamfered panel shape. One dark look on purpose: it is the inside of a cockpit at night.
+   ADDING AN ENTRY: copy one <article class="entry"> block to the top of the log and bump its number.
+   Put images in images/ as JPEG, about 1600 px wide. */
+:root {
+  color-scheme: dark;
+  --void: #0c0b0e;        /* space, slightly violet */
+  --hull: #16141a;        /* panels */
+  --seam: #3a3328;        /* amber-biased hairlines */
+  --text: #ddd5c8;
+  --dim: #9a917f;
+  --amber: #e2ac62;       /* the game's HUD */
+  --amber-hot: #ffdaa0;
+  --teal: #70c4de;        /* the game's nav colour */
+  --violet: #a07fd0;      /* the new nebula */
+  --display: "Share Tech", "Trebuchet MS", sans-serif;
+  --mono: "Share Tech Mono", ui-monospace, Consolas, monospace;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --chamfer: 14px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--void);
+  color: var(--text);
+  font: 400 1.0625rem/1.65 var(--body);
+}
+.wrap {
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--teal); }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 3px; }
+.label {
+  font: 400 0.8125rem/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* ---- Masthead ---- */
+.masthead { position: relative; overflow: hidden; border-bottom: 1px solid var(--seam); }
+.masthead img {
+  display: block; width: 100%; height: clamp(300px, 56vw, 620px);
+  object-fit: cover; object-position: 50% 40%;
+}
+.masthead::after {  /* fades the picture into space, so the title stays readable */
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to top, var(--void) 0%, rgba(12, 11, 14, 0.6) 20%, rgba(12, 11, 14, 0) 46%);
+}
+.masthead .wrap { position: absolute; inset: auto 0 0; z-index: 1; padding-block: 0 clamp(20px, 4vw, 44px); }
+h1 {
+  margin: 0;
+  font: 400 clamp(2.1rem, 8.6vw, 6rem)/1.02 var(--display);
+  letter-spacing: 0.2em;
+  color: var(--amber-hot);
+  text-shadow: 0 0 34px rgba(226, 172, 98, 0.35);
+}
+.tagline { margin: 10px 0 0; max-width: 58ch; color: var(--text); text-shadow: 0 1px 8px var(--void); }
+
+/* ---- Status strip ---- */
+.strip { border-bottom: 1px solid var(--seam); background: var(--hull); }
+.strip dl {
+  display: flex; flex-wrap: wrap; gap: 10px 44px; margin: 0; padding-block: 14px;
+}
+.strip div { min-width: 0; }
+.strip dt { font: 400 0.75rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.strip dd { margin: 0; font: 400 1rem/1.4 var(--mono); color: var(--amber); }
+
+/* ---- Log ---- */
+.log { padding-block: clamp(28px, 6vw, 64px); display: grid; gap: clamp(48px, 8vw, 88px); }
+.entry { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 0 34px; }
+.rail { position: relative; padding-top: 6px; }
+.rail .num { display: block; font: 400 1.9rem/1 var(--display); letter-spacing: 0.06em; color: var(--amber); }
+.rail .build { display: block; margin-top: 8px; color: var(--teal); font: 400 0.875rem/1.4 var(--mono); }
+.rail time { display: block; margin-top: 2px; font: 400 0.8125rem/1.4 var(--mono); color: var(--dim); }
+.entry h2 {
+  margin: 0 0 12px;
+  font: 400 clamp(1.5rem, 3.4vw, 2.15rem)/1.15 var(--display);
+  letter-spacing: 0.03em;
+  color: var(--amber-hot);
+  text-wrap: balance;
+}
+.entry p { margin: 0 0 14px; max-width: 66ch; }
+.entry p:last-of-type { margin-bottom: 0; }
+
+/* Photos: the game's panel shape, top-left and bottom-right corners cut. */
+.shots { display: grid; gap: 12px; margin-top: 22px; }
+.shots.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shots figure { margin: 0; min-width: 0; }
+.shots .wide { grid-column: 1 / -1; }
+.shot {
+  display: block; width: 100%; padding: 0; border: 0; background: var(--hull); cursor: zoom-in;
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+  transition: filter 0.18s;
+}
+.shot:hover { filter: brightness(1.12); }
+.shot img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+figcaption { margin-top: 7px; font: 400 0.8125rem/1.45 var(--mono); color: var(--dim); }
+
+/* Before and after */
+.compare { margin-top: 22px; }
+.compare-stage {
+  position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--hull);
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+  --split: 50%;
+}
+.compare-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.compare-stage .before { clip-path: inset(0 calc(100% - var(--split)) 0 0); }
+.compare-stage .line { position: absolute; top: 0; bottom: 0; left: var(--split); width: 2px; margin-left: -1px; background: var(--amber-hot); }
+.compare-stage .tag { position: absolute; top: 12px; padding: 2px 8px; background: rgba(12, 11, 14, 0.8); color: var(--amber-hot); font: 400 0.75rem/1.5 var(--mono); letter-spacing: 0.08em; }
+.compare-stage .tag.l { left: 18px; }
+.compare-stage .tag.r { right: 12px; }
+.compare input { display: block; width: 100%; margin: 10px 0 0; accent-color: var(--amber); }
+
+/* Next up */
+.next { border-top: 1px solid var(--seam); background: var(--hull); padding-block: clamp(28px, 5vw, 52px); }
+.next h2 { margin: 0 0 16px; font: 400 clamp(1.4rem, 3vw, 1.9rem)/1.2 var(--display); letter-spacing: 0.03em; color: var(--amber-hot); }
+.next ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: leg; max-width: 72ch; }
+.next li { counter-increment: leg; display: grid; grid-template-columns: 2.4em minmax(0, 1fr); }
+.next li::before { content: counter(leg, decimal-leading-zero); font-family: var(--mono); color: var(--teal); padding-top: 0.15em; }
+.next strong { font-weight: 500; color: var(--text); }
+footer { padding-block: 22px 36px; }
+footer p { margin: 0; max-width: 72ch; font-size: 0.9375rem; color: var(--dim); }
+
+/* Full-size view */
+dialog {
+  max-width: 96vw; max-height: 96vh; padding: 0; border: 1px solid var(--seam); background: var(--void); color: var(--text);
+}
+dialog::backdrop { background: rgba(5, 5, 7, 0.92); }
+dialog img { display: block; max-width: 100%; max-height: 86vh; }
+dialog .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 8px 12px; }
+dialog p { margin: 0; min-width: 0; font: 400 0.8125rem/1.45 var(--mono); color: var(--dim); }
+dialog button { background: none; border: 1px solid var(--seam); color: var(--amber); font: 400 0.8125rem/1 var(--mono); padding: 8px 12px; cursor: pointer; }
+
+@media (max-width: 720px) {
+  .entry { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .rail { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding-bottom: 8px; border-bottom: 1px solid var(--seam); }
+  .rail .num { font-size: 1.5rem; }
+  .rail .build, .rail time { margin: 0; }
+  .shots.two { grid-template-columns: minmax(0, 1fr); }
+  h1 { letter-spacing: 0.12em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .shot { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <img src="images/hero_transit.jpg" alt="The player's ship seen from behind inside a tunnel of blue and violet light streaks, with the crescent planet Varga ahead.">
+  <div class="wrap">
+    <h1>FARHORIZON</h1>
+    <p class="tagline">The flight log of a lonely used-future space game: fly a worn-out ship, walk its corridors, mine, trade and fight in a quiet corner of a star system.</p>
+  </div>
+</header>
+
+<section class="strip" aria-label="Project status">
+  <div class="wrap">
+    <dl>
+      <div><dt>Current build</dt><dd>0.7.3</dd></div>
+      <div><dt>Ship</dt><dd>Sparrow</dd></div>
+      <div><dt>Location</dt><dd>Cinder Reach</dd></div>
+      <div><dt>Log entries</dt><dd>10</dd></div>
+    </dl>
+  </div>
+</section>
+
+<main class="wrap log">
+
+  <article class="entry" id="log-10">
+    <div class="rail"><span class="num">LOG 10</span><span class="build">build 0.7.3</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Into the tunnel</h2>
+      <p>The first flights with the new effects showed what was missing. The exhaust had visible gaps, the engine glow was a perfect circle, and nothing told you how fast you were going.</p>
+      <p>The exhaust is now one continuous stream of churning gas with soft, billowing edges. The glow breathes and flickers, each engine in its own rhythm. Fine dust hangs in space around the ship and streaks past as you pick up speed, so you can finally feel your velocity.</p>
+      <p>The big one is the hyperdrive. Engage it and a tunnel of light opens around the ship, twisting slowly as streaks of every width rush past, with your destination waiting at the far end.</p>
+      <div class="shots two">
+        <figure class="wide"><button class="shot" type="button"><img loading="lazy" src="images/log10_tunnel.jpg" alt="The ship inside a tunnel of blue and violet light streaks, with the planet Varga visible in the clear centre."></button><figcaption>In transit to Gale Ridge, with Varga waiting at the end of the tunnel.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log10_cruise.jpg" alt="The ship from behind with two soft, billowing blue exhaust streams and irregular engine glows."></button><figcaption>The exhaust is one continuous stream now.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log10_boost.jpg" alt="The ship under boost with magenta exhaust and sparks, thin streaks of dust racing past it."></button><figcaption>Under boost, with dust streaking past.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-09">
+    <div class="rail"><span class="num">LOG 09</span><span class="build">build 0.7.2</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Colour in the dark, and a handbrake</h2>
+      <p>Space was a bit too empty, so we tried a little colour. Faint violet, teal and rust nebulae now drift across the distant sky. Three real gas clouds also sit out there in the world, close enough to fly into. One wraps around the Cinder Drift asteroid field. This is still a test to see how it feels, so the colours may well change.</p>
+      <p>The engines finally leave something behind. Exhaust now trails off the ship, swelling with the throttle and turning magenta under boost. The hyperdrive got its own moment too: sparks gather while it charges, and there is a flash as it engages.</p>
+      <p>The smallest change might be the most useful. Press X and the ship brakes to a dead stop and holds there, even with flight assist off, until you touch the controls again.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log09_spool.jpg" alt="Sparks of blue light converge on the ship's two engines while the travel drive charges, with the planet Varga ahead."></button><figcaption>The drive charging. Sparks gather at the nozzles.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log09_boost.jpg" alt="The ship under boost with magenta exhaust trails, a rust and blue nebula in the sky behind it."></button><figcaption>Boosting away from Kestrel. The trail turns magenta, and the sky has some colour now.</figcaption></figure>
+        <figure class="wide"><button class="shot" type="button"><img loading="lazy" src="images/log09_field.jpg" alt="The ship cruising past tumbling asteroids with blue engine trails, Varga tinted red by the gas cloud in front of it."></button><figcaption>The Cinder Drift. Varga looks red here because you are seeing it through the gas.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-08">
+    <div class="rail"><span class="num">LOG 08</span><span class="build">build 0.7.1</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Turning the lights on</h2>
+      <p>Seeing the game on a proper graphics card for the first time was humbling. There were no shadows, every wall was one flat colour, and a thick layer of film grain sat over everything.</p>
+      <p>So the world got real light. The sun casts shadows now. Lamps cast them too, so light finally stops at walls. Corners darken where surfaces meet, and floors pick up reflections of the room around them. The models have no textures yet, so the game paints on some grime and panel lines of its own. That gives the ship a used, lived-in look until the real art arrives.</p>
+      <div class="compare">
+        <div class="compare-stage" id="compare">
+          <img src="images/log08_hangar_after.jpg" alt="Kestrel Station's hangar with the new lighting: a reflective panelled floor, and readable walls in the shadows.">
+          <img class="before" src="images/log08_hangar_before.jpg" alt="The same hangar before the new lighting: flat, grainy, and with the right side lost in black.">
+          <span class="line" aria-hidden="true"></span>
+          <span class="tag l">BEFORE</span><span class="tag r">AFTER</span>
+        </div>
+        <label class="label" for="compare-range">Drag to compare the hangar</label>
+        <input id="compare-range" type="range" min="0" max="100" value="50">
+      </div>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log08_outpost.jpg" alt="Gale Ridge Outpost at dusk, with long shadows from steel towers falling across the ground."></button><figcaption>Gale Ridge at dusk, with long shadows at last.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log08_cabin.jpg" alt="The Sparrow's narrow cabin corridor, with panel lines on the floor, worn walls and a lamp in the ceiling."></button><figcaption>The Sparrow's corridor. Grime and panel lines stand in for textures for now.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-07">
+    <div class="rail"><span class="num">LOG 07</span><span class="build">build 0.7.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>A proper front door</h2>
+      <p>Until now the game simply dropped you into space. It now has a title screen with the world slowly turning behind it, a pause menu, save slots and a full options screen where you can rebind your keys.</p>
+      <p>The flight display was rebuilt with a real typeface and tidy panels, and its hints always name the keys you actually chose. The station terminal was redone as well. Clicking a row now only selects it, because nobody should lose a week's earnings to a stray click.</p>
+      <p>It was also the first version built and run on a real gaming PC, after six stages of development on a cloud machine with no graphics card at all.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log07_menu.jpg" alt="The title screen, with FARHORIZON in wide amber letters and a menu on the left over a view of space."></button><figcaption>The title screen. The wide amber letters come from the game's own font.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log07_terminal.jpg" alt="The Kestrel Station market terminal, listing commodities with stock, prices and buy and sell buttons."></button><figcaption>The Kestrel Station Exchange, restyled.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-06">
+    <div class="rail"><span class="num">LOG 06</span><span class="build">build 0.6.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Rust Jackals</h2>
+      <p>The system stopped being safe. Rust Jackal raiders now patrol the far side of the Cinder Drift, and they fly by the same rules as you do. They chase, attack, dodge, and run when it goes badly. Ossa Freight haulers trundle along their routes and flee if you shoot at them.</p>
+      <p>You have pulse lasers that overheat and rockets that hunt. Lose a fight and your insurer tows you home. Your cargo is gone, and you pay the deductible. There is also honest work now: delivery jobs, supply runs and bounties, plus a shipyard to spend the money in.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log06_combat.jpg" alt="A dogfight among asteroids seen from the cockpit, with a target marked in red and a weapons overheated warning."></button><figcaption>Overheated, in the middle of a fight, among rocks.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log06_contracts.jpg" alt="The contract board on the old terminal, offering supply jobs and a bounty on a Rust Jackal raider."></button><figcaption>The job board, on the old terminal.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-05">
+    <div class="rail"><span class="num">LOG 05</span><span class="build">build 0.5.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Somewhere to go</h2>
+      <p>The world got much bigger. A travel drive carries you across thousands of kilometres, and the planet Varga and its moon Ossa hang in the sky. You can descend through the atmosphere in a wash of heat and land at Gale Ridge, a small outpost on a dusty cliff-ringed plain.</p>
+      <p>That gave the game its first trade route: rations out to the outpost, cheap nickel back to the station.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log05_reentry.jpg" alt="The ship descending through a glowing wall of orange heat and cloud during re-entry."></button><figcaption>Coming down through Varga's atmosphere.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log05_orbit.jpg" alt="The ship in front of the huge tan curve of the planet Varga."></button><figcaption>Varga fills the view.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-04">
+    <div class="rail"><span class="num">LOG 04</span><span class="build">build 0.4.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Making a living</h2>
+      <p>You can now point a laser at a rock, scoop up what breaks off and sell it. Prices sag when you flood a market, so hauling one load is fine and hauling ten is not.</p>
+      <p>This is also where the mood arrived. The neon purple from before gave way to the darker, colder look the game has kept ever since: failing lamps, fog in the corridors, amber readouts and quiet hull groans. The game could finally be saved, too.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log04_mining.jpg" alt="The ship firing a bright orange mining laser into an asteroid."></button><figcaption>The first honest day's work.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log04_cabin.jpg" alt="A dim, foggy ship corridor lit by a row of ceiling lamps."></button><figcaption>The Used Future look arrives.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-03">
+    <div class="rail"><span class="num">LOG 03</span><span class="build">build 0.3.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Getting out of the chair</h2>
+      <p>The game became more than a ship on a string. You can land on Kestrel Station's roof pad, leave the pilot's seat, walk down the Sparrow's corridor, cycle the airlock and step out into a hangar with your own ship parked behind you.</p>
+      <p>It looks wildly different here. Those purple walls were a phase.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log03_hangar.jpg" alt="A brightly lit purple and orange station hangar, seen on foot."></button><figcaption>Kestrel Hangar 1, in its purple period.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log03_docked.jpg" alt="The ship clamped to a glowing purple landing pad on the station roof."></button><figcaption>Docked on the roof pad.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-02">
+    <div class="rail"><span class="num">LOG 02</span><span class="build">build 0.2.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>Learning to fly</h2>
+      <p>The ship stopped being a model to look at. It got a flight model with real weight, and you can turn off the flight assist and drift sideways if you are brave. It also got its first asteroid field and a small station to fly around, plus the first retro 80s look.</p>
+      <div class="shots">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log02_station.jpg" alt="The ship flying toward a purple station with blue engine glows, a bright star on the left."></button><figcaption>Approaching the station, with the look turned all the way up to the 80s.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+
+  <article class="entry" id="log-01">
+    <div class="rail"><span class="num">LOG 01</span><span class="build">build 0.1.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>First light</h2>
+      <p>Every game starts with something on the screen. For FARHORIZON that was one small ship and nine thousand stars, drawn by an engine written from scratch. You could only orbit around it and look. It was enough.</p>
+      <div class="shots">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log01_first.jpg" alt="A pale, boxy ship against a starfield with a faint band of galaxy, with developer readouts in the corner."></button><figcaption>From the first build.</figcaption></figure>
+      </div>
+    </div>
+  </article>
+</main>
+
+<section class="next" aria-labelledby="next-heading">
+  <div class="wrap">
+    <h2 id="next-heading">Next on the flight plan</h2>
+    <ol>
+      <li><span><strong>Build places in Blender.</strong> Models with real textures and materials, and whole locations made there and loaded straight into the game.</span></li>
+      <li><span><strong>Explore on foot.</strong> Dock with a dead derelict, walk in, fight what lives there and leave with the loot.</span></li>
+      <li><span><strong>Bring friends.</strong> Co-op for up to four players, sharing one ship or flying their own, with walkable decks and a crew at the stations.</span></li>
+      <li><span><strong>Land anywhere.</strong> Whole planets to fly down to and explore.</span></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>FARHORIZON is built by one developer working with Sage, an AI assistant. All screenshots come straight from the game, using placeholder models. All content is original, and the look is inspired by lonely 70s and 80s used-future sci-fi.</p>
+  </div>
+</footer>
+
+<dialog id="viewer" aria-label="Full-size screenshot">
+  <img id="viewer-img" alt="">
+  <div class="bar">
+    <p id="viewer-caption"></p>
+    <button type="button" id="viewer-close">Close</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  var stage = document.getElementById('compare');
+  var range = document.getElementById('compare-range');
+  if (stage && range) {
+    range.addEventListener('input', function () { stage.style.setProperty('--split', range.value + '%'); });
+  }
+  var viewer = document.getElementById('viewer');
+  var image = document.getElementById('viewer-img');
+  var caption = document.getElementById('viewer-caption');
+  document.querySelectorAll('.shot').forEach(function (button) {
+    var img = button.querySelector('img');
+    button.setAttribute('aria-label', 'View full size: ' + img.alt);
+    button.addEventListener('click', function () {
+      image.src = img.src;
+      image.alt = img.alt;
+      var cap = button.parentElement.querySelector('figcaption');
+      caption.textContent = cap ? cap.textContent : '';
+      if (viewer.showModal) viewer.showModal();
+    });
+  });
+  document.getElementById('viewer-close').addEventListener('click', function () { viewer.close(); });
+  viewer.addEventListener('click', function (e) { if (e.target === viewer) viewer.close(); });
+})();
+</script>
+</body>
+</html>

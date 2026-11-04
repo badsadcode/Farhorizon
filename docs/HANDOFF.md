@@ -21,6 +21,10 @@ _Written 2026-11-04 at the end of the cloud session and updated by the first loc
   * Input: `app.menu` = Esc, `app.toggleMouse` = backtick; clicking the game window recaptures
     the mouse. Benchmarks and `--frames` runs ignore settings and skip menus.
 
+## Dev log
+Keep `docs/devlog/index.html` up to date: a plain-language entry with real screenshots for each
+milestone. How to add one is in the comment at the top of its styles.
+
 ## Next steps
 **See `docs/ROADMAP.md` for the agreed order.** UI (0.7.0, ADR 0010) and lighting (0.7.1, ADR 0011) are
 done in code and waiting for the owner's playtest. Feedback may send work back there. Next is

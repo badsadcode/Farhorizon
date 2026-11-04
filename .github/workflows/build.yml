@@ -71,9 +71,11 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0
         run: |
           root="$PWD"
-          for s in "options_rebind:" "terminal:--start-docked" "graphics_save:--start-docked"; do
+          for s in "options_rebind:" "terminal:--start-docked" "graphics_save:--start-docked" "full_stop:"; do
             name="${s%%:*}"; flag="${s#*:}"
             dir="$root/ui_run/$name"; mkdir -p "$dir"; cd "$dir"
+            # Ray-marched clouds are too slow on a software GPU for runs this long.
+            echo '{"graphics":{"volumetricClouds":false}}' > settings.json
             xvfb-run -a -s "-screen 0 1920x1080x24" "$root/build/farhorizon" $flag --validation               --settings settings.json --ui-script "$root/tests/ui_scripts/$name.txt"
             cd "$root"
           done

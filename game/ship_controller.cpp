@@ -36,10 +36,24 @@ void ShipController::update(const InputState& in, float dt, bool mouseSteering, 
     stick_ = {stick_.x * k, stick_.y * k};
   }
 
-  // Throttle is a persistent set-speed (assist ON); W/S move it, X zeroes it.
+  if (in.pressed("ship.fullStop")) {
+    holding_ = true;
+    throttle_ = 0.0f;
+    stick_ = {};  // otherwise the ship would keep turning toward the old stick position
+  }
+  // Any flight control takes the ship back. Mouse steering counts once it leaves the deadzone.
+  if (holding_) {
+    const float stickMove = std::sqrt(stick_.x * stick_.x + stick_.y * stick_.y);
+    for (const char* action : {"ship.throttleUp", "ship.throttleDown", "ship.strafeLeft", "ship.strafeRight", "ship.strafeUp",
+                               "ship.strafeDown", "ship.rollLeft", "ship.rollRight", "ship.pitchUp", "ship.pitchDown",
+                               "ship.yawLeft", "ship.yawRight", "ship.boost"})
+      if (in.down(action)) holding_ = false;
+    if (stickMove > ms.deadzone) holding_ = false;
+  }
+
+  // Throttle is a persistent set-speed (assist ON); W/S move it.
   const float throttleRate = 0.6f;  // full range in ~1.7 s
   throttle_ += axis(in, "ship.throttleDown", "ship.throttleUp") * throttleRate * dt;
-  if (in.pressed("ship.throttleZero")) throttle_ = 0.0f;
   throttle_ = std::clamp(throttle_, -0.3f, 1.0f);
 
   out = FlightInput{};
@@ -57,6 +71,13 @@ void ShipController::update(const InputState& in, float dt, bool mouseSteering, 
   out.rotation.y = std::clamp(stickYaw + axis(in, "ship.yawLeft", "ship.yawRight"), -1.0f, 1.0f);
   out.rotation.z = axis(in, "ship.rollLeft", "ship.rollRight");
 
+  if (holding_) {
+    // Brakes on every axis at full authority, whatever the assist and precision settings are;
+    // those come back unchanged when the hold ends.
+    out = FlightInput{};
+    out.assist = true;
+    out.mode = SpeedMode::Cruise;
+  }
   if (autofly_) {
     out.throttle = autoThrottle_;
     out.rotation = autoRotation_;

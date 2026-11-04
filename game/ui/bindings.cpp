@@ -10,7 +10,7 @@ using C = BindContext;
 constexpr Bindable kBindables[] = {
     {"ship.throttleUp", "Throttle up", C::Flight},
     {"ship.throttleDown", "Throttle down", C::Flight},
-    {"ship.throttleZero", "Zero throttle", C::Flight},
+    {"ship.fullStop", "Full stop", C::Flight},
     {"ship.strafeLeft", "Strafe left", C::Flight},
     {"ship.strafeRight", "Strafe right", C::Flight},
     {"ship.strafeUp", "Strafe up", C::Flight},

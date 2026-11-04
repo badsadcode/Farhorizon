@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.7.1 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.7.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,8 @@ add_library(fh_core STATIC
   engine/debug/overlay.cpp
   engine/ui/font_atlas.cpp
   engine/render/starfield.cpp
+  engine/render/particle_atlas.cpp
+  game/fx/particles.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
   game/content/visual_profile.cpp
@@ -96,7 +98,10 @@ if(FH_BUILD_GAME)
     shaders/glow.vert shaders/glow.frag
     shaders/planet.frag
     shaders/shadow_sun.vert shaders/shadow_point.vert
-    shaders/ssao.frag shaders/ssao_blur.frag)
+    shaders/ssao.frag shaders/ssao_blur.frag
+    shaders/particle.vert shaders/particle.frag
+    shaders/cloud.frag shaders/cloud_composite.frag
+    shaders/ribbon.vert shaders/ribbon.frag shaders/tunnel.frag)
 
   add_executable(farhorizon
     game/main.cpp
@@ -145,6 +150,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_stage5.cpp
     tests/unit/test_stage6.cpp
     tests/unit/test_ui.cpp
+    tests/unit/test_fx.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

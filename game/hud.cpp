@@ -349,6 +349,7 @@ void flightCluster(Pen& p, const HudContext& c, const PlayerShip& player) {
   p.o.textPx(nx + numW, ny + p.lineH(big) - p.lineH(p.body()) - p.s(4), " m/s", kDim, p.body());
   // Modes.
   const char* mode = fs.boosting ? "BOOST" : (c.input.mode == SpeedMode::Precision ? "PRECISION" : "CRUISE");
+  if (c.controller.holding()) mode = speed > 0.05f ? "BRAKING" : "HOLDING";
   const std::string set = c.input.assist ? std::format("SET {:.0f}", c.input.throttle * cap) : std::string("SET --");
   p.o.textPx(cx, y + h - p.lineH(p.small()) - p.s(10), std::format("{}   {}   ASSIST {}", set, mode, c.input.assist ? "ON" : "OFF"),
              c.input.assist ? kPrimary : kWarn, p.small(), FontFace::Mono, TextAlign::Center);

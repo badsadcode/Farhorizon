@@ -185,6 +185,11 @@ void UiScript::step(const UiScriptHost& host) {
     const std::string want = rest(in);
     if ((want == "open") != host.terminalOpen())
       fail(std::string("terminal is ") + (host.terminalOpen() ? "open" : "closed"));
+  } else if (cmd == "expect-speed-above" || cmd == "expect-speed-below" || cmd == "expect-spin-below") {
+    float limit = 0;
+    in >> limit;
+    const float value = cmd == "expect-spin-below" ? host.shipSpin() : host.shipSpeed();
+    if (cmd == "expect-speed-above" ? value <= limit : value >= limit) fail(std::format("value is {:.3f}", value));
   } else if (cmd == "quit") {
     next_ = lines_.size();
     host.quit();
