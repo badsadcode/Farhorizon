@@ -56,6 +56,14 @@
       "basePrice": 72,
       "massTons": 1,
       "description": "Charged storage cells for station backup power."
+    },
+    {
+      "id": "cargo.sealed",
+      "name": "Sealed Crate",
+      "category": "contract",
+      "basePrice": 1,
+      "massTons": 1,
+      "description": "Contract cargo under bond. Not for sale."
     }
   ]
 }

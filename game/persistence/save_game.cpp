@@ -34,7 +34,18 @@ std::string serializeSave(const SaveGame& s) {
                  {"shipVelocity", vec(s.shipVelocity)},
                  {"boostEnergy", s.boostEnergy},
                  {"credits", s.credits},
-                 {"cargo", s.cargo}};
+                 {"cargo", s.cargo},
+                 {"hull", s.hull},
+                 {"shield", s.shield},
+                 {"upgrades", s.upgrades},
+                 {"defeats", s.defeats}};
+  json contracts = json::array();
+  for (const auto& c : s.contracts)
+    contracts.push_back({{"key", c.key}, {"template", c.templateId}, {"kind", c.kind}, {"title", c.title},
+                         {"description", c.description}, {"issuer", c.issuer}, {"destination", c.destination},
+                         {"commodity", c.commodity}, {"faction", c.faction}, {"units", c.units},
+                         {"killsRequired", c.killsRequired}, {"kills", c.kills}, {"reward", c.reward}});
+  j["contracts"] = {{"active", contracts}, {"taken", s.contractsTaken}, {"completed", s.contractsCompleted}};
   json markets = json::object();
   for (const auto& [id, m] : s.markets)
     markets[id] = {{"lastTick", m.lastTick}, {"stocks", m.stocks}, {"carry", m.carry}};
@@ -58,6 +69,14 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     j["player"]["landedPlanet"] = "";  // v1 had no landings
     j["player"]["landedSite"] = "";
     j["schemaVersion"] = 2;
+  }
+  if (j.value("schemaVersion", -1) == 2 && j.contains("player") && j["player"].is_object()) {
+    j["player"]["hull"] = -1.0;  // v2 had no damage: full hull and shields, nothing fitted
+    j["player"]["shield"] = -1.0;
+    j["player"]["upgrades"] = json::array();
+    j["player"]["defeats"] = 0;
+    j["contracts"] = {{"active", json::array()}, {"taken", json::array()}, {"completed", 0}};
+    j["schemaVersion"] = 3;
   }
   if (j.value("schemaVersion", -1) != SaveGame::kSchemaVersion)
     return fail("unsupported save version " + std::to_string(version) + " (this build reads version " +
@@ -83,6 +102,31 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     s.boostEnergy = p.at("boostEnergy").get<float>();
     s.credits = p.at("credits").get<std::int64_t>();
     s.cargo = p.at("cargo").get<std::map<std::string, int>>();
+    s.hull = p.at("hull").get<float>();
+    s.shield = p.at("shield").get<float>();
+    s.upgrades = p.at("upgrades").get<std::vector<std::string>>();
+    s.defeats = p.at("defeats").get<int>();
+    const json& cj = j.at("contracts");
+    for (const auto& c : cj.at("active")) {
+      SaveGame::ContractState cs;
+      cs.key = c.at("key").get<std::string>();
+      cs.templateId = c.at("template").get<std::string>();
+      cs.kind = c.at("kind").get<std::string>();
+      cs.title = c.at("title").get<std::string>();
+      cs.description = c.at("description").get<std::string>();
+      cs.issuer = c.at("issuer").get<std::string>();
+      cs.destination = c.at("destination").get<std::string>();
+      cs.commodity = c.at("commodity").get<std::string>();
+      cs.faction = c.at("faction").get<std::string>();
+      cs.units = c.at("units").get<int>();
+      cs.killsRequired = c.at("killsRequired").get<int>();
+      cs.kills = c.at("kills").get<int>();
+      cs.reward = c.at("reward").get<std::int64_t>();
+      if (!contractKindFromName(cs.kind)) return fail("save file has an unknown contract kind '" + cs.kind + "'");
+      s.contracts.push_back(cs);
+    }
+    s.contractsTaken = cj.at("taken").get<std::vector<std::string>>();
+    s.contractsCompleted = cj.at("completed").get<int>();
     for (const auto& [id, m] : j.at("markets").items()) {
       SaveGame::MarketState ms;
       ms.lastTick = m.at("lastTick").get<double>();
@@ -174,6 +218,16 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
   s.boostEnergy = f.boostEnergy;
   s.credits = session.credits();
   s.cargo = session.cargo().contents();
+  const Durability& dur = session.combat().player();
+  s.hull = dur.hull;
+  s.shield = dur.shield;
+  s.upgrades = session.ownedUpgrades();
+  s.defeats = session.defeats();
+  for (const Contract& c : session.contracts().active())
+    s.contracts.push_back({c.key, c.templateId, contractKindName(c.kind), c.title, c.description, c.issuer,
+                           c.destination, c.commodity, c.faction, c.units, c.killsRequired, c.kills, c.reward});
+  s.contractsTaken.assign(session.contracts().taken().begin(), session.contracts().taken().end());
+  s.contractsCompleted = session.contracts().completedCount();
   for (auto& [id, m] : session.markets()) {
     m.advanceTo(s.worldTime);
     s.markets[id] = {m.lastTick(), m.stocks(), m.carry()};
@@ -198,6 +252,41 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
   f.boostEnergy = s.boostEnergy;
   w.player().previous = f;
   session.setCredits(s.credits);
+  // Upgrades first: they change hold capacity and durability limits.
+  if (session.upgradeDb()) {
+    std::vector<std::string> owned;
+    for (const auto& id : s.upgrades) {
+      if (session.upgradeDb()->find(id)) owned.push_back(id);
+      else log::warn("save", "upgrade '{}' no longer exists; ignored", id);
+    }
+    session.setOwnedUpgrades(owned);
+  }
+  Durability& dur = session.combat().player();
+  dur.hull = s.hull < 0 ? dur.maxHull : std::clamp(s.hull, 1.0f, dur.maxHull);
+  dur.shield = s.shield < 0 ? dur.maxShield : std::clamp(s.shield, 0.0f, dur.maxShield);
+  session.restoreDefeats(s.defeats);
+  {
+    std::vector<Contract> active;
+    for (const auto& cs : s.contracts) {
+      Contract c;
+      c.key = cs.key;
+      c.templateId = cs.templateId;
+      c.kind = *contractKindFromName(cs.kind);
+      c.title = cs.title;
+      c.description = cs.description;
+      c.issuer = cs.issuer;
+      c.destination = cs.destination;
+      c.commodity = cs.commodity;
+      c.faction = cs.faction;
+      c.units = cs.units;
+      c.killsRequired = cs.killsRequired;
+      c.kills = cs.kills;
+      c.reward = cs.reward;
+      active.push_back(c);
+    }
+    session.contracts().restore(std::move(active), {s.contractsTaken.begin(), s.contractsTaken.end()},
+                                s.contractsCompleted);
+  }
   // Cargo restored as saved but clamped to this ship's capacity (never invents goods).
   session.cargo().setContents({});
   for (const auto& [id, n] : s.cargo) {

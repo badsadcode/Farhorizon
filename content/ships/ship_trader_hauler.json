@@ -1,0 +1,174 @@
+{
+  "id": "ship.trader_hauler",
+  "name": "Hauler (Ossa Freight Co-op)",
+  "mesh": "mesh.ship.hauler",
+  "meshScale": 7.0,
+  "meshRotationDeg": [
+    0,
+    0,
+    0
+  ],
+  "materialOverrides": {
+    "metal": {
+      "metallic": 0.85,
+      "roughness": 0.42
+    },
+    "metalDark": {
+      "metallic": 0.75,
+      "roughness": 0.55
+    },
+    "metalRed": {
+      "metallic": 0.35,
+      "roughness": 0.5
+    },
+    "dark": {
+      "metallic": 0.1,
+      "roughness": 0.8
+    }
+  },
+  "massTons": 14,
+  "cargoCapacityTons": 30,
+  "maxHull": 140,
+  "maxShield": 60,
+  "collisionRadius": 8.0,
+  "flight": {
+    "forwardAcceleration": 10,
+    "reverseAcceleration": 6,
+    "lateralAcceleration": 5,
+    "angularAcceleration": 1.2,
+    "maxAngularRateDeg": [
+      30,
+      26,
+      50
+    ],
+    "maxCruiseSpeed": 110,
+    "strafeSpeedFraction": 0.25,
+    "maxReverseFraction": 0.2
+  },
+  "boost": {
+    "speedMultiplier": 2.2,
+    "accelerationMultiplier": 2.5,
+    "energyCapacity": 100,
+    "drainPerSecond": 28,
+    "regenPerSecond": 9,
+    "minEnergyToStart": 25
+  },
+  "precision": {
+    "speedScale": 0.2,
+    "accelerationScale": 0.6,
+    "angularScale": 0.55
+  },
+  "cameras": {
+    "cockpit": {
+      "socket": "socket_pilot",
+      "fovDeg": 75
+    },
+    "chase": {
+      "distance": 24.0,
+      "height": 6.0,
+      "positionLag": 7.0,
+      "rotationLag": 6.0,
+      "fovDeg": 65
+    }
+  },
+  "sockets": {
+    "socket_pilot": {
+      "position": [
+        0,
+        1.6,
+        -2
+      ]
+    },
+    "hardpoint_nose": {
+      "position": [
+        0,
+        0.2,
+        -7.2
+      ]
+    },
+    "engine_main": {
+      "position": [
+        0,
+        0.4,
+        7.2
+      ]
+    }
+  },
+  "mounts": [
+    "hardpoint_nose"
+  ],
+  "engineGlow": {
+    "sockets": [
+      "engine_main"
+    ],
+    "color": [
+      2.2,
+      1.4,
+      0.7
+    ],
+    "boostColor": [
+      1.4,
+      1.6,
+      3.0
+    ],
+    "idleSize": 0.8,
+    "thrustSize": 1.6,
+    "idleIntensity": 0.6,
+    "thrustIntensity": 2.4
+  },
+  "lights": [
+    {
+      "position": [
+        -6,
+        0.5,
+        0
+      ],
+      "color": [
+        3.0,
+        0.2,
+        0.1
+      ],
+      "size": 0.6,
+      "blinkHz": 1.0,
+      "phase": 0,
+      "duty": 0.2
+    },
+    {
+      "position": [
+        6,
+        0.5,
+        0
+      ],
+      "color": [
+        0.2,
+        3.0,
+        0.4
+      ],
+      "size": 0.6,
+      "blinkHz": 1.0,
+      "phase": 0,
+      "duty": 0.2
+    }
+  ],
+  "combat": {
+    "shieldRegen": 4,
+    "shieldDelay": 6,
+    "heatCapacity": 60,
+    "heatDissipation": 10,
+    "primary": [],
+    "secondary": []
+  },
+  "ai": {
+    "faction": "civilian",
+    "role": "trader",
+    "detectionRange": 1500,
+    "attackRange": 0,
+    "preferredRange": 0,
+    "fleeHullFraction": 1.0,
+    "aimToleranceDeg": 5,
+    "lootCommodity": "goods.rations",
+    "lootMin": 2,
+    "lootMax": 4,
+    "bounty": 0
+  }
+}

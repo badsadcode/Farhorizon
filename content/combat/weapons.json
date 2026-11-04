@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Ship weapons (docs/data_schemas/weapons.md). Colours are linear HDR (bloom picks them up).",
+  "weapons": [
+    {
+      "id": "weapon.pulse_laser",
+      "name": "Pulse Laser",
+      "damage": 6,
+      "fireInterval": 0.22,
+      "heatPerShot": 4.5,
+      "projectileSpeed": 950,
+      "range": 1100,
+      "spreadDeg": 0.35,
+      "shieldMultiplier": 1.25,
+      "hullMultiplier": 0.8,
+      "boltLength": 9,
+      "color": [
+        4.0,
+        1.7,
+        0.5
+      ],
+      "sound": "laser_shot"
+    },
+    {
+      "id": "weapon.slug_cannon",
+      "name": "Slug Cannon",
+      "damage": 5,
+      "fireInterval": 0.42,
+      "heatPerShot": 3,
+      "projectileSpeed": 720,
+      "range": 950,
+      "spreadDeg": 1.1,
+      "shieldMultiplier": 0.8,
+      "hullMultiplier": 1.2,
+      "boltLength": 5,
+      "color": [
+        3.6,
+        0.55,
+        0.35
+      ],
+      "sound": "cannon_shot"
+    },
+    {
+      "id": "weapon.rocket",
+      "name": "Seeker Rocket",
+      "damage": 28,
+      "fireInterval": 1.4,
+      "heatPerShot": 16,
+      "projectileSpeed": 330,
+      "range": 1700,
+      "spreadDeg": 0.5,
+      "shieldMultiplier": 0.6,
+      "hullMultiplier": 1.6,
+      "homing": 1.3,
+      "boltLength": 3,
+      "color": [
+        2.6,
+        2.2,
+        1.6
+      ],
+      "sound": "rocket_launch"
+    }
+  ]
+}

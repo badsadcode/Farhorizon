@@ -6,6 +6,23 @@
 namespace fh {
 
 namespace {
+std::vector<std::string> parseServices(content::Reader& r, const nlohmann::json& j, const std::string& owner) {
+  std::vector<std::string> out;
+  if (!j.contains("services")) return out;
+  if (!j["services"].is_array()) {
+    r.error(owner + ": 'services' must be an array");
+    return out;
+  }
+  for (const auto& v : j["services"]) {
+    const std::string s = v.is_string() ? v.get<std::string>() : "";
+    if (s != "repair" && s != "upgrades" && s != "contracts") r.error(owner + ": unknown service '" + s + "'");
+    else out.push_back(s);
+  }
+  return out;
+}
+}  // namespace
+
+namespace {
 std::optional<std::string> readAsset(const AssetManifest& manifest, const AssetID& id, const char* type,
                                      std::vector<std::string>* errors) {
   auto path = manifest.resolve(id, type);
@@ -32,6 +49,7 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
   s.name = r.str(j, "name");
   s.exposure = float(r.num(j, "exposure", false, 1.0));
   s.startingCredits = static_cast<std::int64_t>(r.num(j, "startingCredits", false, 500.0));
+  s.insuranceDeductible = static_cast<std::int64_t>(r.num(j, "insuranceDeductible", false, 250.0));
 
   if (j.contains("star")) {
     const auto& st = j["star"];
@@ -134,6 +152,7 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
           d.captureDistance = float(r.num(dj, "captureDistance", false, d.captureDistance));
           d.captureSpeed = float(r.num(dj, "captureSpeed", false, d.captureSpeed));
           d.captureAngleDeg = float(r.num(dj, "captureAngleDeg", false, d.captureAngleDeg));
+          d.services = parseServices(r, dj, "docking");
           d.approachHeight = float(r.num(dj, "approachHeight", false, d.approachHeight));
           if (dj.contains("bays") && dj["bays"].is_array())
             for (const auto& bj : dj["bays"]) {
@@ -209,11 +228,46 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
           site.lonDeg = float(r.num(sj, "lonDeg"));
           site.interior = r.str(sj, "interior");
           site.market = r.str(sj, "market", false);
+          site.services = parseServices(r, sj, "site '" + site.id + "'");
           p.sites.push_back(site);
         }
       s.planets.push_back(p);
     }
   }
+  if (j.contains("encounters") && j["encounters"].is_array())
+    for (const auto& ej : j["encounters"]) {
+      EncounterDef e;
+      e.id = r.str(ej, "id");
+      e.ship = r.str(ej, "ship");
+      e.center.metres = r.dvec3(ej, "systemPosition");
+      e.radius = float(r.num(ej, "radius", false, e.radius));
+      e.triggerRange = float(r.num(ej, "triggerRange", false, e.triggerRange));
+      e.spawnMinDistance = float(r.num(ej, "spawnMinDistance", false, e.spawnMinDistance));
+      e.count = int(r.num(ej, "count", false, e.count));
+      e.respawnSeconds = float(r.num(ej, "respawnSeconds", false, e.respawnSeconds));
+      if (e.count < 0 || e.count > 8) r.error("encounter '" + e.id + "': count must be 0..8");
+      if (e.triggerRange <= e.radius) r.error("encounter '" + e.id + "': triggerRange must exceed radius");
+      s.encounters.push_back(e);
+    }
+  if (j.contains("traffic") && j["traffic"].is_array())
+    for (const auto& tj : j["traffic"]) {
+      TrafficDef t;
+      t.id = r.str(tj, "id");
+      t.ship = r.str(tj, "ship");
+      if (tj.contains("waypoints") && tj["waypoints"].is_array())
+        for (const auto& wj : tj["waypoints"]) {
+          if (!wj.is_array() || wj.size() != 3) {
+            r.error("traffic '" + t.id + "': waypoints are [x,y,z] arrays");
+            continue;
+          }
+          t.waypoints.push_back({DVec3{wj[0].get<double>(), wj[1].get<double>(), wj[2].get<double>()}});
+        }
+      if (t.waypoints.size() < 2) r.error("traffic '" + t.id + "': needs at least two waypoints");
+      t.count = int(r.num(tj, "count", false, t.count));
+      t.triggerRange = float(r.num(tj, "triggerRange", false, t.triggerRange));
+      t.respawnSeconds = float(r.num(tj, "respawnSeconds", false, t.respawnSeconds));
+      s.traffic.push_back(t);
+    }
   if (!r.ok()) return std::nullopt;
   return s;
 }
@@ -243,6 +297,8 @@ std::optional<SceneDef> loadSceneDef(const AssetManifest& manifest, const AssetI
       need(site.interior, "interior", "site '" + site.id + "'");
       if (!site.market.empty()) need(site.market, "market", "site '" + site.id + "'");
     }
+  for (const auto& e : scene->encounters) need(e.ship, "ship", "encounter '" + e.id + "'");
+  for (const auto& t : scene->traffic) need(t.ship, "ship", "traffic '" + t.id + "'");
   if (!ok) return std::nullopt;
   return scene;
 }

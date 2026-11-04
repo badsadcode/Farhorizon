@@ -7,8 +7,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
+#include "game/combat/combat.h"
 #include "game/content/interior_def.h"
+#include "game/missions/contracts.h"
+#include "game/progression/upgrades.h"
 #include "game/economy/economy.h"
 #include "game/space/landing.h"
 #include "game/space/mining.h"
@@ -29,7 +33,9 @@ struct ActionResult {
 
 class GameSession {
  public:
-  explicit GameSession(std::unique_ptr<SpaceWorld> world) : world_(std::move(world)) {}
+  explicit GameSession(std::unique_ptr<SpaceWorld> world);
+  GameSession(const GameSession&) = delete;
+  GameSession& operator=(const GameSession&) = delete;
 
   SpaceWorld& world() { return *world_; }
   const SpaceWorld& world() const { return *world_; }
@@ -103,9 +109,51 @@ class GameSession {
   void setMiningTrigger(bool on) { miningTrigger_ = on; }
   const MiningEvents& lastMiningEvents() const { return miningEvents_; }
 
+  // ---- Stage 6: combat, upgrades, contracts ----
+  // Content is owned by the caller and must outlive the session. Call after setEconomy().
+  void setProgression(const SceneDef& scene, const WeaponDb* weapons, const UpgradeDb* upgrades,
+                      const ContractDb* contracts);
+  Combat& combat() { return combat_; }
+  const Combat& combat() const { return combat_; }
+  void setFireTriggers(bool primary, bool secondary) {
+    firePrimary_ = primary;
+    fireSecondary_ = secondary;
+  }
+  // Events from the last fixed step(s), after the session has handled them (for audio/HUD).
+  std::vector<CombatEvent> takeCombatEvents() { return std::exchange(combatEvents_, {}); }
+  bool combatActive() const { return location_ == Location::Cockpit && freeFlight(); }
+
+  // Services of the place we are parked at ("repair", "upgrades", "contracts").
+  bool hasService(const std::string& s) const;
+  std::string currentLocationId() const;  // station prop id / site id; empty when not parked
+  const std::vector<ContractLocation>& contractLocations() const { return locations_; }
+
+  const ShipDef& baseShip() const { return baseShip_; }
+  const std::vector<std::string>& ownedUpgrades() const { return upgrades_; }
+  const UpgradeDb* upgradeDb() const { return upgradeDb_; }
+  bool ownsUpgrade(const std::string& id) const;
+  ActionResult buyUpgrade(const std::string& id);
+  void setOwnedUpgrades(std::vector<std::string> ids);  // save restore; re-derives the ship
+  std::int64_t repairCost() const;
+  ActionResult repair();
+
+  ContractBook& contracts() { return contracts_; }
+  const ContractBook& contracts() const { return contracts_; }
+  const ContractDb* contractDb() const { return contractDb_; }
+  std::vector<Contract> contractOffers() const;  // at the current location
+  ActionResult acceptContract(const Contract& offer);
+  ActionResult abandonContract(size_t index);
+  int defeats() const { return defeats_; }
+  void restoreDefeats(int n) { defeats_ = n; }
+  std::int64_t insuranceDeductible() const { return deductible_; }
+
  private:
   ActionResult enterInterior(const AssetID& id, const std::string& spawn, Location loc);
   ActionResult fail(const std::string& msg);
+  void applyShip();              // base ship + upgrades -> flown ship, hold, mining, combat
+  void handleCombatEvents();
+  void handleDefeat();
+  void onParked();
 
   std::unique_ptr<SpaceWorld> world_;
   Docking docking_;
@@ -130,6 +178,20 @@ class GameSession {
   Mining mining_;
   bool miningTrigger_ = false;
   MiningEvents miningEvents_;
+  // Stage 6.
+  Combat combat_;
+  bool firePrimary_ = false, fireSecondary_ = false;
+  std::vector<CombatEvent> combatEvents_;
+  ShipDef baseShip_;
+  const UpgradeDb* upgradeDb_ = nullptr;
+  const ContractDb* contractDb_ = nullptr;
+  std::vector<std::string> upgrades_;
+  ContractBook contracts_;
+  std::vector<ContractLocation> locations_;
+  std::optional<bool> wasParked_;
+  std::int64_t deductible_ = 250;
+  int defeats_ = 0;
+  std::uint32_t lastCollisions_ = 0;
 };
 
 }  // namespace fh

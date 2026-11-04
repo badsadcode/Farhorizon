@@ -49,6 +49,7 @@ DVec3 SpaceWorld::navArrivalPoint(const TargetRef& t) const {
     }
     case TargetRef::Kind::Site: return planets_.at(t.index).siteOrbit(t.sub);
     case TargetRef::Kind::Asteroid: return standOff(asteroids_.at(t.index).system.metres, 500.0);
+    case TargetRef::Kind::Ship: return me;  // ships are not travel destinations
   }
   return me;
 }
@@ -151,6 +152,14 @@ Transform SpaceWorld::playerRenderTransform(float alpha) const {
 
 TargetInfo SpaceWorld::describe(const TargetRef& ref) const {
   TargetInfo t;
+  if (ref.kind == TargetRef::Kind::Ship) {
+    if (shipDescriber_)
+      if (auto info = shipDescriber_(ref.index)) return *info;
+    t.name = "Lost contact";
+    t.marker = "ship";
+    t.local = player_.state.position;
+    return t;
+  }
   if (ref.kind == TargetRef::Kind::Prop) {
     const Prop& p = props_.at(ref.index);
     t.name = p.def.name;
@@ -186,6 +195,10 @@ TargetInfo SpaceWorld::describe(const TargetRef& ref) const {
 
 std::optional<TargetInfo> SpaceWorld::targetInfo() const {
   if (!target_) return std::nullopt;
+  if (target_->kind == TargetRef::Kind::Ship) {
+    if (!shipDescriber_) return std::nullopt;
+    return shipDescriber_(target_->index);
+  }
   return describe(*target_);
 }
 

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Shipyard upgrades (docs/data_schemas/upgrades.md). Each can be fitted once.",
+  "repairPricePerHull": 3,
+  "upgrades": [
+    {
+      "id": "upgrade.cargo_rack",
+      "name": "Strap-on Cargo Rack",
+      "price": 900,
+      "description": "Welded lattice and cargo netting. +8 t hold. Nobody asks about the rattle.",
+      "effects": {
+        "cargoTons": 8
+      }
+    },
+    {
+      "id": "upgrade.hull_plating",
+      "name": "Laminated Hull Plating",
+      "price": 1100,
+      "description": "Second skin of ceramic-steel laminate. +60 hull.",
+      "effects": {
+        "maxHull": 60
+      }
+    },
+    {
+      "id": "upgrade.shield_booster",
+      "name": "Shield Booster Coil",
+      "price": 1300,
+      "description": "Rewound emitter coils. +40 shield, faster recharge.",
+      "effects": {
+        "maxShield": 40,
+        "shieldRegen": 3
+      }
+    },
+    {
+      "id": "upgrade.thruster_tuning",
+      "name": "Thruster Re-jetting",
+      "price": 800,
+      "description": "Fresh injector nozzles and a mechanic who hums. +15% thrust, +8% speed, +10% turn.",
+      "effects": {
+        "accelerationScale": 1.15,
+        "speedScale": 1.08,
+        "turnScale": 1.1
+      }
+    },
+    {
+      "id": "upgrade.mining_laser_mk2",
+      "name": "Mining Laser Mk II",
+      "price": 1000,
+      "description": "Higher-duty emitter tube. Cuts rock 45% faster.",
+      "effects": {
+        "miningRateScale": 1.45
+      }
+    },
+    {
+      "id": "upgrade.weapon_capacitors",
+      "name": "Weapon Capacitor Bank",
+      "price": 1200,
+      "description": "Overcharged capacitors. +25% weapon damage, +30 heat capacity.",
+      "effects": {
+        "weaponDamageScale": 1.25,
+        "heatCapacity": 30
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@
 // GPU-agnostic: visuals are referenced by opaque mesh handles assigned by the app.
 // Thread affinity: main thread (fixed-step simulation).
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -83,8 +84,8 @@ struct Planet {
 };
 
 struct TargetRef {
-  enum class Kind { Prop, Asteroid, Site, Field } kind = Kind::Prop;
-  std::uint32_t index = 0;      // prop / asteroid / field index; for Site: planet index
+  enum class Kind { Prop, Asteroid, Site, Field, Ship } kind = Kind::Prop;
+  std::uint32_t index = 0;      // prop / asteroid / field index; Site: planet index; Ship: npc id
   std::uint32_t sub = 0;        // Site: site index within the planet
   bool operator==(const TargetRef&) const = default;
 };
@@ -137,6 +138,9 @@ class SpaceWorld {
   const std::optional<TargetRef>& target() const { return target_; }
   std::optional<TargetInfo> targetInfo() const;
   TargetInfo describe(const TargetRef& ref) const;
+  // Ships live outside the world (combat owns them); it describes them through this hook.
+  using ShipDescriber = std::function<std::optional<TargetInfo>(std::uint32_t)>;
+  void setShipDescriber(ShipDescriber d) { shipDescriber_ = std::move(d); }
 
   const LocalFrame& frame() const { return frame_; }
   const std::vector<Prop>& props() const { return props_; }
@@ -156,6 +160,7 @@ class SpaceWorld {
   std::vector<Asteroid> asteroids_;
   std::vector<Planet> planets_;
   std::optional<TargetRef> target_;
+  ShipDescriber shipDescriber_;
   double time_ = 0.0;
 };
 

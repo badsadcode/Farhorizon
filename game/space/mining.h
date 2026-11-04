@@ -46,6 +46,9 @@ class Mining {
   const std::string& status() const { return status_; }  // why the beam is not cutting
   float progress() const { return progress_; }           // fraction toward the next unit
   const std::vector<OreChunk>& chunks() const { return chunks_; }
+  // Adds a free-floating canister (e.g. salvage from a wreck) the scoop can collect.
+  void addChunk(const OreChunk& c);
+  void clearChunks() { chunks_.clear(); }
 
   // Scanning (reveals composition on the HUD).
   void startScan(std::uint32_t asteroid, double now);

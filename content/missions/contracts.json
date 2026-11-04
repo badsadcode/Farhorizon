@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Contract templates (docs/data_schemas/contracts.md). Offers are generated per location and world day.",
+  "offersPerLocation": 3,
+  "maxActive": 3,
+  "daySeconds": 1800,
+  "templates": [
+    {
+      "id": "contract.courier_sealed",
+      "kind": "courier",
+      "title": "Sealed crate to {dest}",
+      "description": "{units} sealed crates. Don't open them. Don't ask what hums inside.",
+      "commodities": [
+        "cargo.sealed"
+      ],
+      "unitsMin": 2,
+      "unitsMax": 4,
+      "rewardBase": 160,
+      "rewardPerUnit": 45,
+      "weight": 1.2
+    },
+    {
+      "id": "contract.procure_ore",
+      "kind": "procurement",
+      "title": "Need {units} {commodity}",
+      "description": "The refinery's hoppers are empty. Bring {units} {commodity} back here.",
+      "issuers": [
+        "station.kestrel"
+      ],
+      "commodities": [
+        "ore.iron",
+        "ore.nickel",
+        "ice.water"
+      ],
+      "unitsMin": 5,
+      "unitsMax": 9,
+      "rewardBase": 80,
+      "priceMultiplier": 1.6,
+      "weight": 1.0
+    },
+    {
+      "id": "contract.procure_parts",
+      "kind": "procurement",
+      "title": "Spares for {issuer}: {units} {commodity}",
+      "description": "Things keep breaking. {units} {commodity}, soon.",
+      "issuers": [
+        "site.gale_ridge"
+      ],
+      "commodities": [
+        "goods.parts",
+        "goods.medical",
+        "goods.fuelcells"
+      ],
+      "unitsMin": 2,
+      "unitsMax": 5,
+      "rewardBase": 60,
+      "priceMultiplier": 1.5,
+      "weight": 1.0
+    },
+    {
+      "id": "contract.bounty_jackals",
+      "kind": "bounty",
+      "title": "Bounty: {kills} Rust Jackal raider(s)",
+      "description": "Raiders are working the deep side of the Cinder Drift. Confirm {kills} kill(s), then report back.",
+      "faction": "pirate",
+      "killsMin": 1,
+      "killsMax": 3,
+      "rewardBase": 150,
+      "rewardPerKill": 220,
+      "weight": 1.1
+    }
+  ]
+}

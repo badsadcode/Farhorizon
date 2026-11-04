@@ -214,5 +214,28 @@
     "massLockRange": 3000,
     "exitSpeed": 150,
     "minDistance": 20000
+  },
+  "combat": {
+    "shieldRegen": 7,
+    "shieldDelay": 4.5,
+    "heatCapacity": 100,
+    "heatDissipation": 20,
+    "collisionDamagePerMs": 1.4,
+    "primary": [
+      {
+        "mount": "hardpoint_left",
+        "weapon": "weapon.pulse_laser"
+      },
+      {
+        "mount": "hardpoint_right",
+        "weapon": "weapon.pulse_laser"
+      }
+    ],
+    "secondary": [
+      {
+        "mount": "hardpoint_left",
+        "weapon": "weapon.rocket"
+      }
+    ]
   }
 }

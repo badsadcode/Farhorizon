@@ -100,6 +100,37 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
 
   d.materialOverrides = r.materialOverrides(j);
   d.lights = r.lights(j);
+  if (j.contains("combat") && j["combat"].is_object()) {
+    const auto& c = j["combat"];
+    CombatParams& cp = d.combat;
+    cp.shieldRegen = float(r.num(c, "shieldRegen", false, cp.shieldRegen));
+    cp.shieldDelay = float(r.num(c, "shieldDelay", false, cp.shieldDelay));
+    cp.heatCapacity = float(r.num(c, "heatCapacity", false, cp.heatCapacity));
+    cp.heatDissipation = float(r.num(c, "heatDissipation", false, cp.heatDissipation));
+    cp.collisionDamagePerMs = float(r.num(c, "collisionDamagePerMs", false, cp.collisionDamagePerMs));
+    for (const char* group : {"primary", "secondary"})
+      if (c.contains(group) && c[group].is_array())
+        for (const auto& mj : c[group]) {
+          MountDef m{r.str(mj, "mount"), r.str(mj, "weapon")};
+          (std::string(group) == "primary" ? cp.primary : cp.secondary).push_back(m);
+        }
+  }
+  if (j.contains("ai") && j["ai"].is_object()) {
+    const auto& a = j["ai"];
+    AiParams& ap = d.ai;
+    ap.faction = r.str(a, "faction", false, ap.faction);
+    ap.role = r.str(a, "role", false, ap.role);
+    ap.detectionRange = float(r.num(a, "detectionRange", false, ap.detectionRange));
+    ap.attackRange = float(r.num(a, "attackRange", false, ap.attackRange));
+    ap.preferredRange = float(r.num(a, "preferredRange", false, ap.preferredRange));
+    ap.fleeHullFraction = float(r.num(a, "fleeHullFraction", false, ap.fleeHullFraction));
+    ap.aimToleranceDeg = float(r.num(a, "aimToleranceDeg", false, ap.aimToleranceDeg));
+    ap.lootCommodity = r.str(a, "lootCommodity", false, ap.lootCommodity);
+    ap.lootMin = int(r.num(a, "lootMin", false, ap.lootMin));
+    ap.lootMax = int(r.num(a, "lootMax", false, ap.lootMax));
+    ap.bounty = int(r.num(a, "bounty", false, 0));
+    if (ap.role != "pirate" && ap.role != "trader") r.error("ai.role must be pirate or trader");
+  }
   if (j.contains("travelDrive") && j["travelDrive"].is_object()) {
     const auto& t = j["travelDrive"];
     TravelDriveParams& tp = d.travel;

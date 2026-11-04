@@ -16,7 +16,7 @@ namespace fh {
 class GameSession;
 
 struct SaveGame {
-  static constexpr int kSchemaVersion = 2;  // v2: landing sites (v1 files are migrated)
+  static constexpr int kSchemaVersion = 3;  // v2: landing sites, v3: combat/upgrades/contracts (migrated)
   int schemaVersion = kSchemaVersion;
   std::string sceneId;
   double worldTime = 0;
@@ -33,6 +33,18 @@ struct SaveGame {
   float boostEnergy = 0;
   std::int64_t credits = 0;
   std::map<std::string, int> cargo;
+  // v3: durability, fitted upgrades, contracts.
+  float hull = -1, shield = -1;            // -1 = full (also what v2 files migrate to)
+  std::vector<std::string> upgrades;
+  struct ContractState {
+    std::string key, templateId, kind, title, description, issuer, destination, commodity, faction;
+    int units = 0, killsRequired = 0, kills = 0;
+    std::int64_t reward = 0;
+  };
+  std::vector<ContractState> contracts;
+  std::vector<std::string> contractsTaken;
+  int contractsCompleted = 0;
+  int defeats = 0;
   // World deviations.
   struct MarketState {
     double lastTick = 0;

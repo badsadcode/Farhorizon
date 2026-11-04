@@ -41,6 +41,8 @@ class CargoHold {
   CargoHold() = default;
   CargoHold(const CommodityDb* db, float capacityTons) : db_(db), capacity_(capacityTons) {}
   float capacityTons() const { return capacity_; }
+  void setCapacity(float tons) { capacity_ = tons; }
+  void clear() { units_.clear(); }
   float usedTons() const;
   float freeTons() const { return capacity_ - usedTons(); }
   int units(const std::string& id) const;

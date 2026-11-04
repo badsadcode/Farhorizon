@@ -193,6 +193,36 @@
     "bench.landing": {
       "type": "benchmark",
       "source": "benchmarks/landing.json"
+    },
+    "mesh.ship.raider": {
+      "type": "mesh",
+      "source": "models/ships/raider_placeholder.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'craft_speederA' (kenney.nl). PLACEHOLDER pirate raider."
+    },
+    "mesh.ship.hauler": {
+      "type": "mesh",
+      "source": "models/ships/hauler_placeholder.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'craft_miner' (kenney.nl). PLACEHOLDER civilian hauler."
+    },
+    "ship.pirate_raider": {
+      "type": "ship",
+      "source": "ships/ship_pirate_raider.json"
+    },
+    "ship.trader_hauler": {
+      "type": "ship",
+      "source": "ships/ship_trader_hauler.json"
+    },
+    "combat.weapons": {
+      "type": "weapons",
+      "source": "combat/weapons.json"
+    },
+    "economy.upgrades": {
+      "type": "upgrades",
+      "source": "economy/upgrades.json"
+    },
+    "missions.contracts": {
+      "type": "contracts",
+      "source": "missions/contracts.json"
     }
   }
 }

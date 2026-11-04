@@ -1,0 +1,168 @@
+{
+  "id": "ship.pirate_raider",
+  "name": "Raider (Rust Jackals)",
+  "mesh": "mesh.ship.raider",
+  "meshScale": 4.5,
+  "meshRotationDeg": [
+    0,
+    0,
+    0
+  ],
+  "materialOverrides": {
+    "metal": {
+      "metallic": 0.85,
+      "roughness": 0.42
+    },
+    "metalDark": {
+      "metallic": 0.75,
+      "roughness": 0.55
+    },
+    "metalRed": {
+      "metallic": 0.35,
+      "roughness": 0.5
+    },
+    "dark": {
+      "metallic": 0.1,
+      "roughness": 0.8
+    }
+  },
+  "massTons": 14,
+  "cargoCapacityTons": 8,
+  "maxHull": 60,
+  "maxShield": 30,
+  "collisionRadius": 4.5,
+  "flight": {
+    "forwardAcceleration": 22,
+    "reverseAcceleration": 12,
+    "lateralAcceleration": 10,
+    "angularAcceleration": 2.4,
+    "maxAngularRateDeg": [
+      60,
+      50,
+      110
+    ],
+    "maxCruiseSpeed": 165,
+    "strafeSpeedFraction": 0.3,
+    "maxReverseFraction": 0.3
+  },
+  "boost": {
+    "speedMultiplier": 2.2,
+    "accelerationMultiplier": 2.5,
+    "energyCapacity": 100,
+    "drainPerSecond": 28,
+    "regenPerSecond": 9,
+    "minEnergyToStart": 25
+  },
+  "precision": {
+    "speedScale": 0.2,
+    "accelerationScale": 0.6,
+    "angularScale": 0.55
+  },
+  "cameras": {
+    "cockpit": {
+      "socket": "socket_pilot",
+      "fovDeg": 75
+    },
+    "chase": {
+      "distance": 24.0,
+      "height": 6.0,
+      "positionLag": 7.0,
+      "rotationLag": 6.0,
+      "fovDeg": 65
+    }
+  },
+  "sockets": {
+    "socket_pilot": {
+      "position": [
+        0,
+        1.6,
+        -2
+      ]
+    },
+    "hardpoint_nose": {
+      "position": [
+        0,
+        0.2,
+        -4.05
+      ]
+    },
+    "engine_main": {
+      "position": [
+        0,
+        0.4,
+        4.05
+      ]
+    }
+  },
+  "mounts": [
+    "hardpoint_nose"
+  ],
+  "engineGlow": {
+    "sockets": [
+      "engine_main"
+    ],
+    "color": [
+      3.2,
+      0.9,
+      0.35
+    ],
+    "boostColor": [
+      1.4,
+      1.6,
+      3.0
+    ],
+    "idleSize": 0.8,
+    "thrustSize": 1.6,
+    "idleIntensity": 0.6,
+    "thrustIntensity": 2.4
+  },
+  "lights": [
+    {
+      "position": [
+        0,
+        0.9,
+        1.5
+      ],
+      "color": [
+        3.0,
+        0.25,
+        0.15
+      ],
+      "size": 0.5,
+      "blinkHz": 2.2,
+      "phase": 0,
+      "duty": 0.15
+    }
+  ],
+  "combat": {
+    "shieldRegen": 5,
+    "shieldDelay": 5,
+    "heatCapacity": 80,
+    "heatDissipation": 18,
+    "primary": [
+      {
+        "mount": "hardpoint_nose",
+        "weapon": "weapon.slug_cannon"
+      }
+    ],
+    "secondary": [
+      {
+        "mount": "hardpoint_nose",
+        "weapon": "weapon.rocket"
+      }
+    ]
+  },
+  "ai": {
+    "faction": "pirate",
+    "role": "pirate",
+    "detectionRange": 2600,
+    "attackRange": 950,
+    "preferredRange": 420,
+    "fleeHullFraction": 0.25,
+    "aimToleranceDeg": 5,
+    "lootCommodity": "goods.parts",
+    "lootMin": 1,
+    "lootMax": 3,
+    "bounty": 90
+  }
+}

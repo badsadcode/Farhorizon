@@ -14,6 +14,9 @@
 #include "game/content/interior_def.h"
 #include "game/economy/economy.h"
 #include "game/audio_director.h"
+#include "game/combat/weapon_def.h"
+#include "game/missions/contracts.h"
+#include "game/progression/upgrades.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -30,7 +33,29 @@ int main(int argc, char** argv) {
     for (const auto& [id, entry] : manifest->entries()) {
       ++checked;
       if (entry.type == "ship") {
-        fh::loadShipDef(*manifest, id, &errors);
+        if (auto ship = fh::loadShipDef(*manifest, id, &errors)) {
+          // Cross-check weapon references against every weapons file in the manifest.
+          for (const auto& [wid, we] : manifest->entries()) {
+            if (we.type != "weapons") continue;
+            std::vector<std::string> ignore;
+            auto db = fh::loadWeapons(*manifest, wid, &ignore);
+            if (!db) continue;
+            for (const auto* group : {&ship->combat.primary, &ship->combat.secondary})
+              for (const auto& m : *group) {
+                if (!db->find(m.weapon))
+                  errors.push_back("ship '" + id + "': unknown weapon '" + m.weapon + "'");
+                if (!ship->sockets.count(m.mount))
+                  errors.push_back("ship '" + id + "': weapon mount '" + m.mount + "' is not a socket");
+              }
+          }
+        }
+      } else if (entry.type == "weapons") {
+        fh::loadWeapons(*manifest, id, &errors);
+      } else if (entry.type == "upgrades") {
+        fh::loadUpgrades(*manifest, id, &errors);
+      } else if (entry.type == "contracts") {
+        if (auto db = fh::loadCommodities(*manifest, "economy.commodities", &errors))
+          fh::loadContracts(*manifest, id, *db, &errors);
       } else if (entry.type == "scene") {
         fh::loadSceneDef(*manifest, id, &errors);  // also checks referenced ships and meshes
       } else if (entry.type == "audio") {

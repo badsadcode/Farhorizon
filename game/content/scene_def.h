@@ -70,6 +70,7 @@ struct DockingDef {
   float captureAngleDeg = 15.0f;
   float approachHeight = 80.0f;   // autopilot approach column height above the bay
   std::vector<DockingBayDef> bays;
+  std::vector<std::string> services;  // terminal services: "repair", "upgrades", "contracts"
 };
 
 // Static (optionally spinning) scene object such as a station proxy or a beacon.
@@ -122,6 +123,7 @@ struct LandingSiteDef {
   float latDeg = 0, lonDeg = 0;   // planet-local direction of the site
   AssetID interior;               // surface scene (pad, terrain, outpost)
   AssetID market;                 // optional
+  std::vector<std::string> services;  // terminal services: "repair", "upgrades", "contracts"
 };
 
 // A planet or moon: rendered as a far-field impostor, never as a physics body (design 4.3 / 5.3).
@@ -138,6 +140,28 @@ struct PlanetDef {
   float atmosphereThickness = 0.0f;  // fraction of radius (0 = airless)
   double orbitAltitude = 150000.0;   // metres above the surface for travel/landing approach
   std::vector<LandingSiteDef> sites;
+};
+
+// Pirate (or other) ships that appear when the player comes near a zone (design doc 8.3).
+struct EncounterDef {
+  std::string id;
+  AssetID ship;
+  SystemPosition center;
+  float radius = 1500.0f;          // ships spawn and patrol inside this sphere
+  float triggerRange = 6000.0f;    // player distance from the centre that activates the zone
+  float spawnMinDistance = 1200.0f; // never spawn closer than this to the player
+  int count = 2;                   // ships alive at once
+  float respawnSeconds = 90.0f;    // time to refill the zone (split between ships)
+};
+
+// Civilian ships shuttling between waypoints while the player is near the route.
+struct TrafficDef {
+  std::string id;
+  AssetID ship;
+  std::vector<SystemPosition> waypoints;
+  int count = 1;
+  float triggerRange = 8000.0f;    // player distance from the first waypoint
+  float respawnSeconds = 60.0f;
 };
 
 struct CameraDef {
@@ -158,12 +182,15 @@ struct SceneDef {
   SkyDef sky;
   float exposure = 1.0f;
   std::int64_t startingCredits = 500;
+  std::int64_t insuranceDeductible = 250;  // charged when the ship is lost
   double rebaseDistance = 4096.0;
   CameraDef camera;
   PlayerStartDef player;
   std::vector<PropDef> props;
   std::vector<AsteroidFieldDef> asteroidFields;
   std::vector<PlanetDef> planets;
+  std::vector<EncounterDef> encounters;
+  std::vector<TrafficDef> traffic;
 };
 
 std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string& context,

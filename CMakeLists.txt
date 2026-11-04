@@ -49,6 +49,11 @@ add_library(fh_core STATIC
   game/session/world_builder.cpp
   game/economy/economy.cpp
   game/space/mining.cpp
+  game/combat/weapon_def.cpp
+  game/combat/combat.cpp
+  game/progression/upgrades.cpp
+  game/missions/contracts.cpp
+  game/session/progression_setup.cpp
   game/space/travel_drive.cpp
   game/space/landing.cpp
   game/persistence/save_game.cpp
@@ -127,6 +132,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_stage4.cpp
     tests/unit/test_audio.cpp
     tests/unit/test_stage5.cpp
+    tests/unit/test_stage6.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

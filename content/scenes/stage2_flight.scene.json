@@ -299,7 +299,12 @@
             ]
           }
         ],
-        "market": "market.kestrel"
+        "market": "market.kestrel",
+        "services": [
+          "repair",
+          "upgrades",
+          "contracts"
+        ]
       }
     },
     {
@@ -584,7 +589,11 @@
           "latDeg": -9.0,
           "lonDeg": 180.0,
           "interior": "interior.gale_ridge",
-          "market": "market.gale_ridge"
+          "market": "market.gale_ridge",
+          "services": [
+            "repair",
+            "contracts"
+          ]
         }
       ]
     },
@@ -611,6 +620,49 @@
       "craters": 0.9,
       "atmosphereThickness": 0.0,
       "orbitAltitude": 60000.0
+    }
+  ],
+  "insuranceDeductible": 250,
+  "encounters": [
+    {
+      "id": "enc.cinder_deep",
+      "ship": "ship.pirate_raider",
+      "systemPosition": [
+        149597861300.0,
+        11999900.0,
+        -3500005800.0
+      ],
+      "radius": 1300,
+      "triggerRange": 4600,
+      "spawnMinDistance": 1600,
+      "count": 2,
+      "respawnSeconds": 120
+    }
+  ],
+  "traffic": [
+    {
+      "id": "traffic.kestrel_run",
+      "ship": "ship.trader_hauler",
+      "waypoints": [
+        [
+          149597871400.0,
+          12000400.0,
+          -3500001600.0
+        ],
+        [
+          149597876300.0,
+          12000750.0,
+          -3499996700.0
+        ],
+        [
+          149597868500.0,
+          12000550.0,
+          -3499999300.0
+        ]
+      ],
+      "count": 1,
+      "triggerRange": 9000,
+      "respawnSeconds": 90
     }
   ]
 }

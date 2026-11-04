@@ -12,6 +12,7 @@
 #include "game/ships/flight_model.h"
 #include "game/space/mining_params.h"
 #include "game/space/travel_params.h"
+#include "game/combat/combat_params.h"
 
 namespace fh {
 
@@ -51,6 +52,8 @@ struct ShipDef {
   EngineGlowDef engineGlow;
   MiningParams mining;
   TravelDriveParams travel;
+  CombatParams combat;
+  AiParams ai;
   std::vector<std::string> mounts;
 };
 

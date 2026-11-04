@@ -31,6 +31,13 @@ float Mining::scanProgress(double now) const {
   return std::clamp(float((now - scanStart_) / params_.scanSeconds), 0.0f, 1.0f);
 }
 
+void Mining::addChunk(const OreChunk& c) {
+  if (int(chunks_.size()) >= params_.maxChunks) chunks_.erase(chunks_.begin());
+  OreChunk k = c;
+  k.asteroid = kNone;
+  chunks_.push_back(k);
+}
+
 void Mining::applyRebase(const Vec3& delta) {
   for (auto& c : chunks_) c.local += delta;
   beamEnd_ += delta;
