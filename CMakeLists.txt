@@ -1,0 +1,103 @@
+cmake_minimum_required(VERSION 3.24)
+project(FARHORIZON VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
+option(FH_BUILD_GAME   "Build the game executable (needs Vulkan + SDL3)" ON)
+option(FH_BUILD_TESTS  "Build headless unit tests" ON)
+option(FH_SANITIZERS   "Enable ASan/UBSan in Debug builds (GCC/Clang)" OFF)
+option(FH_SYSTEM_SDL3  "Use an installed SDL3 instead of fetching the pinned release" OFF)
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(Warnings)
+
+# ---- Vendored header-only third-party code (see docs/DEPENDENCIES.md) ----
+add_library(fh_third_party INTERFACE)
+target_include_directories(fh_third_party SYSTEM INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+
+# ---- fh_core: platform-independent, GPU-free code. Unit tests link only this. ----
+add_library(fh_core STATIC
+  engine/core/log.cpp
+  engine/core/file_io.cpp
+  engine/core/clock.cpp
+  engine/assets/asset_manifest.cpp
+  engine/assets/gltf_loader.cpp
+  engine/assets/image_io.cpp
+  engine/debug/frame_stats.cpp
+  engine/debug/overlay.cpp
+  engine/render/starfield.cpp
+  game/content/ship_def.cpp
+  game/content/scene_def.cpp
+)
+target_include_directories(fh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(fh_core PUBLIC fh_third_party)
+fh_set_warnings(fh_core)
+
+if(FH_BUILD_GAME)
+  include(Dependencies)   # SDL3 + Vulkan
+  include(Shaders)
+
+  add_library(fh_engine STATIC
+    engine/platform/window.cpp
+    engine/platform/input.cpp
+    engine/render/vk_context.cpp
+    engine/render/gpu_resources.cpp
+    engine/render/renderer.cpp
+  )
+  target_link_libraries(fh_engine PUBLIC fh_core SDL3::SDL3 Vulkan::Vulkan)
+  fh_set_warnings(fh_engine)
+
+  fh_compile_shaders(fh_shaders
+    shaders/sky.vert shaders/sky.frag
+    shaders/stars.vert shaders/stars.frag
+    shaders/mesh.vert shaders/mesh.frag
+    shaders/overlay.vert shaders/overlay.frag)
+
+  add_executable(farhorizon
+    game/main.cpp
+    game/showcase_app.cpp
+    game/camera.cpp
+  )
+  target_link_libraries(farhorizon PRIVATE fh_engine)
+  add_dependencies(farhorizon fh_shaders)
+  fh_set_warnings(farhorizon)
+  # Runtime data locations are passed in so a build directory runs without copying.
+  target_compile_definitions(farhorizon PRIVATE
+    FH_DEFAULT_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content"
+    FH_DEFAULT_SHADER_DIR="${FH_SHADER_OUTPUT_DIR}")
+  if(WIN32)
+    set_target_properties(farhorizon PROPERTIES WIN32_EXECUTABLE OFF) # keep console for logs in Stage 1
+  endif()
+endif()
+
+# ---- Tools (GPU-free) ----
+add_executable(content_validator tools/content_validator/main.cpp)
+target_link_libraries(content_validator PRIVATE fh_core)
+fh_set_warnings(content_validator)
+
+if(FH_BUILD_TESTS)
+  enable_testing()
+  add_executable(fh_unit_tests
+    tests/unit/test_main.cpp
+    tests/unit/test_math.cpp
+    tests/unit/test_frames.cpp
+    tests/unit/test_clock.cpp
+    tests/unit/test_assets.cpp
+    tests/unit/test_content.cpp
+    tests/unit/test_starfield.cpp
+  )
+  target_link_libraries(fh_unit_tests PRIVATE fh_core)
+  target_compile_definitions(fh_unit_tests PRIVATE
+    FH_TEST_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content")
+  fh_set_warnings(fh_unit_tests)
+  add_test(NAME unit COMMAND fh_unit_tests)
+  add_test(NAME content COMMAND content_validator ${CMAKE_CURRENT_SOURCE_DIR}/content)
+endif()

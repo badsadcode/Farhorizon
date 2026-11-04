@@ -1,0 +1,18 @@
+{
+  "id": "scene.stage1_showcase",
+  "name": "Stage 1 showcase - Sparrow at 1 AU",
+  "exposure": 1.0,
+  "star": {
+    "systemPosition": [0, 0, 0],
+    "color": [1.0, 0.93, 0.82],
+    "intensity": 3.2,
+    "angularDiameterDeg": 0.55
+  },
+  "starfield": { "seed": 7741, "count": 9000, "brightness": 1.0, "galacticPlaneTiltDeg": 28.0 },
+  "ambient": { "skyColor": [0.035, 0.045, 0.07], "groundColor": [0.02, 0.015, 0.012] },
+  "floatingOrigin": { "rebaseDistance": 4096.0 },
+  "camera": { "fovDeg": 62.0, "orbitDistance": 22.0, "yawDeg": 125, "pitchDeg": 14.0, "autoRotateDegPerSec": 5.0 },
+  "objects": [
+    { "ship": "ship.sparrow", "systemPosition": [149597870700.0, 12000000.0, -3500000000.0], "rotationDeg": [0, 0, 0] }
+  ]
+}

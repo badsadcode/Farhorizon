@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vulkan headers, loader and glslang
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: 1.4.304.1
+          vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang
+          vulkan-use-cache: true
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build (Release)
+        run: cmake --build build --config Release --parallel
+      - name: Unit + content tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farhorizon-windows-x64
+          path: |
+            build/Release/farhorizon.exe
+            build/shaders/*.spv
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages (Vulkan, lavapipe software GPU, Xvfb, X11 dev headers for SDL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libvulkan-dev mesa-vulkan-drivers \
+            glslang-tools vulkan-validationlayers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev
+      - name: Configure (Debug + sanitizers)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFH_SANITIZERS=ON
+      - name: Build
+        run: cmake --build build
+      - name: Unit + content tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Smoke run (software Vulkan, validation on, screenshot)
+        env:
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+          ASAN_OPTIONS: detect_leaks=0
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./build/farhorizon --frames 30 --validation --screenshot smoke.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-smoke
+          path: |
+            smoke.png
+            farhorizon.log

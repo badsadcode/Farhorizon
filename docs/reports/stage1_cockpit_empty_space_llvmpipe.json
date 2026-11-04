@@ -1,0 +1,14 @@
+{
+  "avgCpuMs": 48.69699355882356,
+  "avgFps": 20.53514861840597,
+  "avgGpuMs": 46.255031784313736,
+  "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "drawCalls": 7,
+  "frames": 204,
+  "maxCpuMs": 66.781988,
+  "maxGpuMs": 78.174854,
+  "minCpuMs": 39.755334000000005,
+  "p99CpuMs": 62.190539,
+  "scenario": "stage1_cockpit_empty_space",
+  "triangles": 18265
+}

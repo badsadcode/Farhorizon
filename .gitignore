@@ -1,0 +1,11 @@
+/build*/
+/out/
+/.vs/
+/.vscode/
+*.user
+CMakeUserPresets.json
+/benchmarks/
+/saves/
+imgui.ini
+farhorizon.log
+/screenshots/

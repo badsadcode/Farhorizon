@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "assets": {
+    "mesh.ship.sparrow": {
+      "type": "mesh",
+      "source": "models/ships/sparrow_placeholder.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'craft_cargoA' (kenney.nl). PLACEHOLDER until the real Sparrow model exists."
+    },
+    "ship.sparrow": { "type": "ship", "source": "ships/ship_sparrow.json" },
+    "scene.stage1_showcase": { "type": "scene", "source": "scenes/stage1_showcase.scene.json" },
+    "config.input": { "type": "config", "source": "config/input.json" }
+  }
+}

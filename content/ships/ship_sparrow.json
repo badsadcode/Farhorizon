@@ -1,0 +1,24 @@
+{
+  "id": "ship.sparrow",
+  "name": "Sparrow Light Freighter",
+  "mesh": "mesh.ship.sparrow",
+  "meshScale": 6.0,
+  "meshRotationDeg": [0, 0, 0],
+  "materialOverrides": {
+    "metal":     { "metallic": 0.85, "roughness": 0.42 },
+    "metalDark": { "metallic": 0.75, "roughness": 0.55 },
+    "metalRed":  { "metallic": 0.35, "roughness": 0.50 },
+    "dark":      { "metallic": 0.10, "roughness": 0.80 }
+  },
+  "massTons": 22.0,
+  "cargoCapacityTons": 12.0,
+  "maxHull": 100,
+  "maxShield": 60,
+  "flight": {
+    "forwardAcceleration": 18.0,
+    "lateralAcceleration": 9.0,
+    "angularAcceleration": 1.8,
+    "maxCruiseSpeed": 170.0
+  },
+  "mounts": ["hardpoint_left", "hardpoint_right"]
+}

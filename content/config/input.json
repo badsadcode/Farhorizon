@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Action -> SDL scancode names. Rebind by editing this file (in-game rebinding is Stage 2).",
+  "bindings": {
+    "camera.forward":    ["W"],
+    "camera.back":       ["S"],
+    "camera.left":       ["A"],
+    "camera.right":      ["D"],
+    "camera.up":         ["E", "Space"],
+    "camera.down":       ["Q", "Left Ctrl"],
+    "camera.boost":      ["Left Shift"],
+    "camera.toggleMode": ["Tab"],
+    "camera.autoRotate": ["R"],
+    "debug.overlay":     ["F1"],
+    "debug.reloadAssets":["F5"],
+    "debug.screenshot":  ["F12"],
+    "window.fullscreen": ["F11"],
+    "app.quit":          ["Escape"]
+  }
+}
