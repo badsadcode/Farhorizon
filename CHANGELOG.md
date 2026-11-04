@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.7.0 — Stage 7, part 1: the UI pass (2026-11-04)
+First version built and run on a real GPU (RTX 3080). Stage 7 continues with the Blender pipeline
+and lighting.
+* **Menus:** main menu with the world turning behind it, pause menu (Esc), load and save with
+  3 slots + quicksave + autosave, confirmations.
+* **Options:** graphics (look, fullscreen, VSync, field of view, interface scale, camera shake),
+  audio volumes, gameplay toggles, and controls with **in-game key rebinding**. Conflicts are
+  flagged and name the other action, the app's own keys are reserved, and Reset keys restores the
+  defaults. Settings live in `settings.json`, beside the game.
+* **New flight HUD:** TrueType font, consistent panels, and scaling with Interface scale. A new
+  target panel shows range, closing speed, ship shields and hull, or the asteroid scan. Messages
+  and warnings stack, so they no longer overlap.
+* **Hints show your actual keys** in the HUD and terminal, including after rebinding.
+* **Restyled station terminal:** every row has its own buttons (BUY / SELL / ALL, FIT, TAKE, DROP),
+  and clicking a row only selects it, so a stray click can no longer spend money or accept a job.
+  Long lists scroll.
+* TrueType UI font (Share Tech Mono + Share Tech, SIL OFL) and a data-driven UI theme.
+* Mouse: Esc opens the menu, backtick frees the mouse, and clicking the game window recaptures it.
+* **Fixed:**
+  * Validation errors on real GPUs: `shaderDemoteToHelperInvocation` is now enabled. Shaders using
+    `discard` were invalid without it. Software rendering in CI had not shown this.
+  * The pause menu closed itself on the frame it opened.
+  * During key capture, Up, Down and Tab moved around the menu, F10 quit the game, and binding
+    Enter re-triggered the prompt.
+  * After a fullscreen toggle, a resting mouse stole keyboard focus, so the next Enter changed the
+    wrong setting.
+  * The mouse wheel could leave focus on a row scrolled out of view.
+  * Dragging the Interface scale slider moved the slider under the mouse.
+  * Focus could start on a disabled menu item, leaving nothing selected.
+* **Testing:** `--ui-script` drives the real menus and terminal with scripted input events and
+  checks the results (`tests/ui_scripts/`, also in CI). New `--settings` flag. Tests: 101.
+
 ## 0.6.0 — Stage 6: combat, contracts and upgrades (2026-11-04)
 * **Combat:** shields and hull with delayed recharge, collision damage, weapon heat and
   overheat lock. Twin **pulse lasers** (simulated bolts, lead pip) and homing **seeker rockets**

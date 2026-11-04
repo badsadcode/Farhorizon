@@ -84,7 +84,9 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 
 **On foot:** WASD walk, Shift run, Space jump, mouse look, F use.
 
-All bindings and mouse settings live in `content/config/input.json`.
+**Esc** opens the pause menu; **backtick** frees the mouse, and clicking the game window takes it
+back. Rebind keys in **Options > Controls** (overrides are saved in `settings.json`; the defaults
+are in `content/config/input.json`).
 
 **Try the trade run to Varga:** buy Ration Packs at Kestrel (M), undock (L), press N until
 "Gale Ridge Outpost (Varga)" is selected, then J to engage the travel drive. Once you're in orbit,

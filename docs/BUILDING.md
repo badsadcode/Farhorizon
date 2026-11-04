@@ -16,6 +16,27 @@ SDL3 is linked statically, so no DLL has to be copied. The executable finds `con
 compiled shaders through absolute paths baked in at configure time. Override them with `--content`
 and `--shaders` when you move the build.
 
+### If CMake reports "No CMAKE_CXX_COMPILER could be found"
+Check `build/CMakeFiles/CMakeConfigureLog.yaml`. `LNK1104: MSVCRTD.lib` means the default MSVC
+toolset in your Visual Studio install is incomplete. Repair Visual Studio, or select a complete
+toolset for the configure and build steps (look in `VC\Tools\MSVC` for the version):
+```bat
+set VCToolsVersion=14.44.35207
+```
+A user-wide `vcpkg integrate install` also injects libraries into every link. To turn it off for
+this project, add `-DCMAKE_VS_GLOBALS="VcpkgEnabled=false"` when configuring.
+
+## Testing the UI
+
+`--ui-script` drives the real menus and terminal with scripted input, checks the results and takes
+screenshots. The command language is in `game/ui/ui_script.h`. Run from an empty folder, since saves,
+settings and screenshots land in the current directory. A failed expectation exits with code 3:
+```bat
+farhorizon --ui-script tests\ui_scripts\options_rebind.txt --settings settings.json --validation
+farhorizon --start-docked --ui-script tests\ui_scripts\terminal.txt --settings settings.json --validation
+farhorizon --start-docked --ui-script tests\ui_scripts\graphics_save.txt --settings settings.json --validation
+```
+
 ## Linux (development / CI)
 
 ```bash

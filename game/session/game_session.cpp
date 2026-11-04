@@ -83,7 +83,7 @@ const InteriorDef* GameSession::surfaceScene() const {
 bool GameSession::engageTravel() {
   if (!freeFlight()) return fail("Travel drive unavailable right now").ok;
   const auto& t = world_->target();
-  if (!t || t->kind == TargetRef::Kind::Asteroid) return fail("Select a destination first (N)").ok;
+  if (!t || t->kind == TargetRef::Kind::Asteroid) return fail("Select a destination first").ok;
   return travel_.engage(*world_, *t, world_->player().def.travel);
 }
 

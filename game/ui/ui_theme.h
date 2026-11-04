@@ -13,14 +13,16 @@ namespace fh {
 
 struct UiTheme {
   std::filesystem::path monoFont, sansFont;  // absolute paths after loading
-  OverlayColor text{226, 172, 98, 255}, textDim{226, 172, 98, 130}, textBright{255, 218, 160, 255};
+  OverlayColor text{226, 172, 98, 255}, textDim{226, 172, 98, 170}, textBright{255, 218, 160, 255};
   OverlayColor accent{112, 196, 222, 255}, danger{222, 76, 54, 255}, ok{150, 208, 124, 255};
-  OverlayColor panel{7, 8, 9, 228}, panelBorder{226, 172, 98, 150}, highlight{226, 172, 98, 46};
+  OverlayColor panel{7, 8, 9, 252}, panelBorder{226, 172, 98, 150}, highlight{226, 172, 98, 46};
   OverlayColor backdrop{0, 0, 0, 165};
-  float small = 15, body = 20, heading = 26, title = 88, subtitle = 18;
+  float small = 16, body = 20, heading = 26, title = 88, subtitle = 18;
   float chamfer = 14, border = 1.5f, padding = 22;
   float rowHeight = 40;
   float letterSpacing = 0.32f;  // em, for spaced-out titles
+  float hudPanelAlpha = 0.8f;  // HUD panels stay see-through: the world is the point
+  float hudSpeed = 46, hudWarning = 30;
 };
 
 std::optional<UiTheme> loadUiTheme(const AssetManifest& manifest, const AssetID& id, std::vector<std::string>* errors);

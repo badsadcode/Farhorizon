@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 6 (combat, contracts, upgrades)._
+_Last updated: 2026-11-04 · Stage 7 (polish) in progress: UI pass done, awaiting the owner's playtest._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -10,14 +10,14 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
-| Test harness | ✅ | 70 tests (incl. headless Stage 3, 4, 5 and 6 exit criteria) + content validation (CTest) |
+| Test harness | ✅ | 101 tests (incl. headless Stage 3, 4, 5 and 6 exit criteria) + content validation (CTest) + scripted UI runs (`tests/ui_scripts/`) |
 | CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
 | Item | State | Notes |
 |---|---|---|
 | SDL3 window/input, Vulkan swapchain, resize | ✅ | |
-| Validation layer + overlay counters | ✅ | 0 messages in all runs |
+| Validation layer + overlay counters | ✅ | 0 messages from the game on an RTX 3080 (SDK 1.4.363), after enabling a missing device feature that CI runs had not reported |
 | Star field, procedural sky, star disc | ✅ | sky colours now data-driven per scene |
 | Imported GLB ship with PBR | ✅ | |
 | Developer overlay, screenshots, benchmark export | ✅ | |
@@ -38,7 +38,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Simple asteroids | ✅ | procedural, deterministic meshes + clustered fields, instanced, frustum culled |
 | Station proxy | ✅ | Kenney CC0 hangar + dish, running lights, nav marker |
 | Collisions | ✅ | sphere vs sphere and sphere vs oriented box (station hull), push-out/bounce, impact warning |
-| Rebindable controls | 🟡 | via `input.json` + F5. No in-game rebinding UI yet. |
+| Rebindable controls | ✅ | in-game (Options > Controls), stored in `settings.json`; defaults in `input.json` |
 | Rebasing without visible jumps | ✅ | unit-tested (interpolation continuity) and observed in a 40 s flight |
 | "Fun to fly for 10 minutes" | ⬜ | needs a human play session on real hardware |
 | In-system travel drive | ⬜ | design 4.2. Not in the Stage 2 list. Next candidate. |
@@ -120,5 +120,20 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Instanced meshes | ✅ | |
 | Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
 
+## Stage 7 — polish
+| Item | State | Notes |
+|---|---|---|
+| TrueType UI font + theme | ✅ | one atlas, `content/ui/theme.json`; theme is a placeholder until the owner's reference art arrives |
+| Ui kit | ✅ | focus, scrolling, sliders, rows; unit-tested; ADR 0010 |
+| Main, pause, load/save, confirm screens | ✅ | scripted run on an RTX 3080 |
+| Options: graphics, audio, controls, gameplay | ✅ | scripted run: live fullscreen, VSync, look, FOV, scale; persisted to `settings.json`. Audio volumes not yet checked by ear (ISSUES #18). |
+| Key rebinding + Reset keys | ✅ | keyboard and mouse, scrolling list, conflicts, reserved keys; unit tests + scripted run |
+| Flight, on-foot and surface HUD | ✅ | checked in screenshots: combat, mining, docking, hangar, 720p, 1440p, 150% scale. Not yet judged by a human in play. |
+| Station terminal restyle | ✅ | scripted run: trade, repair/fit, take a contract, open and close |
+| Scripted UI tests | ✅ | `--ui-script`; on Windows here; in the Linux CI job, not yet run there |
+| Owner playtest of the UI | ⬜ | next |
+| Blender pipeline | ⬜ | PBR textures, `KHR_lights_punctual`, whole-level maps, scale reference scene, artist guide |
+| Lighting on real GPUs | ⬜ | cascaded sun shadows, interior spot shadows, IBL, tonemapping |
+
 ## Later stages
-Not started: polish (7).
+Not started.

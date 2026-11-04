@@ -34,6 +34,11 @@ struct LoadedMesh {
 
 GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
   scripted_ = !options_.benchmarkId.empty() || options_.exitAfterFrames > 0;
+  settingsPath_ = options_.settingsPath;
+  if (!options_.uiScript.empty()) {
+    std::string err;
+    if (!uiScript_.load(options_.uiScript, &err)) throw std::runtime_error(err);
+  }
   // Benchmarks and scripted runs use defaults (reproducible); players get their settings.json.
   if (!scripted_) settings_ = loadSettings(settingsPath_);
   if (scripted_ || !options_.devOverlay) settings_.showDevOverlay = scripted_ && options_.devOverlay;
@@ -59,7 +64,8 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     std::vector<std::string> audioErrors;
     if (!audio_.load(*manifest_, "audio.config", &audioErrors))
       for (const auto& e : audioErrors) log::warn("audio", "{}", e);
-    if (!benchmark_ && options_.exitAfterFrames == 0) audioDevice_.open(audio_.mixer());  // tests/benchmarks stay silent
+    if (!benchmark_ && options_.exitAfterFrames == 0 && !uiScript_.active())
+      audioDevice_.open(audio_.mixer());  // tests/benchmarks stay silent
   }
   if (benchmark_ && benchmark_->startLanded) options_.startLanded = true;
   if (options_.startIn == "surface") options_.startLanded = true;
@@ -121,7 +127,7 @@ void GameApp::refreshSaveSlots() {
   static constexpr Def defs[] = {{"Slot 1", "saves/slot1.json", true},
                                  {"Slot 2", "saves/slot2.json", true},
                                  {"Slot 3", "saves/slot3.json", true},
-                                 {"Quicksave (F7)", "saves/quicksave.json", true},
+                                 {"Quicksave", "saves/quicksave.json", true},
                                  {"Autosave", "saves/autosave.json", false}};
   slots_.clear();
   for (const auto& d : defs) {
@@ -169,6 +175,7 @@ void GameApp::openMenu(MenuSystem::Screen s) {
   if (market_.isOpen()) market_.close();
   refreshSaveSlots();
   menus_.open(s);
+  menuOpenedFrame_ = frameCount_;
   setMouseCapture(false);
   if (s == MenuSystem::Screen::Main) {  // the world turns slowly behind the title
     camera_.setMode(CameraMode::Orbit, world().playerRenderTransform(1.0f));
@@ -206,6 +213,10 @@ UiInput GameApp::uiInput() {
   in.mouseX = input_.mouseX() * ps;
   in.mouseY = input_.mouseY() * ps;
   in.mouseMoved = in.mouseX != lastUiMouseX_ || in.mouseY != lastUiMouseY_;
+  if (mouseSettleFrames_ > 0) {  // not a real move: it must not steal keyboard focus
+    --mouseSettleFrames_;
+    in.mouseMoved = false;
+  }
   lastUiMouseX_ = in.mouseX;
   lastUiMouseY_ = in.mouseY;
   in.mouseDown = input_.mouseLeft();
@@ -233,9 +244,22 @@ void GameApp::buildMenus() {
   bool canContinue = false;
   for (const auto& s : slots_) canContinue |= s.exists;
   MenuEnv env{settings_, input_, lookNames, lookIds, slots_, canContinue, "FARHORIZON 0.7  ·  test build"};
-  ui_.begin(overlay_, theme_, float(ext.width), float(ext.height), settings_.uiScale, uiInput(), runTime_);
+  UiInput in = uiInput();
+  // Rebinding: this key press belongs to the capture. Just opened: the Esc that opened the pause
+  // menu is still "pressed" this frame and must not close it again.
+  if (menus_.capturingKey() || menuOpenedFrame_ == frameCount_) {
+    UiInput neutral;
+    neutral.mouseX = in.mouseX;
+    neutral.mouseY = in.mouseY;
+    in = neutral;
+  }
+  ui_.begin(overlay_, theme_, float(ext.width), float(ext.height), settings_.uiScale, in, runTime_);
   auto actions = menus_.update(ui_, env);
   ui_.end();
+  if (ui_.focus() != lastMenuFocus_) {  // also lets the player hear the Interface volume setting
+    if (lastMenuFocus_ >= 0) audio_.event("ui", 0.45f, 1.3f);
+    lastMenuFocus_ = ui_.focus();
+  }
   pendingMenuActions_.insert(pendingMenuActions_.end(), actions.begin(), actions.end());
 }
 
@@ -273,7 +297,10 @@ void GameApp::handleMenuActions() {
       case T::QuitToMenu: openMenu(MenuSystem::Screen::Main); break;
       case T::Quit: quit_ = true; break;
       case T::SettingsChanged: applySettings(); break;
-      case T::BindingsChanged: applyBindingOverrides(); break;
+      case T::BindingsChanged:
+        applyBindingOverrides();
+        persistSettings();
+        break;
       case T::ResetBindings:
         if (manifest_)
           if (auto path = manifest_->resolve("config.input", "config")) {
@@ -281,6 +308,7 @@ void GameApp::handleMenuActions() {
             input_.loadBindings(*path, &errs);
           }
         applySettings();
+        persistSettings();
         break;
       case T::SettingsClosed: persistSettings(); break;
     }
@@ -530,6 +558,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
 void GameApp::openMarket() {
   if (!MarketPanel::available(*session_) || market_.isOpen()) return;
   market_.open(*session_);
+  ui_.resetFocus();
   mouseWasCaptured_ = mouseCaptured_;
   setMouseCapture(false);
 }
@@ -687,6 +716,7 @@ void GameApp::handleAppInput() {
   const Transform ship = world().playerRenderTransform(1.0f);
   const bool cockpit = session_->location() == Location::Cockpit;
   handleMenuActions();
+  if (menus_.capturingKey()) return;  // F10, F11... are being offered to the rebind prompt
   if (input_.pressed("app.quit")) quit_ = true;
   if (menus_.active()) {  // menus own input; the simulation is paused (see run())
     if (input_.pressed("debug.screenshot"))
@@ -698,12 +728,7 @@ void GameApp::handleAppInput() {
     }
     return;
   }
-  if (market_.isOpen()) {  // the terminal owns the keyboard while open
-    const VkExtent2D ext = renderer_->extent();
-    const float ps = window_->pixelScale();
-    market_.handleInput(input_, *session_, input_.mouseX() * ps, input_.mouseY() * ps, float(ext.width),
-                        float(ext.height));
-    if (!market_.isOpen()) closeMarket();
+  if (market_.isOpen()) {  // the terminal owns the keyboard while open (MarketPanel::update)
     if (input_.pressed("debug.screenshot"))
       pendingScreenshot_ = std::filesystem::path("screenshots") / std::format("farhorizon_{:03}.png", screenshotCounter_++);
     return;
@@ -811,7 +836,7 @@ void GameApp::handleAppInput() {
     if (input_.pressed("ship.scan")) {
       const auto& t = world().target();
       if (t && t->kind == TargetRef::Kind::Asteroid) session_->mining().startScan(t->index, world().simulationTime());
-      else session_->notify("Target an asteroid to scan (G)");
+      else session_->notify("Target an asteroid to scan");
     }
   }
   if (input_.pressed("debug.reloadAssets")) {
@@ -852,7 +877,7 @@ void GameApp::buildDevOverlay() {
   const VkExtent2D ext = renderer_->extent();
   const OverlayColor normal{205, 215, 225, 230}, dim{140, 150, 165, 230}, bad{255, 110, 100, 255};
   std::vector<std::pair<std::string, OverlayColor>> lines;
-  lines.push_back({std::format("FARHORIZON 0.6  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
+  lines.push_back({std::format("FARHORIZON 0.7  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
                                ctx_->vsync() ? "on" : "off", ctx_->validationEnabled() ? "on" : "off"),
                    dim});
   lines.push_back({std::format("FPS {:5.1f}  CPU {:5.2f} ms (max {:5.2f})  GPU {}", s.avgFps, s.avgCpuMs, s.maxCpuMs,
@@ -876,7 +901,7 @@ void GameApp::buildDevOverlay() {
   lines.push_back({"LMB fire/mine  RMB rocket  1/2 guns/mining  Y nearest hostile  Alt mine  R scan", dim});
   lines.push_back({"M terminal  L dock  K autopilot  F use  F7 save  F8 load", dim});
   lines.push_back({"Z assist  B precision  C recenter  T target  G nearest rock  V camera  F2 dev cam", dim});
-  lines.push_back({"Esc mouse  F1 info  F3 autofly  F4 look  F5 reload  F11 fullscreen  F12 shot  F10 quit", dim});
+  lines.push_back({"Esc menu  ` mouse  F1 info  F3 autofly  F4 look  F5 reload  F11 fullscreen  F12 shot  F10 quit", dim});
 
   const float scale = 1.5f;
   const float lineH = 11.0f * scale;
@@ -906,25 +931,32 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   hc.missileWarning = runTime_ < missileWarnUntil_ + 0.3;
   hc.showContractTracker = settings_.showContractTracker;
   hc.showHints = settings_.showHints;
-  if (menus_.atMainMenu()) {  // title screen: no HUD, just the slowly turning world
+  hc.uiScale = settings_.uiScale;
+  hc.theme = &theme_;
+  hc.bindings = &input_;
+  if (menus_.active()) {  // the world holds still behind the menu; the HUD would only compete with it
     buildMenus();
     return;
   }
   if (market_.isOpen()) {  // the terminal takes the whole screen's attention
-    market_.draw(overlay_, *session_, look.hud, float(ext.width), float(ext.height), runTime_);
+    ui_.begin(overlay_, theme_, float(ext.width), float(ext.height), settings_.uiScale, uiInput(), runTime_);
+    market_.update(ui_, input_, *session_);
+    ui_.end();
+    if (!market_.isOpen()) closeMarket();
     return;
   }
   if (session_->location() == Location::Cockpit && session_->surfaceScene()) {
-    InteriorHudContext sc{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
+    InteriorHudContext sc{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud,
+                          settings_.uiScale, &theme_, &input_, settings_.showContractTracker, settings_.showHints};
     drawSurfaceHud(overlay_, sc);
   } else if (session_->location() == Location::Cockpit) {
     drawHud(overlay_, hc);
   } else {
-    InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
+    InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud,
+                          settings_.uiScale, &theme_, &input_, settings_.showContractTracker, settings_.showHints};
     drawInteriorHud(overlay_, ic);
   }
-  if (showDevOverlay_ && !menus_.active()) buildDevOverlay();
-  if (menus_.active()) buildMenus();
+  if (showDevOverlay_) buildDevOverlay();
 }
 
 int GameApp::run() {
@@ -943,9 +975,29 @@ int GameApp::run() {
     last = now;
     runTime_ = std::chrono::duration<double>(now - start).count();
 
+    if (uiScript_.active()) {
+      uiScript_.step({[this](const std::filesystem::path& p) { pendingScreenshot_ = p; },
+                      [this](const std::string& a) { return input_.bindingNames(a); },
+                      [this] {
+                        using S = MenuSystem::Screen;
+                        switch (menus_.screen()) {
+                          case S::None: return std::string("none");
+                          case S::Main: return std::string("main");
+                          case S::Pause: return std::string("pause");
+                          case S::Options: return std::string("options");
+                          case S::Load: return std::string("load");
+                          case S::Save: return std::string("save");
+                          default: return std::string("confirm");
+                        }
+                      },
+                      [this] { return market_.isOpen(); }, [this] { quit_ = true; }});
+    }
     if (!window_->pollEvents(input_)) break;
     if (window_->isMinimized()) continue;  // keep pending resize until restored (no 0x0 swapchain)
-    if (window_->consumeResized()) ctx_->recreateSwapchain();
+    if (window_->consumeResized()) {
+      ctx_->recreateSwapchain();
+      mouseSettleFrames_ = 8;
+    }
     if (mouseCaptured_ && !window_->hasFocus()) setMouseCapture(false);
 
     handleAppInput();
@@ -1419,6 +1471,10 @@ int GameApp::run() {
   }
   log::info("app", "exiting after {} frames, {} rebases, {} impacts, {} validation messages", frameCount_, rebases_,
             world().player().collisions, VkContext::validationMessageCount());
+  if (uiScript_.failures() > 0) {
+    log::error("ui-script", "{} expectation(s) failed", uiScript_.failures());
+    return 3;
+  }
   return VkContext::validationMessageCount() > 0 && options_.validation ? 2 : 0;
 }
 

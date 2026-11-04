@@ -2,16 +2,16 @@
 
 | # | Status | Area | Description |
 |---|---|---|---|
-| 1 | fixed (0.2) | build | Windows MSVC build + tests green in CI (official LunarG SDK installer). The game has not yet been *run* on a Windows GPU, since CI has no GPU. |
+| 1 | fixed (0.7) | build | Windows MSVC build + tests green in CI. The game now also builds and runs on a Windows GPU (RTX 3080). |
 | 2 | fixed (0.2) | render | HDR target + tonemap pass + bloom (ADR 0004). |
 | 3 | open | render | No image-based lighting. The shadow side of ships relies on a hemispheric ambient approximation. |
 | 4 | open | render | One device allocation per buffer/image. Fine for Stage 1, needs a sub-allocator before asset counts grow. |
 | 5 | partial (0.2) | assets | Sockets (`socket_*`, `hardpoint_*`) are imported. Collision helpers and LOD nodes are still baked into the visual mesh. |
 | 6 | open | assets | Hot reload is manual (F5). There is no file watcher yet. |
-| 7 | open | platform | Under Xvfb (no window manager) the F11 toggle state cannot be observed. Verify on Windows. |
+| 7 | fixed (0.7) | platform | Fullscreen toggles verified on Windows, from Options, with the swapchain recreated both ways. F11 itself is the same code path. |
 | 8 | info | perf | The software rasterizer (llvmpipe) is GPU-bound on the procedural sky (5-octave fbm ×3 per pixel). This should be negligible on real GPUs. Bake it to a cubemap if it ever shows up in profiles. |
 | 9 | fixed (0.3) | physics | Props support oriented-box colliders; docking uses scripted capture onto a roof pad. |
-| 10 | open | input | No in-game rebinding UI; rebinding means editing `input.json` and pressing F5. |
+| 10 | fixed (0.7) | input | In-game rebinding in Options > Controls (ADR 0010). One key per action in the UI; several keys per action still work through `input.json`. |
 | 11 | open | camera | In flight, the cockpit camera still sees the exterior hull top as a flat "dash". The walkable cabin exists, but flight uses the exterior view. |
 | 12 | open | render | The retro look costs ~25 ms more than `clean` on the software rasteriser (expected to be negligible on GPUs). Bloom is iterative Gaussian, not a mip pyramid. |
 | 13 | fixed (0.5) | gameplay | In-system travel drive implemented (ADR 0008). |
@@ -23,7 +23,7 @@
 | 19 | open | render | Point lights have no shadows and shine through walls; lamp placement accounts for it. |
 | 20 | fixed (0.5) | economy | Gale Ridge Supply Shed creates the first trade route. |
 | 21 | open | mining | Asteroids do not shrink visually as they deplete (yield only). |
-| 22 | open | ui | The market panel is the only menu. Settings, a main menu and save slots come in Stage 7. |
+| 22 | fixed (0.7) | ui | Main, pause, options, load/save screens and a restyled terminal. |
 | 23 | open | render | The planet impostor is the most expensive pass on the CPU rasteriser (~178 ms with Varga filling the view). Bake the surface to a cubemap if real GPUs ever show it. |
 | 24 | open | landing | The descent and approach are scripted (no manual landing on the surface yet), and the speed readout shows the cinematic plunge rate. |
 | 25 | open | planets | Planets do not rotate or orbit; site lighting is fixed (dusk at Gale Ridge). |
@@ -34,3 +34,9 @@
 | 30 | open | combat | Salvage canisters reuse the asteroid chunk mesh (tinted cyan glow); there is no dedicated canister model. |
 | 31 | open | contracts | No reputation or faction standing; contracts have no deadlines; bounties count any kill of the faction, even outside the contract area. |
 | 32 | open | combat | The raider and hauler are Kenney CC0 placeholders (`craft_speederA`, `craft_miner`). At combat range they are a few pixels, so the HUD markers do most of the work. |
+| 33 | open | ui | The UI theme is a placeholder until the owner's reference art arrives. |
+| 34 | open | ui | Settings other than key bindings are written when you leave Options, so closing the window from inside Options loses changes made there. |
+| 35 | open | ui | Menus and the terminal are keyboard and mouse only; there is no gamepad support. Mouse buttons cannot be rebound. |
+| 36 | open | hud | Marker labels can overlap when objects line up on screen (station and target, for example). |
+| 37 | open | hud | At 720p and 100% scale the small text is about 11 px, which is hard to read; Interface scale helps. Not judged by a human yet. |
+| 38 | info | tools | Scripted UI runs exit with code 2 under `--validation` on a PC with a broken global Vulkan layer, because the loader's message counts as a validation message. Seen with ReShade on the dev PC; set `VK_LOADER_LAYERS_DISABLE` to rule it out. |

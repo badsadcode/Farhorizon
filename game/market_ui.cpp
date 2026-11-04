@@ -3,16 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <optional>
 
 #include "engine/platform/input.h"
 
 namespace fh {
 
 namespace {
-OverlayColor col(const Vec4& c, float alpha = 1.0f) {
-  auto b = [](float v) { return std::uint8_t(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
-  return {b(c.x), b(c.y), b(c.z), b(c.w * alpha)};
-}
 std::string credits(std::int64_t c) {
   std::string s = std::to_string(c < 0 ? -c : c);
   for (int i = int(s.size()) - 3; i > 0; i -= 3) s.insert(size_t(i), ",");
@@ -26,7 +23,13 @@ const char* tabName(MarketPanel::Tab t) {
   }
   return "?";
 }
-std::string clip(const std::string& s, size_t n) { return s.size() <= n ? s : s.substr(0, n - 3) + "..."; }
+std::string keyOf(const InputState& in, const char* action) {
+  const auto names = in.bindingNames(action);
+  return names.empty() ? std::string("--") : names.front();
+}
+
+constexpr int kMaxVisibleRows = 8;
+constexpr float kRowH = 40, kBtnH = 28;
 }  // namespace
 
 bool MarketPanel::available(const GameSession& session) {
@@ -36,8 +39,8 @@ bool MarketPanel::available(const GameSession& session) {
 
 void MarketPanel::open(const GameSession& session) {
   open_ = true;
+  justOpened_ = true;
   message_.clear();
-  selected_ = 0;
   const auto t = tabs(session);
   if (std::find(t.begin(), t.end(), tab_) == t.end()) tab_ = t.empty() ? Tab::Market : t.front();
 }
@@ -50,45 +53,10 @@ std::vector<MarketPanel::Tab> MarketPanel::tabs(const GameSession& session) cons
   return t;
 }
 
-MarketPanel::Layout MarketPanel::layout(float width, float height) {
-  Layout l;
-  l.scale = width >= 2400 ? 3.0f : 2.0f;
-  l.w = std::min(width - 40.0f, 560.0f * l.scale);
-  l.x = (width - l.w) * 0.5f;
-  l.y = std::max(20.0f, height * 0.10f);
-  l.rowH = 14.0f * l.scale;
-  l.tabY = l.y + 34.0f * l.scale;
-  l.tableY = l.y + 56.0f * l.scale;
-  l.buttonW = 40.0f * l.scale;
-  l.allX = l.x + l.w - l.buttonW - 8.0f * l.scale;
-  l.sellX = l.allX - l.buttonW - 4.0f * l.scale;
-  l.buyX = l.sellX - l.buttonW - 4.0f * l.scale;
-  return l;
-}
-
-int MarketPanel::rowCount(GameSession& session) const {
-  switch (tab_) {
-    case Tab::Market: {
-      Market* m = session.dockedMarket();
-      return m ? int(m->def().entries.size()) : 0;
-    }
-    case Tab::Services: {
-      int n = session.hasService("repair") ? 1 : 0;
-      if (session.hasService("upgrades") && session.upgradeDb()) n += int(session.upgradeDb()->all().size());
-      return n;
-    }
-    case Tab::Contracts: return int(session.contractOffers().size() + session.contracts().active().size());
-  }
-  return 0;
-}
-
-void MarketPanel::doTrade(GameSession& session, int units) {
-  Market* m = session.dockedMarket();
-  if (!m || selected_ < 0 || selected_ >= int(m->def().entries.size())) return;
-  const std::string& id = m->def().entries[size_t(selected_)].commodity;
-  const CommodityDef* c = session.commodities().find(id);
-  const TradeResult r = session.trade(id, units);
-  const std::string name = c ? c->name : id;
+void MarketPanel::doTrade(GameSession& session, const std::string& commodity, int units) {
+  const CommodityDef* c = session.commodities().find(commodity);
+  const TradeResult r = session.trade(commodity, units);
+  const std::string name = c ? c->name : commodity;
   messageGood_ = r.units > 0;
   if (r.units > 0)
     message_ = std::format("{} {} x {} for {}", units > 0 ? "Bought" : "Sold", r.units, name, credits(r.credits));
@@ -96,263 +64,262 @@ void MarketPanel::doTrade(GameSession& session, int units) {
     message_ = r.message.empty() ? "No trade" : r.message;
 }
 
-void MarketPanel::activate(GameSession& session) {
-  ActionResult r{false, ""};
-  if (tab_ == Tab::Services) {
-    int row = selected_;
-    if (session.hasService("repair")) {
-      if (row == 0) r = session.repair();
-      --row;
-    }
-    if (row >= 0 && session.upgradeDb() && row < int(session.upgradeDb()->all().size()))
-      r = session.buyUpgrade(session.upgradeDb()->all()[size_t(row)].id);
-  } else if (tab_ == Tab::Contracts) {
-    const auto offers = session.contractOffers();
-    if (selected_ < int(offers.size())) r = session.acceptContract(offers[size_t(selected_)]);
-    else r = {false, "Already yours. DEL abandons it."};
-  } else {
-    return;
-  }
+void MarketPanel::show(const ActionResult& r) {
   if (r.message.empty()) return;
   message_ = r.message;
   messageGood_ = r.ok;
 }
 
-void MarketPanel::abandon(GameSession& session) {
-  if (tab_ != Tab::Contracts) return;
-  const int i = selected_ - int(session.contractOffers().size());
-  if (i < 0) return;
-  const ActionResult r = session.abandonContract(size_t(i));
-  message_ = r.message;
-  messageGood_ = false;
-}
-
-void MarketPanel::handleInput(const InputState& in, GameSession& session, float mx, float my, float width,
-                              float height) {
+void MarketPanel::update(Ui& ui, const InputState& in, GameSession& session) {
   const auto ts = tabs(session);
-  if (ts.empty() || in.pressed("ui.close") || in.pressed("ui.market")) {
+  const bool closeKey = !justOpened_ && (in.pressed("ui.close") || in.pressed("ui.market"));
+  justOpened_ = false;
+  if (ts.empty() || closeKey) {
     close();
     return;
   }
-  const Layout l = layout(width, height);
-  auto setTab = [&](Tab t) {
-    if (t == tab_) return;
-    tab_ = t;
-    selected_ = 0;
-    message_.clear();
-  };
-  if (in.pressed("ui.tabNext")) {
-    auto it = std::find(ts.begin(), ts.end(), tab_);
-    setTab(it == ts.end() || std::next(it) == ts.end() ? ts.front() : *std::next(it));
-  }
-  if (std::find(ts.begin(), ts.end(), tab_) == ts.end()) setTab(ts.front());
-  if (in.mouseLeftPressed() && my >= l.tabY - 2 && my <= l.tabY + l.rowH) {
-    float tx = l.x + 8.0f * l.scale;
-    for (Tab t : ts) {
-      const float w = OverlayBuilder::textWidth(std::string("[") + tabName(t) + "]", l.scale);
-      if (mx >= tx && mx <= tx + w) setTab(t);
-      tx += w + 12.0f * l.scale;
-    }
-  }
-  const int rows = rowCount(session);
-  if (rows > 0) {
-    selected_ = std::clamp(selected_, 0, rows - 1);
-    if (in.pressed("ui.up")) selected_ = (selected_ + rows - 1) % rows;
-    if (in.pressed("ui.down")) selected_ = (selected_ + 1) % rows;
-  }
-  if (tab_ == Tab::Market) {
-    Market* m = session.dockedMarket();
-    if (!m) return;
-    const int mult = in.down("ui.modifier") ? 10 : 1;
-    if (in.pressed("ui.buy")) doTrade(session, mult);
-    if (in.pressed("ui.sell")) doTrade(session, -mult);
-    if (in.pressed("ui.sellAll") && rows > 0) {
-      const std::string& id = m->def().entries[size_t(selected_)].commodity;
-      if (const int have = session.cargo().units(id); have > 0) doTrade(session, -have);
-      else message_ = "Nothing to sell";
-    }
-  } else {
-    if (in.pressed("ui.accept") || in.pressed("ui.buy")) activate(session);
-    if (in.pressed("ui.abandon")) abandon(session);
-  }
-  if (in.mouseLeftPressed()) {
-    for (int r = 0; r < rows; ++r) {
-      const float y = l.tableY + l.rowH * float(r + 1);
-      if (my < y - 2 || my > y + l.rowH - 2 || mx < l.x || mx > l.x + l.w) continue;
-      const bool again = selected_ == r;
-      selected_ = r;
-      if (tab_ == Tab::Market) {
-        const int mult = in.down("ui.modifier") ? 10 : 1;
-        if (mx >= l.buyX && mx <= l.buyX + l.buttonW) doTrade(session, mult);
-        else if (mx >= l.sellX && mx <= l.sellX + l.buttonW) doTrade(session, -mult);
-        else if (mx >= l.allX && mx <= l.allX + l.buttonW) {
-          const std::string& id = session.dockedMarket()->def().entries[size_t(r)].commodity;
-          if (const int have = session.cargo().units(id); have > 0) doTrade(session, -have);
-        }
-      } else if (again || mx >= l.allX) {
-        activate(session);  // click a selected row (or its action column) to act
-      }
-    }
-  }
-}
+  if (std::find(ts.begin(), ts.end(), tab_) == ts.end()) tab_ = ts.front();
 
-void MarketPanel::draw(OverlayBuilder& o, GameSession& session, const HudPalette& pal, float width, float height,
-                       double time) const {
-  const auto ts = tabs(session);
-  if (ts.empty()) return;
-  const Layout l = layout(width, height);
-  const OverlayColor fg = col(pal.primary), dim = col(pal.primary, 0.55f), nav = col(pal.nav), warn = col(pal.warn);
-  const int rows = std::max(rowCount(session), 1);
-  const float h = (56.0f + 14.0f * float(rows + 1) + 58.0f) * l.scale;
-  // Terminal frame with a faint phosphor wash and scan bars.
-  o.rect(0, 0, width, height, {0, 0, 0, 120});
-  o.rect(l.x, l.y, l.w, h, {4, 8, 6, 248});
-  for (float sy = l.y; sy < l.y + h; sy += 3.0f * l.scale) o.rect(l.x, sy, l.w, 1.0f, {0, 0, 0, 60});
-  o.line(l.x, l.y, l.x + l.w, l.y, 2, fg);
-  o.line(l.x, l.y + h, l.x + l.w, l.y + h, 2, fg);
-  o.line(l.x, l.y, l.x, l.y + h, 2, fg);
-  o.line(l.x + l.w, l.y, l.x + l.w, l.y + h, 2, fg);
-  const float pad = 8.0f * l.scale;
-  Market* m = session.dockedMarket();
+  const UiTheme& t = ui.theme();
+  ui.backdrop(0.7f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = std::min(1240.0f, W - 80);
+  const float headerH = 156, footerH = 174;
+  const int visible = std::clamp(int((H - 110 - headerH - footerH) / kRowH), 3, kMaxVisibleRows);
+  const float ph = headerH + kRowH * float(visible) + footerH;
+  const float px = (W - pw) * 0.5f, py = std::max(16.0f, (H - ph) * 0.5f - 14);
+  const float pad = t.padding + 10, rx = px + pad, rw = pw - pad * 2;
+  ui.panel(px, py, pw, ph);
+
+  // ---- Header: where you are, what you have ----
+  Market* market = session.dockedMarket();
   const std::string title =
-      "> " + (m ? m->def().name : locationDisplayName(session.contractLocations(), session.currentLocationId()));
-  o.text(l.x + pad, l.y + pad, title, fg, l.scale);
-  const bool blink = std::fmod(time, 1.0) < 0.5;
-  o.text(l.x + pad + OverlayBuilder::textWidth(title, l.scale) + 4, l.y + pad, blink ? "_" : " ", fg, l.scale);
+      market ? market->def().name : locationDisplayName(session.contractLocations(), session.currentLocationId());
+  const float titlePx = t.heading + 4;
+  ui.label(rx, py + 20, title, titlePx, t.textBright, FontFace::Sans);
+  if (std::fmod(ui.time(), 1.0) < 0.5)  // terminal cursor
+    ui.label(rx + OverlayBuilder::measure(title, ui.s(titlePx), FontFace::Sans) / ui.scale() + 6, py + 20, "_", titlePx,
+             t.text, FontFace::Sans);
   const Durability& dur = session.combat().player();
-  o.text(l.x + pad, l.y + pad + 12 * l.scale,
-         std::format("CREDITS {}    HOLD {:.0f}/{:.0f} t    HULL {:.0f}/{:.0f}", credits(session.credits()),
-                     session.cargo().usedTons(), session.cargo().capacityTons(), dur.hull, dur.maxHull),
-         nav, l.scale);
-  // Tabs.
-  float tx = l.x + pad;
-  for (Tab t : ts) {
-    const std::string label = std::string("[") + tabName(t) + "]";
-    const float w = OverlayBuilder::textWidth(label, l.scale);
-    if (t == tab_) o.rect(tx - 2, l.tabY - 3, w + 4, l.rowH, col(pal.primary, 0.25f));
-    o.text(tx, l.tabY, label, t == tab_ ? fg : dim, l.scale);
-    tx += w + 12.0f * l.scale;
+  const float statsX = px + pw - pad;
+  ui.label(statsX, py + 18, credits(session.credits()), t.heading, t.textBright, FontFace::Mono, TextAlign::Right);
+  ui.label(statsX, py + 54,
+           std::format("HOLD {:.0f}/{:.0f} t    HULL {:.0f}/{:.0f}", session.cargo().usedTons(), session.cargo().capacityTons(),
+                       dur.hull, dur.maxHull),
+           t.small, t.text, FontFace::Mono, TextAlign::Right);
+
+  // ---- Tabs ----
+  std::vector<std::string> labels;
+  int current = 0;
+  for (size_t i = 0; i < ts.size(); ++i) {
+    labels.push_back(tabName(ts[i]));
+    if (ts[i] == tab_) current = int(i);
   }
-  o.line(l.x + pad, l.tabY + l.rowH, l.x + l.w - pad, l.tabY + l.rowH, 1, dim);
+  const int picked = ui.tabs(rx, py + 66, labels, current);
+  if (picked != current) {
+    tab_ = ts[size_t(picked)];
+    ui.resetFocus();
+    message_.clear();
+  }
 
-  std::string description;
-  auto rowY = [&](int r) { return l.tableY + l.rowH * float(r + 1); };
-  auto highlight = [&](int r) {
-    if (r == selected_) o.rect(l.x + 2, rowY(r) - 3, l.w - 4, l.rowH, col(pal.primary, 0.18f));
-    return r == selected_ ? fg : col(pal.primary, 0.8f);
+  // ---- Table ----
+  const float headY = py + 120, rowsY = headY + 32;
+  const float small = t.small;
+  auto column = [&](float x, const char* name, TextAlign a = TextAlign::Left) {
+    ui.label(x, headY, name, small, t.textDim, FontFace::Mono, a);
   };
-  std::string help;
+  auto textY = [&](float y) { return y + (kRowH - OverlayBuilder::lineHeight(ui.s(t.body)) / ui.scale()) * 0.5f; };
+  std::string description;
+  int rowIndex = 0;
+  int count = 0;
+  float y = rowsY;
+  int first = 0;
+  auto beginList = [&](int rows) {
+    count = rows;
+    first = ui.scrollFor(0, rows, visible);
+  };
+  // Runs `draw(index, y)` for visible rows; rows scrolled away keep their focus index.
+  auto rowVisible = [&](int i) {
+    if (i < first || i >= first + visible) {
+      ui.skipFocusable();
+      return false;
+    }
+    return true;
+  };
 
-  if (tab_ == Tab::Market && m) {
-    const float cName = l.x + pad, cStock = l.x + l.w * 0.34f, cBuy = l.x + l.w * 0.45f, cSell = l.x + l.w * 0.55f,
-                cHold = l.x + l.w * 0.65f;
-    o.text(cName, l.tableY, "COMMODITY", dim, l.scale);
-    o.text(cStock, l.tableY, "STOCK", dim, l.scale);
-    o.text(cBuy, l.tableY, "BUY", dim, l.scale);
-    o.text(cSell, l.tableY, "SELL", dim, l.scale);
-    o.text(cHold, l.tableY, "HOLD", dim, l.scale);
+  const float btnY = (kRowH - kBtnH) * 0.5f;
+  std::string help;
+  if (tab_ == Tab::Market && market) {
+    const float cStock = rx + rw * 0.36f, cBuy = rx + rw * 0.47f, cSell = rx + rw * 0.56f, cHold = rx + rw * 0.65f;
+    const float bw = 76, bAll = rx + rw - bw - 8, bSell = bAll - bw - 8, bBuy = bSell - bw - 8;
+    column(rx + 16, "COMMODITY");
+    column(cStock, "STOCK", TextAlign::Right);
+    column(cBuy, "BUY", TextAlign::Right);
+    column(cSell, "SELL", TextAlign::Right);
+    column(cHold, "HOLD", TextAlign::Right);
     const CommodityDb& db = session.commodities();
-    const int n = int(m->def().entries.size());
-    for (int r = 0; r < n; ++r) {
-      const MarketEntryDef& e = m->def().entries[size_t(r)];
+    const auto& entries = market->def().entries;
+    beginList(int(entries.size()));
+    const int mult = in.down("ui.modifier") ? 10 : 1;
+    for (int r = 0; r < count; ++r) {
+      if (!rowVisible(r)) continue;
+      const MarketEntryDef& e = entries[size_t(r)];
       const CommodityDef* c = db.find(e.commodity);
-      const float y = rowY(r);
-      const bool sel = r == selected_;
-      const OverlayColor rc = highlight(r);
-      o.text(cName, y, (sel ? "> " : "  ") + (c ? c->name : e.commodity), rc, l.scale);
-      o.text(cStock, y, std::to_string(m->stock(r)), rc, l.scale);
-      o.text(cBuy, y, e.sells ? std::to_string(m->buyPrice(db, r)) : std::string("--"), rc, l.scale);
-      o.text(cSell, y, e.buys ? std::to_string(m->sellPrice(db, r)) : std::string("--"), rc, l.scale);
+      const Ui::RowState st = ui.row(rx, y, rw, kRowH);
+      const OverlayColor fg = st.focused ? t.textBright : t.text;
+      const float ty = textY(y);
       const int have = session.cargo().units(e.commodity);
-      o.text(cHold, y, have ? std::to_string(have) : std::string("."), have ? nav : dim, l.scale);
-      auto button = [&](float bx, const char* label, bool enabled) {
-        const OverlayColor bc = enabled ? (sel ? fg : dim) : col(pal.primary, 0.2f);
-        o.line(bx, y - 2, bx + l.buttonW, y - 2, 1, bc);
-        o.line(bx, y + l.rowH - 5, bx + l.buttonW, y + l.rowH - 5, 1, bc);
-        o.text(bx + (l.buttonW - OverlayBuilder::textWidth(label, l.scale)) * 0.5f, y, label, bc, l.scale);
-      };
-      button(l.buyX, "BUY", e.sells);
-      button(l.sellX, "SELL", e.buys && have > 0);
-      button(l.allX, "ALL", e.buys && have > 0);
-      if (sel && c) description = c->description;
-    }
-    help = "UP/DOWN select  RIGHT buy  LEFT sell  SHIFT x10  HOME sell all  TAB next  ESC close";
-  } else if (tab_ == Tab::Services) {
-    o.text(l.x + pad, l.tableY, "SERVICE", dim, l.scale);
-    o.text(l.x + l.w * 0.62f, l.tableY, "PRICE", dim, l.scale);
-    int r = 0;
-    if (session.hasService("repair")) {
-      const OverlayColor rc = highlight(r);
-      const auto cost = session.repairCost();
-      o.text(l.x + pad, rowY(r), std::string(r == selected_ ? "> " : "  ") + "Hull repair", rc, l.scale);
-      o.text(l.x + l.w * 0.62f, rowY(r), cost > 0 ? credits(cost) : std::string("--"), rc, l.scale);
-      o.text(l.x + l.w * 0.82f, rowY(r), cost > 0 ? "REPAIR" : "SOUND", cost > 0 ? rc : dim, l.scale);
-      if (r == selected_)
-        description = std::format("Patch the hull back to {:.0f} points. Shields recharge on their own.", dur.maxHull);
-      ++r;
-    }
-    if (session.hasService("upgrades") && session.upgradeDb()) {
-      for (const auto& u : session.upgradeDb()->all()) {
-        const OverlayColor rc = highlight(r);
-        const bool owned = session.ownsUpgrade(u.id);
-        o.text(l.x + pad, rowY(r), (r == selected_ ? "> " : "  ") + u.name, owned ? dim : rc, l.scale);
-        o.text(l.x + l.w * 0.62f, rowY(r), credits(u.price), owned ? dim : (session.credits() >= u.price ? rc : warn),
-               l.scale);
-        o.text(l.x + l.w * 0.82f, rowY(r), owned ? "FITTED" : "FIT", owned ? nav : rc, l.scale);
-        if (r == selected_) description = u.description;
-        ++r;
+      ui.label(rx + 16, ty, fitText(c ? c->name : e.commodity, ui.s(t.body), ui.s(rw * 0.28f)), t.body, fg);
+      ui.label(cStock, ty, std::to_string(market->stock(r)), t.body, fg, FontFace::Mono, TextAlign::Right);
+      ui.label(cBuy, ty, e.sells ? std::to_string(market->buyPrice(db, r)) : std::string("--"), t.body, e.sells ? fg : t.textDim,
+               FontFace::Mono, TextAlign::Right);
+      ui.label(cSell, ty, e.buys ? std::to_string(market->sellPrice(db, r)) : std::string("--"), t.body, e.buys ? fg : t.textDim,
+               FontFace::Mono, TextAlign::Right);
+      ui.label(cHold, ty, have ? std::to_string(have) : std::string("--"), t.body, have ? t.accent : t.textDim, FontFace::Mono,
+               TextAlign::Right);
+      const bool canSell = e.buys && have > 0;
+      if (ui.inlineButton(bBuy, y + btnY, bw, kBtnH, mult > 1 ? "BUY 10" : "BUY", e.sells)) doTrade(session, e.commodity, mult);
+      if (ui.inlineButton(bSell, y + btnY, bw, kBtnH, mult > 1 ? "SELL 10" : "SELL", canSell)) doTrade(session, e.commodity, -mult);
+      if (ui.inlineButton(bAll, y + btnY, bw, kBtnH, "ALL", canSell)) doTrade(session, e.commodity, -have);
+      if (st.focused) {
+        if (c) description = c->description;
+        if (in.pressed("ui.buy")) doTrade(session, e.commodity, mult);
+        if (in.pressed("ui.sell")) doTrade(session, e.commodity, -mult);
+        if (in.pressed("ui.sellAll")) {
+          if (have > 0) doTrade(session, e.commodity, -have);
+          else {
+            message_ = "Nothing to sell";
+            messageGood_ = false;
+          }
+        }
       }
-    } else if (r == 1) {
-      o.text(l.x + pad, rowY(1), "  No shipyard at this outpost.", dim, l.scale);
+      y += kRowH;
     }
-    help = "UP/DOWN select  ENTER repair / fit  TAB next  ESC close";
+    help = "UP/DOWN select    RIGHT buy    LEFT sell    SHIFT x10    HOME sell all    TAB next    ESC close";
+  } else if (tab_ == Tab::Services) {
+    const float cPrice = rx + rw * 0.76f, bw = 110, bx = rx + rw - bw - 8;
+    column(rx + 16, "SERVICE");
+    column(cPrice, "PRICE", TextAlign::Right);
+    const bool repair = session.hasService("repair");
+    const bool yard = session.hasService("upgrades") && session.upgradeDb();
+    beginList((repair ? 1 : 0) + (yard ? int(session.upgradeDb()->all().size()) : 0));
+    if (repair) {
+      if (rowVisible(rowIndex)) {
+        const auto cost = session.repairCost();
+        const Ui::RowState st = ui.row(rx, y, rw, kRowH);
+        const float ty = textY(y);
+        const OverlayColor fg = st.focused ? t.textBright : t.text;
+        ui.label(rx + 16, ty, "Hull repair", t.body, fg);
+        ui.label(cPrice, ty, cost > 0 ? credits(cost) : std::string("--"), t.body, cost > session.credits() ? t.danger : fg,
+                 FontFace::Mono, TextAlign::Right);
+        const bool clicked = ui.inlineButton(bx, y + btnY, bw, kBtnH, cost > 0 ? "REPAIR" : "SOUND", cost > 0);
+        if (clicked || (st.accepted && cost > 0)) show(session.repair());
+        if (st.focused)
+          description = std::format("Patch the hull back to {:.0f} points. Shields recharge on their own.", dur.maxHull);
+        y += kRowH;
+      }
+      ++rowIndex;
+    }
+    if (yard) {
+      for (const auto& u : session.upgradeDb()->all()) {
+        if (rowVisible(rowIndex)) {
+          const Ui::RowState st = ui.row(rx, y, rw, kRowH);
+          const bool owned = session.ownsUpgrade(u.id);
+          const float ty = textY(y);
+          const OverlayColor fg = owned ? t.textDim : st.focused ? t.textBright : t.text;
+          ui.label(rx + 16, ty, u.name, t.body, fg);
+          ui.label(cPrice, ty, credits(u.price), t.body, owned ? t.textDim : session.credits() >= u.price ? fg : t.danger,
+                   FontFace::Mono, TextAlign::Right);
+          const bool clicked = ui.inlineButton(bx, y + btnY, bw, kBtnH, owned ? "FITTED" : "FIT", !owned);
+          if (clicked || (st.accepted && !owned)) show(session.buyUpgrade(u.id));
+          if (st.focused) description = u.description;
+          y += kRowH;
+        }
+        ++rowIndex;
+      }
+    } else {
+      ui.label(rx + 16, textY(y), "No shipyard at this outpost.", t.body, t.textDim);
+    }
+    help = "UP/DOWN select    ENTER repair / fit    TAB next    ESC close";
   } else if (tab_ == Tab::Contracts) {
     const auto offers = session.contractOffers();
     const auto& active = session.contracts().active();
-    o.text(l.x + pad, l.tableY, "JOB", dim, l.scale);
-    o.text(l.x + l.w * 0.70f, l.tableY, "PAY", dim, l.scale);
-    int r = 0;
+    const float cPay = rx + rw * 0.74f, cState = rx + rw * 0.88f, bw = 110, bx = rx + rw - bw - 8;
+    column(rx + 16, "JOB");
+    column(cPay, "PAY", TextAlign::Right);
+    beginList(int(offers.size() + active.size()));
+    const float titleW = rw * 0.58f;
     for (const auto& c : offers) {
-      const OverlayColor rc = highlight(r);
-      o.text(l.x + pad, rowY(r), (r == selected_ ? "> " : "  ") + clip(c.title, 42), rc, l.scale);
-      o.text(l.x + l.w * 0.70f, rowY(r), credits(c.reward), rc, l.scale);
-      o.text(l.x + l.w * 0.86f, rowY(r), "TAKE", rc, l.scale);
-      if (r == selected_) description = c.description;
-      ++r;
+      if (rowVisible(rowIndex)) {
+        const Ui::RowState st = ui.row(rx, y, rw, kRowH);
+        const float ty = textY(y);
+        const OverlayColor fg = st.focused ? t.textBright : t.text;
+        ui.label(rx + 16, ty, fitText(c.title, ui.s(t.body), ui.s(titleW)), t.body, fg);
+        ui.label(cPay, ty, credits(c.reward), t.body, fg, FontFace::Mono, TextAlign::Right);
+        const bool clicked = ui.inlineButton(bx, y + btnY, bw, kBtnH, "TAKE");
+        if (clicked || st.accepted) show(session.acceptContract(c));
+        if (st.focused) description = c.description;
+        y += kRowH;
+      }
+      ++rowIndex;
     }
-    if (offers.empty()) o.text(l.x + pad, rowY(-1) + l.rowH, " ", dim, l.scale);
+    size_t heldIndex = 0;
+    std::optional<size_t> toAbandon;
     for (const auto& c : active) {
-      const OverlayColor rc = highlight(r);
-      std::string status;
-      switch (c.kind) {
-        case ContractKind::Courier: status = "DELIVER"; break;
-        case ContractKind::Procurement:
-          status = std::format("{}/{}", std::min(session.cargo().units(c.commodity), c.units), c.units);
-          break;
-        case ContractKind::Bounty: status = c.ready() ? "REPORT" : std::format("{}/{}", c.kills, c.killsRequired); break;
+      if (rowVisible(rowIndex)) {
+        const Ui::RowState st = ui.row(rx, y, rw, kRowH);
+        const float ty = textY(y);
+        const OverlayColor fg = c.ready() ? t.ok : st.focused ? t.textBright : t.text;
+        ui.label(rx + 16, ty, fitText("* " + c.title, ui.s(t.body), ui.s(titleW)), t.body, fg);
+        ui.label(cPay, ty, credits(c.reward), t.body, fg, FontFace::Mono, TextAlign::Right);
+        std::string status;
+        switch (c.kind) {
+          case ContractKind::Courier: status = "DELIVER"; break;
+          case ContractKind::Procurement:
+            status = std::format("{}/{}", std::min(session.cargo().units(c.commodity), c.units), c.units);
+            break;
+          case ContractKind::Bounty: status = c.ready() ? "REPORT" : std::format("{}/{}", c.kills, c.killsRequired); break;
+        }
+        ui.label(cState - 8, ty, status, t.small, t.accent, FontFace::Mono, TextAlign::Right);
+        if (ui.inlineButton(bx, y + btnY, bw, kBtnH, "DROP")) toAbandon = heldIndex;
+        if (st.accepted) {
+          message_ = "Already yours. " + keyOf(in, "ui.abandon") + " abandons it.";
+          messageGood_ = false;
+        }
+        if (st.focused) {
+          if (in.pressed("ui.abandon")) toAbandon = heldIndex;
+          const auto& locs = session.contractLocations();
+          description = c.description;
+          if (c.kind == ContractKind::Courier) description += "  Deliver to " + locationDisplayName(locs, c.destination) + ".";
+          else description += "  Report to " + locationDisplayName(locs, c.issuer) + ".";
+        }
+        y += kRowH;
       }
-      o.text(l.x + pad, rowY(r), (r == selected_ ? "> * " : "  * ") + clip(c.title, 40), c.ready() ? nav : rc, l.scale);
-      o.text(l.x + l.w * 0.70f, rowY(r), credits(c.reward), rc, l.scale);
-      o.text(l.x + l.w * 0.86f, rowY(r), status, nav, l.scale);
-      if (r == selected_) {
-        description = c.description;
-        if (c.kind == ContractKind::Courier)
-          description += "  Deliver to " + locationDisplayName(session.contractLocations(), c.destination) + ".";
-        else
-          description += "  Report to " + locationDisplayName(session.contractLocations(), c.issuer) + ".";
-      }
-      ++r;
+      ++rowIndex;
+      ++heldIndex;
     }
-    if (r == 0) o.text(l.x + pad, rowY(0), "  The board is empty. Come back tomorrow.", dim, l.scale);
-    help = std::format("ENTER take job  DEL abandon (* = yours, max {})  TAB next  ESC close",
-                       session.contractDb() ? session.contractDb()->maxActive : 3);
+    if (toAbandon) {
+      const ActionResult r = session.abandonContract(*toAbandon);
+      message_ = r.message;
+      messageGood_ = false;
+    }
+    if (count == 0) ui.label(rx + 16, textY(y), "The board is empty. Come back tomorrow.", t.body, t.textDim);
+    help = std::format("UP/DOWN select    ENTER take job    {} abandon (* = yours, max {})    TAB next    ESC close",
+                       keyOf(in, "ui.abandon"), session.contractDb() ? session.contractDb()->maxActive : 3);
+  }
+  if (count > visible) {  // scroll indicator
+    const float sx = ui.s(px + pw - 22), sy0 = ui.s(rowsY), sh = ui.s(kRowH * float(visible));
+    ui.draw().rect(sx, sy0, 2, sh, t.textDim.withAlpha(0.4f));
+    ui.draw().rect(sx - 1, sy0 + sh * float(first) / float(count), 4, sh * float(visible) / float(count), t.text);
   }
 
-  const float fy = l.tableY + l.rowH * float(rows + 1) + 8 * l.scale;
-  o.text(l.x + pad, fy, clip(description, 96), dim, l.scale * 0.85f);
-  o.text(l.x + pad, fy + 14 * l.scale, message_.empty() ? std::string(" ") : message_, messageGood_ ? nav : warn,
-         l.scale);
-  o.text(l.x + pad, fy + 28 * l.scale, help, dim, l.scale * 0.8f);
+  // ---- Footer: details, last result, close ----
+  const float footY = rowsY + kRowH * float(visible) + 14;
+  ui.textBlock(rx + 16, footY, rw - 32, description, t.small, t.text, 3);
+  const float closeW = 170, closeH = 44, closeY = py + ph - closeH - 18;
+  if (!message_.empty()) ui.label(rx + 16, closeY + 10, fitText(message_, ui.s(t.body), ui.s(rw - closeW - 50)), t.body, messageGood_ ? t.ok : t.danger);
+  if (ui.button(px + pw - pad - closeW, closeY, closeW, closeH, "CLOSE")) close();
+  ui.hintBar(help);
 }
 
 }  // namespace fh

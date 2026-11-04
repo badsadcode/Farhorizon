@@ -1,0 +1,83 @@
+# End-to-end check of live graphics options and save slots (start with --start-docked; 1600x900).
+wait 10
+key Escape
+wait 3
+expect-screen pause
+key Down
+key Down
+key Down
+key Return
+wait 3
+expect-screen options
+
+# Look: cycle away and back. Rows: 0 Look, 1 Fullscreen, 2 VSync, 3 FOV, 4 Interface scale, 5 Shake.
+key Right
+wait 5
+shot g01_look_changed.png
+key Left
+wait 3
+
+# Fullscreen on and off again: the swapchain is recreated both ways.
+key Down
+key Return
+wait 40
+shot g02_fullscreen.png
+key Return
+wait 40
+shot g03_windowed.png
+
+# VSync off and on.
+key Down
+key Return
+wait 30
+key Return
+wait 10
+
+# FOV by keyboard.
+key Down
+key Right
+key Right
+key Right
+wait 3
+
+# Interface scale by mouse: the layout must not move while dragging, and it applies on release.
+drag 900 392 1130 392
+wait 5
+shot g04_scale_150.png
+key Escape
+wait 3
+expect-screen pause
+key Escape
+wait 5
+expect-screen none
+shot g05_hud_scale_150.png
+key M
+wait 3
+expect-terminal open
+shot g06_terminal_scale_150.png
+key Escape
+wait 3
+expect-terminal closed
+
+# Save to slot 1 from the pause menu, then load it back.
+key Escape
+wait 3
+key Down
+key Return
+wait 3
+expect-screen save
+shot g07_save.png
+key Return
+wait 5
+expect-screen pause
+key Down
+key Down
+key Return
+wait 3
+expect-screen load
+shot g08_load.png
+key Return
+wait 10
+expect-screen none
+shot g09_loaded.png
+quit

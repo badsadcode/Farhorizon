@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.6.0 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.7.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +60,7 @@ add_library(fh_core STATIC
   game/settings.cpp
   game/ui/ui_theme.cpp
   game/ui/ui.cpp
+  game/ui/bindings.cpp
   game/space/travel_drive.cpp
   game/space/landing.cpp
   game/persistence/save_game.cpp
@@ -103,6 +104,7 @@ if(FH_BUILD_GAME)
     game/hud.cpp
     game/market_ui.cpp
     game/ui/menus.cpp
+    game/ui/ui_script.cpp
   )
   target_link_libraries(farhorizon PRIVATE fh_engine)
   add_dependencies(farhorizon fh_shaders)
@@ -140,6 +142,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_audio.cpp
     tests/unit/test_stage5.cpp
     tests/unit/test_stage6.cpp
+    tests/unit/test_ui.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

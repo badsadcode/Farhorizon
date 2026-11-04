@@ -11,6 +11,9 @@
 * `mouse.sensitivity` is virtual-stick deflection per pixel. `recenterPerSecond > 0` makes the
   stick drift back to centre.
 * The file is re-read on F5, so rebinding takes effect without restarting.
+* These are the defaults. Players rebind in Options > Controls; their overrides live in
+  `settings.json` and win over this file. Reset keys removes them. The list of rebindable actions
+  and the conflict rules are in `game/ui/bindings.cpp` (ADR 0010).
 
 Actions: `nav.next`, `travel.engage`, `ship.mine`, `ship.scan`, `ui.market`, `ui.up/down/buy/sell/sellAll/modifier/close`, `game.save`, `game.load`, `dock.request`, `dock.autopilot`, `interact`, `foot.forward/back/left/right/run/jump`, `debug.forceDock`, `ship.throttleUp/Down/Zero`, `ship.strafeLeft/Right/Up/Down`, `ship.rollLeft/Right`,
 `ship.pitchUp/Down`, `ship.yawLeft/Right`, `ship.boost`, `ship.toggleAssist`,

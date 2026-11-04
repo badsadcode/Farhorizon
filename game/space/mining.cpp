@@ -64,7 +64,7 @@ MiningEvents Mining::fixedUpdate(SpaceWorld& world, bool firing, CargoHold& carg
   if (firing) {
     const auto& t = world.target();
     if (!t || t->kind != TargetRef::Kind::Asteroid) {
-      status_ = "No asteroid targeted (G)";
+      status_ = "No asteroid targeted";
     } else {
       Asteroid& a = world.asteroid(t->index);
       const Vec3 toCentre = a.local - shipPos;

@@ -8,9 +8,12 @@
 #include "game/content/visual_profile.h"
 #include "game/session/game_session.h"
 #include "game/ship_controller.h"
+#include "game/ui/ui_theme.h"
 #include "game/world/space_world.h"
 
 namespace fh {
+
+class InputState;
 
 struct HudContext {
   const SpaceWorld& world;
@@ -34,6 +37,11 @@ struct HudContext {
   bool missileWarning = false;
   bool showContractTracker = true;
   bool showHints = true;
+  // Stage 7: fonts and panels from the UI theme, sizes follow Options > Interface scale, and the
+  // hints name the player's actual keys.
+  float uiScale = 1.0f;
+  const UiTheme* theme = nullptr;
+  const InputState* bindings = nullptr;
 };
 
 struct InteriorHudContext {
@@ -42,6 +50,11 @@ struct InteriorHudContext {
   bool mouseCaptured = false;
   double time = 0;
   HudPalette palette;
+  float uiScale = 1.0f;
+  const UiTheme* theme = nullptr;
+  const InputState* bindings = nullptr;
+  bool showContractTracker = true;
+  bool showHints = true;
 };
 void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c);
 // Cockpit HUD while the ship is in a planet's surface scene (approach, landed, liftoff).

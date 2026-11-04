@@ -6,18 +6,58 @@
 
 namespace fh {
 
+float uiLayoutScale(float height, float userScale) { return std::clamp(height / 1080.0f, 0.6f, 2.5f) * userScale; }
+
+std::vector<std::string> wrapText(std::string_view text, float px, float maxWidth, FontFace face) {
+  std::vector<std::string> lines;
+  std::string line;
+  size_t i = 0;
+  while (i < text.size()) {
+    while (i < text.size() && text[i] == ' ') ++i;
+    size_t end = i;
+    while (end < text.size() && text[end] != ' ') ++end;
+    if (end == i) break;
+    const std::string_view word = text.substr(i, end - i);
+    std::string candidate = line;
+    if (!candidate.empty()) candidate += ' ';
+    candidate += word;
+    if (!line.empty() && OverlayBuilder::measure(candidate, px, face) > maxWidth) {
+      lines.push_back(line);
+      line = std::string(word);
+    } else {
+      line = std::move(candidate);
+    }
+    i = end;
+  }
+  if (!line.empty()) lines.push_back(line);
+  return lines;
+}
+
+std::string fitText(std::string_view text, float px, float maxWidth, FontFace face) {
+  if (OverlayBuilder::measure(text, px, face) <= maxWidth) return std::string(text);
+  std::string s(text);
+  while (!s.empty() && OverlayBuilder::measure(s + "...", px, face) > maxWidth) {
+    // Drop one whole UTF-8 character.
+    while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
+    if (!s.empty()) s.pop_back();
+  }
+  return s + "...";
+}
+
 void Ui::begin(OverlayBuilder& o, const UiTheme& theme, float width, float height, float userScale, const UiInput& in,
                double time) {
   o_ = &o;
   theme_ = &theme;
   w_ = width;
   h_ = height;
-  scale_ = std::clamp(height / 1080.0f, 0.6f, 2.5f) * userScale;
+  scale_ = uiLayoutScale(height, userScale);
   in_ = in;
   time_ = time;
   lastCount_ = count_;
   count_ = 0;
   if (lastCount_ > 0) {
+    if (in_.up) moveDir_ = -1;
+    if (in_.down) moveDir_ = 1;
     if (in_.up) focus_ = (focus_ + lastCount_ - 1) % lastCount_;
     if (in_.down) focus_ = (focus_ + 1) % lastCount_;
     focus_ = std::clamp(focus_, 0, lastCount_ - 1);
@@ -74,11 +114,22 @@ void Ui::rowFrame(float x, float y, float w, float h, bool focused) {
   o_->rect(x, y, std::max(2.0f, s(3)), h, theme_->text);  // focus bar on the left
 }
 
+void Ui::hoverFocus(int id, bool hot) {
+  if (hot && (in_.mouseMoved || in_.mousePressed)) focus_ = id;
+}
+
+void Ui::skipIfDisabled(int id, bool enabled) {
+  if (enabled || focus_ != id) return;
+  if (moveDir_ >= 0) focus_ = id + 1;  // reached later this frame (or clamped by end())
+  else if (lastCount_ > 0) focus_ = (id + lastCount_ - 1) % lastCount_;
+}
+
 bool Ui::button(float x, float y, float w, float h, std::string_view text, bool enabled) {
   const int id = nextFocus();
+  skipIfDisabled(id, enabled);
   const float X = s(x), Y = s(y), W = s(w), H = s(h);
   const bool hot = enabled && hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   const OverlayColor border = !enabled ? theme_->textDim.withAlpha(0.4f) : focused ? theme_->textBright : theme_->panelBorder;
   o_->panel(X, Y, W, H, focused && enabled ? theme_->highlight : theme_->panel, border, s(8), std::max(1.0f, s(1.5f)));
@@ -90,9 +141,10 @@ bool Ui::button(float x, float y, float w, float h, std::string_view text, bool 
 
 bool Ui::menuItem(float x, float y, float w, std::string_view text, bool enabled) {
   const int id = nextFocus();
+  skipIfDisabled(id, enabled);
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight + 6);
   const bool hot = enabled && hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   const float px = s(theme_->heading);
   const float ty = Y + (H - OverlayBuilder::lineHeight(px, FontFace::Sans)) * 0.5f;
@@ -112,7 +164,7 @@ bool Ui::sliderRow(float x, float y, float w, std::string_view text, float& valu
   const int id = nextFocus();
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
   const bool hot = hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   rowFrame(X, Y, W, H, focused);
   const float px = s(theme_->body);
@@ -124,7 +176,7 @@ bool Ui::sliderRow(float x, float y, float w, std::string_view text, float& valu
   const float t = hi > lo ? std::clamp((value - lo) / (hi - lo), 0.0f, 1.0f) : 0.0f;
   o_->rect(bx, by, bw * t, bh, focused ? theme_->textBright : theme_->text);
   for (int k = 0; k <= 10; ++k)  // ticks
-    o_->rect(bx + bw * float(k) / 10.0f, by + bh + s(3), 1.0f, s(k % 5 == 0 ? 6 : 3), theme_->textDim);
+    o_->rect(bx + bw * float(k) / 10.0f, by + bh + s(3), 1.0f, s(k % 5 == 0 ? 6.0f : 3.0f), theme_->textDim);
   o_->rect(bx + bw * t - s(2), by - s(6), s(4), bh + s(12), theme_->textBright);
   o_->textPx(X + W - s(14), ty, valueText, theme_->text, px, FontFace::Mono, TextAlign::Right);
   const float before = value;
@@ -144,7 +196,7 @@ bool Ui::toggleRow(float x, float y, float w, std::string_view text, bool& value
   const int id = nextFocus();
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
   const bool hot = hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   rowFrame(X, Y, W, H, focused);
   const float px = s(theme_->body);
@@ -169,7 +221,7 @@ bool Ui::choiceRow(float x, float y, float w, std::string_view text, int& index,
   const int id = nextFocus();
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
   const bool hot = hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   rowFrame(X, Y, W, H, focused);
   const float px = s(theme_->body);
@@ -190,11 +242,12 @@ bool Ui::choiceRow(float x, float y, float w, std::string_view text, int& index,
   return index != before;
 }
 
-bool Ui::keyRow(float x, float y, float w, std::string_view text, std::string_view keys, bool listening) {
+bool Ui::keyRow(float x, float y, float w, std::string_view text, std::string_view keys, bool listening,
+                bool conflict) {
   const int id = nextFocus();
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
   const bool hot = hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   rowFrame(X, Y, W, H, focused);
   const float px = s(theme_->body);
@@ -204,18 +257,20 @@ bool Ui::keyRow(float x, float y, float w, std::string_view text, std::string_vi
   const float kw = std::max(s(90), OverlayBuilder::measure(shown, s(theme_->small)) + s(24));
   const float kx = X + W - kw - s(14), ky = Y + H * 0.5f - s(14);
   o_->panel(kx, ky, kw, s(28), listening ? theme_->highlight : theme_->panel,
-            listening ? theme_->textBright : theme_->panelBorder, s(5), 1.0f);
+            listening ? theme_->textBright : conflict ? theme_->danger : theme_->panelBorder, s(5), 1.0f);
   o_->textPx(kx + kw * 0.5f, ky + (s(28) - OverlayBuilder::lineHeight(s(theme_->small))) * 0.5f, shown,
-             listening ? theme_->textBright : theme_->text, s(theme_->small), FontFace::Mono, TextAlign::Center);
+             listening ? theme_->textBright : conflict ? theme_->danger : theme_->text, s(theme_->small), FontFace::Mono,
+             TextAlign::Center);
   return (focused && in_.accept) || (hot && in_.mousePressed);
 }
 
 bool Ui::listRow(float x, float y, float w, float h, std::string_view text, std::string_view detail,
                  std::string_view sub, bool enabled) {
   const int id = nextFocus();
+  skipIfDisabled(id, enabled);
   const float X = s(x), Y = s(y), W = s(w), H = s(h);
-  const bool hot = hovered(X, Y, W, H);
-  if (hot && in_.mouseMoved) focus_ = id;
+  const bool hot = enabled && hovered(X, Y, W, H);
+  hoverFocus(id, hot);
   const bool focused = focus_ == id;
   rowFrame(X, Y, W, H, focused);
   o_->line(X, Y + H, X + W, Y + H, 1.0f, theme_->textDim.withAlpha(0.3f));
@@ -247,15 +302,59 @@ int Ui::tabs(float x, float y, const std::vector<std::string>& labels, int curre
   return result;
 }
 
-int Ui::scrollFor(int focusInList, int count, int visible) {
-  if (count <= visible) return scroll_ = 0;
-  if (in_.wheel != 0) {
-    scroll_ -= int(std::round(in_.wheel)) * 2;
-  } else if (focusInList >= 0 && (in_.up || in_.down)) {
-    if (focusInList < scroll_) scroll_ = focusInList;
-    if (focusInList >= scroll_ + visible) scroll_ = focusInList - visible + 1;
+Ui::RowState Ui::row(float x, float y, float w, float h) {
+  const int id = nextFocus();
+  const float X = s(x), Y = s(y), W = s(w), H = s(h);
+  RowState r;
+  r.hot = hovered(X, Y, W, H);
+  hoverFocus(id, r.hot);
+  r.focused = focus_ == id;
+  r.pressed = r.hot && in_.mousePressed;
+  r.accepted = r.focused && in_.accept;
+  rowFrame(X, Y, W, H, r.focused);
+  o_->line(X, Y + H, X + W, Y + H, 1.0f, theme_->textDim.withAlpha(0.25f));
+  return r;
+}
+
+bool Ui::inlineButton(float x, float y, float w, float h, std::string_view text, bool enabled) {
+  const float X = s(x), Y = s(y), W = s(w), H = s(h);
+  const bool hot = enabled && hovered(X, Y, W, H);
+  const OverlayColor c = !enabled ? theme_->textDim.withAlpha(0.45f) : hot ? theme_->textBright : theme_->text;
+  o_->panel(X, Y, W, H, hot ? theme_->highlight : OverlayColor{0, 0, 0, 0}, c.withAlpha(enabled ? 0.8f : 0.5f), s(4), 1.0f);
+  const float px = s(theme_->small);
+  o_->textPx(X + W * 0.5f, Y + (H - OverlayBuilder::lineHeight(px)) * 0.5f, text, c, px, FontFace::Mono, TextAlign::Center);
+  return hot && in_.mousePressed;
+}
+
+float Ui::textBlock(float x, float y, float w, std::string_view text, float px, OverlayColor c, int maxLines) {
+  auto lines = wrapText(text, s(px), s(w));
+  if (maxLines > 0 && int(lines.size()) > maxLines) {
+    lines.resize(size_t(maxLines));
+    lines.back() = fitText(lines.back() + "...", s(px), s(w));
   }
-  return scroll_ = std::clamp(scroll_, 0, count - visible);
+  const float step = OverlayBuilder::lineHeight(s(px));
+  float Y = s(y);
+  for (const auto& line : lines) {
+    o_->textPx(s(x), Y, line, c, s(px));
+    Y += step;
+  }
+  return (Y - s(y)) / scale_;
+}
+
+int Ui::scrollFor(int firstFocus, int count, int visible) {
+  if (count <= visible) return scroll_ = 0;
+  const int maxScroll = count - visible;
+  const int inList = focus_ - firstFocus;
+  if (in_.wheel != 0) {
+    scroll_ = std::clamp(scroll_ - int(std::round(in_.wheel)) * 2, 0, maxScroll);
+    if (inList >= 0 && inList < count) focus_ = firstFocus + std::clamp(inList, scroll_, scroll_ + visible - 1);
+  } else if (in_.up || in_.down) {
+    if (inList < 0) scroll_ = 0;                    // a row above the list
+    else if (inList >= count) scroll_ = maxScroll;  // a button below it
+    else if (inList < scroll_) scroll_ = inList;
+    else if (inList >= scroll_ + visible) scroll_ = inList - visible + 1;
+  }
+  return scroll_ = std::clamp(scroll_, 0, maxScroll);
 }
 
 }  // namespace fh

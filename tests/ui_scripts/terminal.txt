@@ -1,0 +1,63 @@
+# End-to-end check of the station terminal (start with --start-docked, window 1600x900).
+wait 10
+shot t01_docked_hud.png
+key M
+wait 3
+expect-terminal open
+shot t02_market.png
+# Keyboard trade: row 0, buy with the Right key.
+key Right
+wait 2
+key Down
+wait 2
+key Right
+wait 2
+shot t03_bought.png
+key Left
+wait 2
+# Ration Packs (row 3) is on sale: a real purchase, then a sale at Shift x10.
+key Down
+key Down
+wait 2
+key Right
+wait 2
+shot t03b_purchase.png
+key Left
+wait 2
+key Tab
+wait 3
+shot t04_services.png
+key Return
+wait 2
+key Down
+wait 2
+key Return
+wait 3
+shot t05_fit.png
+key Tab
+wait 3
+shot t06_contracts.png
+key Return
+wait 3
+shot t07_contract_taken.png
+# Closing with the terminal key and with Esc, and that Esc does not also open the pause menu.
+key M
+wait 3
+expect-terminal closed
+expect-screen none
+shot t08_hud_contract.png
+key M
+wait 3
+expect-terminal open
+key Escape
+wait 3
+expect-terminal closed
+expect-screen none
+key Escape
+wait 3
+expect-screen pause
+shot t09_pause.png
+key Escape
+wait 3
+expect-screen none
+quit

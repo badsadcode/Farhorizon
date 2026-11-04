@@ -25,6 +25,7 @@
 #include "game/settings.h"
 #include "game/ui/menus.h"
 #include "game/ui/ui.h"
+#include "game/ui/ui_script.h"
 #include "game/ui/ui_theme.h"
 #include "engine/ui/font_atlas.h"
 #include "game/ship_controller.h"
@@ -56,6 +57,8 @@ struct AppOptions {
   bool startLanded = false;                      // debug: start landed at the first landing site
   std::string startIn;                           // debug: "ship" or "station" (implies startDocked)
   std::filesystem::path loadPath;                // load this save after startup
+  std::filesystem::path settingsPath = "settings.json";
+  std::filesystem::path uiScript;                // developer test driver (game/ui/ui_script.h)
 };
 
 class GameApp {
@@ -145,7 +148,11 @@ class GameApp {
   double runTime_ = 0;
   bool quit_ = false;
   Settings settings_;
-  std::filesystem::path settingsPath_ = "settings.json";
+  std::filesystem::path settingsPath_;
+  UiScript uiScript_;
+  int lastMenuFocus_ = -1;
+  int mouseSettleFrames_ = 0;  // a window resize moves the cursor without the player touching it
+  std::uint64_t menuOpenedFrame_ = ~std::uint64_t(0);
   bool scripted_ = false;         // benchmarks / --frames: defaults, no menus, no settings file
   FontAtlas font_;
   UiTheme theme_;

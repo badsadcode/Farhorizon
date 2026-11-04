@@ -1,0 +1,148 @@
+# End-to-end check of the Options screens through the real input path (window 1600x900).
+# Run from a scratch directory so saves and settings stay out of the source tree:
+#   farhorizon --ui-script <this file> --settings settings.json --validation
+wait 10
+expect-screen main
+shot 01_main.png
+
+# Main menu -> Options. CONTINUE is disabled with no saves, so focus starts on NEW GAME.
+key Down
+key Down
+key Return
+wait 3
+expect-screen options
+shot 02_graphics.png
+key Tab
+wait 2
+shot 03_audio.png
+key Tab
+wait 2
+shot 04_controls_top.png
+
+# --- Rebinding by keyboard ---------------------------------------------------------------------
+# Focus: 0 sensitivity, 1 invert, 2 throttle up, 3 throttle down. Rebind throttle down to K.
+key Down
+key Down
+key Down
+key Return
+wait 2
+shot 05_listening.png
+key K
+wait 3
+expect-binding ship.throttleDown K
+shot 06_rebound.png
+
+# Enter can be bound: it must not re-trigger the row it just finished on.
+key Return
+wait 2
+key Return
+wait 3
+expect-binding ship.throttleDown Return
+key Tab
+wait 1
+key Tab
+wait 1
+key Tab
+wait 1
+key Tab
+wait 2
+
+# Arrow keys, Tab and Esc during capture: arrows bind, Tab binds, Esc cancels. None may navigate.
+key Down
+key Down
+key Down
+key Return
+wait 2
+key Down
+wait 3
+expect-binding ship.throttleDown Down
+key Return
+wait 2
+key Escape
+wait 3
+expect-screen options
+expect-binding ship.throttleDown Down
+
+# Reserved keys are refused, and F10 must not quit the game from the prompt.
+key Return
+wait 2
+key F10
+wait 3
+expect-screen options
+expect-binding ship.throttleDown Down
+shot 07_reserved.png
+
+# A conflicting key is allowed but flagged: Strafe left (A) on Throttle down.
+key Return
+wait 2
+key A
+wait 3
+expect-binding ship.throttleDown A
+shot 08_conflict.png
+
+# --- Scrolling ---------------------------------------------------------------------------------
+# Hold Down into the far end of the list; the last row must be visible and rebindable.
+hold 60 Down
+wait 3
+shot 09_scrolled_key_repeat.png
+wheel 10
+wait 3
+shot 10_scrolled_wheel.png
+wheel -30
+wait 3
+shot 11_scrolled_bottom.png
+wheel 40
+wait 3
+shot 12_scrolled_top.png
+
+# --- Reset keys --------------------------------------------------------------------------------
+# By mouse (hover focus + click on the 1600x900 layout), then again by keyboard.
+move 1150 743
+wait 2
+shot 13_reset_focus.png
+click 1150 743
+wait 3
+expect-binding ship.throttleDown S
+shot 14_reset_done.png
+move 800 300
+wait 2
+# Rebind by clicking a key chip (first visible row is Throttle up once scrolled to the top).
+click 1188 345
+wait 2
+key L
+wait 3
+expect-binding ship.throttleUp L
+# Reset by keyboard: Up from Throttle up reaches Invert, Sensitivity, BACK, then RESET KEYS.
+key Up
+key Up
+key Up
+key Up
+wait 2
+key Return
+wait 3
+expect-binding ship.throttleUp W
+
+key Tab
+wait 2
+shot 15_gameplay.png
+key Escape
+wait 3
+expect-screen main
+
+# Load screen and confirm dialogs (focus is back on NEW GAME; LOAD GAME is next).
+key Down
+key Return
+wait 3
+expect-screen load
+shot 16_load.png
+key Escape
+wait 3
+expect-screen main
+key Escape
+wait 3
+expect-screen confirm
+shot 17_confirm.png
+key Escape
+wait 3
+expect-screen main
+quit

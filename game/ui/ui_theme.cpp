@@ -71,7 +71,14 @@ std::optional<UiTheme> loadUiTheme(const AssetManifest& manifest, const AssetID&
   }
   t.rowHeight = float(r.num(j, "rowHeight", false, t.rowHeight));
   t.letterSpacing = float(r.num(j, "letterSpacing", false, t.letterSpacing));
-  for (float v : {t.small, t.body, t.heading, t.title, t.subtitle, t.rowHeight})
+  if (j.contains("hud") && j["hud"].is_object()) {
+    const auto& h = j["hud"];
+    t.hudPanelAlpha = float(r.num(h, "panelAlpha", false, t.hudPanelAlpha));
+    t.hudSpeed = float(r.num(h, "speed", false, t.hudSpeed));
+    t.hudWarning = float(r.num(h, "warning", false, t.hudWarning));
+    if (t.hudPanelAlpha < 0 || t.hudPanelAlpha > 1) r.error("hud.panelAlpha must be within 0..1");
+  }
+  for (float v : {t.small, t.body, t.heading, t.title, t.subtitle, t.rowHeight, t.hudSpeed, t.hudWarning})
     if (v < 6 || v > 200) r.error("sizes must be within 6..200 px");
   if (!r.ok()) return std::nullopt;
   return t;

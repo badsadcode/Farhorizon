@@ -51,6 +51,7 @@ class MenuSystem {
   Screen screen() const { return screen_; }
   bool active() const { return screen_ != Screen::None; }
   bool atMainMenu() const { return active() && root_ == Screen::Main; }
+  // While capturing, the app passes the Ui a neutral input and ignores its own hotkeys.
   bool capturingKey() const { return !listening_.empty(); }
   // Draws the current screen and handles its input.
   std::vector<MenuAction> update(Ui& ui, MenuEnv& env);
@@ -68,6 +69,9 @@ class MenuSystem {
   Screen pendingFocusFor_ = Screen::None;
   int optionsTab_ = 0;
   std::string listening_;           // action being rebound
+  std::string notice_;              // result of the last rebind, shown on the Controls tab
+  bool noticeBad_ = false;
+  float pendingUiScale_ = -1;       // applied on release: the layout must not move under a drag
 };
 
 }  // namespace fh

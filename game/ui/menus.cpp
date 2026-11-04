@@ -4,36 +4,11 @@
 #include <cmath>
 #include <format>
 
+#include "game/ui/bindings.h"
+
 namespace fh {
 
 namespace {
-struct Bindable {
-  const char* action;
-  const char* label;
-};
-// Rebindable actions, in the order the Controls tab shows them.
-constexpr Bindable kBindables[] = {
-    {"ship.throttleUp", "Throttle up"},          {"ship.throttleDown", "Throttle down"},
-    {"ship.throttleZero", "Zero throttle"},      {"ship.strafeLeft", "Strafe left"},
-    {"ship.strafeRight", "Strafe right"},        {"ship.strafeUp", "Strafe up"},
-    {"ship.strafeDown", "Strafe down"},          {"ship.rollLeft", "Roll left"},
-    {"ship.rollRight", "Roll right"},            {"ship.boost", "Boost"},
-    {"ship.toggleAssist", "Flight assist"},      {"ship.togglePrecision", "Precision mode"},
-    {"weapon.guns", "Select guns"},              {"weapon.mining", "Select mining laser"},
-    {"ship.firePrimary", "Fire (keyboard)"},     {"ship.fireSecondary", "Rocket (keyboard)"},
-    {"ship.mine", "Mining laser (hold)"},        {"ship.scan", "Scan asteroid"},
-    {"target.next", "Next target"},              {"target.nearestHostile", "Nearest hostile"},
-    {"target.nearestAsteroid", "Nearest asteroid"}, {"target.clear", "Clear target"},
-    {"nav.next", "Next destination"},            {"travel.engage", "Travel drive"},
-    {"dock.request", "Dock / land / launch"},    {"dock.autopilot", "Docking autopilot"},
-    {"interact", "Interact / leave seat"},       {"ui.market", "Terminal"},
-    {"camera.cycle", "Chase / cockpit camera"},  {"foot.forward", "Walk forward"},
-    {"foot.back", "Walk back"},                  {"foot.left", "Walk left"},
-    {"foot.right", "Walk right"},                {"foot.run", "Run"},
-    {"foot.jump", "Jump"},                       {"game.save", "Quicksave"},
-    {"game.load", "Quickload"},                  {"app.toggleMouse", "Free / capture mouse"},
-};
-
 std::string joinKeys(const std::vector<std::string>& keys) {
   std::string s;
   for (const auto& k : keys) s += (s.empty() ? "" : " / ") + k;
@@ -46,6 +21,8 @@ void MenuSystem::open(Screen s) {
   screen_ = s;
   pendingFocusFor_ = s;
   listening_.clear();
+  notice_.clear();
+  pendingUiScale_ = -1;
 }
 
 void MenuSystem::back() {
@@ -66,9 +43,18 @@ std::vector<MenuAction> MenuSystem::update(Ui& ui, MenuEnv& env) {
   // Key capture for rebinding swallows everything (Escape cancels).
   if (!listening_.empty()) {
     const int key = env.input.firstKeyPressed();
-    if (key >= 0) {
-      const std::string name = InputState::keyName(key);
-      if (name != "Escape" && !name.empty()) {
+    const std::string name = key >= 0 ? InputState::keyName(key) : std::string();
+    if (!name.empty()) {  // keys SDL cannot name cannot be stored: keep listening
+      const BindingLookup lookup = [&](const std::string& a) { return env.input.bindingNames(a); };
+      if (name == "Escape") {
+        notice_.clear();
+      } else if (isReservedKey(name, lookup)) {
+        notice_ = name + " is reserved by the game";
+        noticeBad_ = true;
+      } else {
+        const std::string other = bindingConflict(listening_, name, lookup);
+        noticeBad_ = !other.empty();
+        notice_ = other.empty() ? "Bound to " + name : name + " is also used by: " + other;
         env.settings.bindings[listening_] = {name};
         out.push_back({MenuAction::Type::BindingsChanged, {}});
       }
@@ -161,6 +147,7 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
     optionsTab_ = tab;
     ui.resetFocus();
     listening_.clear();
+    notice_.clear();
   }
   const float rx = px + 40, rw = pw - 80, row = t.rowHeight + 6;
   float y = py + 146;
@@ -183,7 +170,14 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
       changed |= ui.sliderRow(rx, y, rw, "Field of view", s.fovOffsetDeg, -15, 20, 1,
                               std::format("{:+.0f} deg", s.fovOffsetDeg));
       y += row;
-      changed |= ui.sliderRow(rx, y, rw, "Interface scale", s.uiScale, 0.75f, 1.5f, 0.05f, pct(s.uiScale));
+      {  // Applied on release: the slider itself moves when the scale changes.
+        if (pendingUiScale_ < 0) pendingUiScale_ = s.uiScale;
+        ui.sliderRow(rx, y, rw, "Interface scale", pendingUiScale_, 0.75f, 1.5f, 0.05f, pct(pendingUiScale_));
+        if (!ui.dragging() && pendingUiScale_ != s.uiScale) {
+          s.uiScale = pendingUiScale_;
+          changed = true;
+        }
+      }
       y += row;
       changed |= ui.toggleRow(rx, y, rw, "Camera shake", s.cameraShake);
       break;
@@ -207,28 +201,38 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
       y += row + 8;
       ui.label(rx + 16, y, "KEY BINDINGS", t.small, t.textDim);
       y += 28;
-      const int count = int(std::size(kBindables));
+      const auto list = bindables();
+      const int count = int(list.size());
       const int visible = std::max(3, int((py + ph - 96 - y) / row));
-      const int firstFocus = 2;  // the two rows above
-      const int first = ui.scrollFor(ui.focus() - firstFocus, count, visible);
+      const int first = ui.scrollFor(2, count, visible);  // two rows above the list
+      const BindingLookup lookup = [&](const std::string& a) { return env.input.bindingNames(a); };
+      const float listTop = y;
       for (int i = 0; i < count; ++i) {
-        const Bindable& b = kBindables[i];
+        const Bindable& b = list[size_t(i)];
         if (i < first || i >= first + visible) {
           ui.skipFocusable();
           continue;
         }
+        const auto keys = env.input.bindingNames(b.action);
+        bool conflict = false;
+        for (const auto& k : keys) conflict |= !bindingConflict(b.action, k, lookup).empty();
         const bool listening = listening_ == b.action;
-        if (ui.keyRow(rx, y, rw, b.label, joinKeys(env.input.bindingNames(b.action)), listening) && listening_.empty())
+        if (ui.keyRow(rx, y, rw - 24, b.label, joinKeys(keys), listening, conflict) && listening_.empty()) {
           listening_ = b.action;
+          notice_.clear();
+        }
         y += row;
       }
       if (count > visible) {  // scroll indicator
-        const float sx = ui.s(px + pw - 22), sy0 = ui.s(py + 230), sh = ui.s(ph - 340);
+        const float sx = ui.s(px + pw - 40), sy0 = ui.s(listTop), sh = ui.s(row * float(visible));
         ui.draw().rect(sx, sy0, 2, sh, t.textDim.withAlpha(0.4f));
         ui.draw().rect(sx - 1, sy0 + sh * float(first) / float(count), 4, sh * float(visible) / float(count), t.text);
       }
+      if (!notice_.empty()) ui.label(px + 270, py + ph - 58, notice_, t.small, noticeBad_ ? t.danger : t.ok);
       if (ui.button(px + pw - 300, py + ph - 70, 260, 44, "RESET KEYS")) {
         s.bindings.clear();
+        notice_ = "Default keys restored";
+        noticeBad_ = false;
         out.push_back({MenuAction::Type::ResetBindings, {}});
       }
       break;
@@ -238,7 +242,7 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
       y += row;
       changed |= ui.toggleRow(rx, y, rw, "Control hints", s.showHints);
       y += row;
-      changed |= ui.toggleRow(rx, y, rw, "Developer info overlay (F1)", s.showDevOverlay);
+      changed |= ui.toggleRow(rx, y, rw, "Developer info overlay", s.showDevOverlay);
       break;
     default: break;
   }
@@ -250,8 +254,8 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
     out.push_back({MenuAction::Type::SettingsClosed, {}});
     back();
   }
-  ui.hintBar(listening_.empty() ? "TAB next tab    UP/DOWN select    LEFT/RIGHT adjust    ENTER change    ESC back"
-                                : "Press the new key    ESC cancel");
+  ui.hintBar(listening_.empty() ? "TAB next tab    UP/DOWN select    LEFT/RIGHT adjust    ENTER change    WHEEL scroll    ESC back"
+                                : "PRESS THE NEW KEY    ESC cancel");
 }
 
 void MenuSystem::slots(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out, bool saving) {

@@ -212,6 +212,8 @@ void VkContext::createDevice() {
   VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
   f13.dynamicRendering = VK_TRUE;
   f13.synchronization2 = VK_TRUE;
+  f13.shaderDemoteToHelperInvocation = VK_TRUE;  // SPIR-V 1.6 `discard` (core and mandatory in 1.3)
+  f13.shaderDemoteToHelperInvocation = VK_TRUE;  // SPIR-V 1.6 `discard` (core and mandatory in 1.3)
   VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
   f2.pNext = &f13;
 

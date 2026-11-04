@@ -72,7 +72,7 @@ bool Landing::request(SpaceWorld& world) {
   }
   auto s = nearestSite(world);
   if (!s) {
-    say("No landing site in range. Travel to a site's orbit first (J).", world);
+    say("No landing site in range. Travel to a site's orbit first.", world);
     return false;
   }
   site_ = s;

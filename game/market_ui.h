@@ -1,16 +1,16 @@
 #pragma once
-// Station / outpost terminal: a compact CRT-style panel (design doc 11 "station services") with tabs
+// Station / outpost terminal (design doc 11 "station services"), drawn with the Ui kit. Tabs:
 //   MARKET    - buy/sell commodities,
 //   SERVICES  - hull repair and shipyard upgrades,
 //   CONTRACTS - today's job board and the jobs you hold.
 // Keyboard: Tab next tab, Up/Down select, Right/= buy, Left/- sell (Shift = x10), Home sell all,
-// Enter accept/repair/fit, Delete abandon, Esc/M close. Mouse: click tabs, rows and buttons.
+// Enter accept/repair/fit, Delete abandon, Esc or the terminal key close.
+// Mouse: hover to select; each row has its own action buttons, so a click on a row never spends.
 #include <string>
 #include <vector>
 
-#include "engine/debug/overlay.h"
-#include "game/content/visual_profile.h"
 #include "game/session/game_session.h"
+#include "game/ui/ui.h"
 
 namespace fh {
 
@@ -27,26 +27,17 @@ class MarketPanel {
   // Terminal available at the current location (any tab has something to show).
   static bool available(const GameSession& session);
 
-  // Handles input while open. Mouse position in drawable pixels.
-  void handleInput(const InputState& in, GameSession& session, float mouseX, float mouseY, float width, float height);
-  void draw(OverlayBuilder& o, GameSession& session, const HudPalette& palette, float width, float height,
-            double time) const;
+  // Draws the terminal and handles its input. May close it (check isOpen() afterwards).
+  void update(Ui& ui, const InputState& in, GameSession& session);
 
  private:
-  struct Layout {
-    float x, y, w, rowH, scale, tabY, tableY;
-    float buyX, sellX, allX, buttonW;
-  };
-  static Layout layout(float width, float height);
   std::vector<Tab> tabs(const GameSession& session) const;
-  int rowCount(GameSession& session) const;
-  void doTrade(GameSession& session, int units);
-  void activate(GameSession& session);   // Enter on the selected row (services / contracts)
-  void abandon(GameSession& session);
+  void doTrade(GameSession& session, const std::string& commodity, int units);
+  void show(const ActionResult& r);
 
   bool open_ = false;
+  bool justOpened_ = false;  // the key that opened the terminal must not also close it
   Tab tab_ = Tab::Market;
-  int selected_ = 0;
   std::string message_;
   bool messageGood_ = true;
 };

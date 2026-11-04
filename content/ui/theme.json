@@ -7,24 +7,25 @@
   },
   "colors": {
     "text":        [226, 172, 98, 255],
-    "textDim":     [226, 172, 98, 130],
+    "textDim":     [226, 172, 98, 170],
     "textBright":  [255, 218, 160, 255],
     "accent":      [112, 196, 222, 255],
     "danger":      [222, 76, 54, 255],
     "ok":          [150, 208, 124, 255],
-    "panel":       [7, 8, 9, 228],
+    "panel":       [7, 8, 9, 252],
     "panelBorder": [226, 172, 98, 150],
-    "highlight":   [226, 172, 98, 46],
+    "highlight":   [226, 172, 98, 34],
     "backdrop":    [0, 0, 0, 165]
   },
   "sizes": {
-    "small": 15,
+    "small": 16,
     "body": 20,
     "heading": 26,
     "title": 88,
     "subtitle": 18
   },
   "panel": { "chamfer": 14, "border": 1.5, "padding": 22 },
+  "hud": { "panelAlpha": 0.8, "speed": 46, "warning": 30 },
   "rowHeight": 40,
   "letterSpacing": 0.32
 }

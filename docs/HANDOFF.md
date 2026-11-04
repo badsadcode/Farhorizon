@@ -1,13 +1,13 @@
 # FARHORIZON — handoff to a local session
 
-_Written 2026-11-04 at the end of the cloud session. Branch: `claude/happy-mayer-kejesk`._
+_Written 2026-11-04 at the end of the cloud session and updated by the first local session. Branch: `claude/happy-mayer-kejesk`._
 
 ## Where the project is
 * **Stages 0–6 are done** (see `docs/STATUS.md`, `CHANGELOG.md`, ADRs in `docs/decisions/`):
   flight, docking, walkable ship/station, mining/trade/save, travel drive + planet landing,
   combat, contracts and upgrades. CI (Windows MSVC + Linux sanitizers) is green, and it uploads a
   playable Windows zip (`FARHORIZON-windows-x64` artifact).
-* **Stage 7 (polish) has started, work in progress, committed but not finished:**
+* **Stage 7 (polish) is under way. The UI pass is finished:**
   * TrueType UI font: Share Tech Mono + Share Tech (SIL OFL) in `content/fonts/`, baked with
     `stb_truetype` into one atlas (`engine/ui/font_atlas.*`). The overlay now has UVs
     (`engine/debug/overlay.*`, `shaders/overlay.*`) and a chamfered `panel()` primitive.
@@ -22,14 +22,8 @@ _Written 2026-11-04 at the end of the cloud session. Branch: `claude/happy-mayer
     the mouse. Benchmarks and `--frames` runs ignore settings and skip menus.
 
 ## Next steps (agreed order with the owner)
-1. **Finish the UI pass:**
-   * Verify the Options tabs interactively. The Controls tab scrolls, so check rebinding and
-     Reset keys.
-   * Redesign the flight HUD with the new font: consistent panels, use `uiScale`.
-   * Restyle the station terminal (`game/market_ui.*`) with the Ui kit.
-   * Add unit tests for settings parse/serialize and for the Ui focus logic.
-   * Update docs: STATUS, CHANGELOG 0.7.0, ISSUES, a `ui_theme` schema doc, and an ADR 0010
-     for the UI.
+1. **UI pass: done in code (0.7.0), waiting for the owner's playtest and feedback.** See ADR 0010.
+   Feedback may send work back here before step 2 starts.
 2. **Blender pipeline:**
    * Normal, metallic-roughness, emissive and occlusion textures in the glTF loader and mesh
      shader.
@@ -74,6 +68,7 @@ Useful flags:
 * `--validation`: Vulkan validation layers.
 * `--benchmark bench.combat_skirmish`: run a benchmark.
 * `--frames N --screenshot x.png`: render N frames and save a screenshot.
+* `--ui-script file --settings file`: drive the real UI with scripted input (`docs/BUILDING.md`).
 
 The content validator is `build\Release\content_validator.exe content`.
 
