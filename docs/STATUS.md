@@ -143,6 +143,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Mesh collision | ✅ | floors, walls, ramps, stairs, closed rooms; unit tests + scripted walk |
 | Ship exterior preview | 🟡 | exports and flies; making a ship permanent still needs a JSON file by hand |
 | Maps reachable in the game world | ⬜ | `--map` and Play only, for now |
+| Placed reflection probes | ✅ | sample map; checked by eye, not yet judged in play |
 | Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
 
 ## Later stages

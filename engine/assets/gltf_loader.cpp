@@ -217,7 +217,12 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
         li.range = l.range;
         sceneInfo->lights.push_back(std::move(li));
       } else if (!extras.empty()) {
-        sceneInfo->nodes.push_back({name, extras, world.transformPoint({0, 0, 0}), quatFromMatrix(world)});
+        // Axis lengths in world space, so glTF's swapped up axis needs no special case.
+        const Vec3 ax = world.transformDir({1, 0, 0}), ay = world.transformDir({0, 1, 0}), az = world.transformDir({0, 0, 1});
+        const Vec3 scale{std::max({std::fabs(ax.x), std::fabs(ay.x), std::fabs(az.x)}),
+                         std::max({std::fabs(ax.y), std::fabs(ay.y), std::fabs(az.y)}),
+                         std::max({std::fabs(ax.z), std::fabs(ay.z), std::fabs(az.z)})};
+        sceneInfo->nodes.push_back({name, extras, world.transformPoint({0, 0, 0}), quatFromMatrix(world), scale});
       }
     }
     if (node->mesh)

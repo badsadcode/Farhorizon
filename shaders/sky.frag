@@ -26,7 +26,7 @@ float fbm(vec3 p) {
 void main() {
   // Reconstruct the view direction (reversed-Z: ndc z = 1 is the near plane).
   vec4 h = frame.invViewProj * vec4(vNdc, 1.0, 1.0);
-  vec3 dir = normalize(h.xyz / h.w);
+  vec3 dir = normalize(h.xyz / h.w - frame.viewOrigin.xyz);
 
   // Deep background with a faint galactic band and restrained procedural dust.
   float band = 1.0 - abs(dot(dir, galacticNormal()));

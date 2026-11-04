@@ -17,6 +17,7 @@ layout(set = 2, binding = 0) uniform sampler2DArrayShadow sunShadowMap;
 layout(set = 2, binding = 1) uniform samplerCubeArrayShadow pointShadowMap;
 layout(set = 2, binding = 2) uniform sampler2D aoTex;
 layout(set = 2, binding = 3) uniform samplerCube envMap;
+layout(set = 2, binding = 4) uniform samplerCubeArray probeArray;
 
 layout(push_constant) uniform Push {
   vec4 baseColor;
@@ -47,6 +48,31 @@ vec3 envBrdfApprox(vec3 f0, float rough, float NoV) {
   float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
   vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
   return f0 * ab.x + ab.y;
+}
+
+// Reflections: the live view around the camera, or a placed probe for surfaces inside its box. A probe's
+// lookup is corrected for the surface's position: follow the ray to the box wall it hits, and look that
+// way from where the snapshot was taken. `blur` is 0 (sharp) to 1 (the room's average colour).
+vec3 sampleEnv(vec3 dir, float blur) {
+  vec3 live = textureLod(envMap, dir, blur * (frame.lighting.w - 1.0)).rgb;
+  int count = int(frame.viewOrigin.w);
+  int best = -1;
+  float bestWeight = 0.0;
+  for (int i = 0; i < count; ++i) {
+    vec3 inside = min(vPos - frame.probeMin[i].xyz, frame.probeMax[i].xyz - vPos);
+    // Full strength up to the box, fading over 60 cm beyond it: floors and walls sit right on the box.
+    float weight = clamp(min(inside.x, min(inside.y, inside.z)) / 0.6 + 1.0, 0.0, 1.0);
+    if (weight > bestWeight) {
+      bestWeight = weight;
+      best = i;
+    }
+  }
+  if (best < 0) return live;
+  vec3 a = (frame.probeMax[best].xyz - vPos) / dir, b = (frame.probeMin[best].xyz - vPos) / dir;
+  vec3 far_ = max(a, b);
+  vec3 hit = vPos + dir * min(far_.x, min(far_.y, far_.z));
+  vec3 placed = textureLod(probeArray, vec4(hit - frame.probePos[best].xyz, float(best)), blur * 9.0).rgb;
+  return mix(live, placed, bestWeight);
 }
 
 // ---- Procedural surface detail: the models have no textures yet ------------------------------
@@ -135,7 +161,7 @@ void main() {
   vec3 emissive = pc.emissiveMetallic.rgb * texture(emissiveTex, vUv).rgb;
 
   vec3 N = normalize(vNormal);
-  vec3 V = normalize(-vPos);          // camera at origin in render space
+  vec3 V = normalize(frame.viewOrigin.xyz - vPos);  // the camera is at the origin, except for probes
   if (dot(N, V) < 0.0) N = -N;        // tolerate thin/double-sided geometry
   const vec3 Ng = N;                  // before the bump: shadow lookups use the true surface
   if (pc.params.w > 0.5) {
@@ -204,7 +230,9 @@ void main() {
   vec3 spec = D_GGX(NoH, a) * V_SmithGGXCorrelated(NoV, NoL, a) * F;
   vec3 diff = diffuseColor / PI;
   float sun = NoL > 0.0 ? sunShadow(Ng, NoL, noise) : 1.0;
-  vec3 direct = (diff * (1.0 - F) + spec) * frame.sunColorExp.rgb * NoL * sun;
+  // A near-mirror's highlight is a tiny point of enormous brightness, which bloom would smear into a
+  // white disc, so highlights are capped.
+  vec3 direct = (diff * (1.0 - F) * frame.sunColorExp.rgb * NoL + min(spec * frame.sunColorExp.rgb * NoL, vec3(5.0))) * sun;
 
   // Authored ambient keeps shadow sides from going fully black; the probe adds real surroundings.
   float hemi = dot(N, L) * 0.5 + 0.5;
@@ -212,10 +240,9 @@ void main() {
   vec3 envDiffuse = vec3(0.0);
   vec3 envSpec;
   if (frame.lighting.y > 0.0) {
-    float maxLod = frame.lighting.w;
-    envDiffuse = min(textureLod(envMap, N, maxLod - 1.0).rgb, vec3(4.0)) * frame.lighting.y;
+    envDiffuse = min(sampleEnv(N, 1.0), vec3(4.0)) * frame.lighting.y;
     vec3 R = reflect(-V, N);
-    vec3 env = min(textureLod(envMap, R, rough * (maxLod - 1.0)).rgb, vec3(12.0)) * frame.lighting.y;
+    vec3 env = min(sampleEnv(R, rough), vec3(12.0)) * frame.lighting.y;
     envSpec = env * envBrdfApprox(f0, rough, NoV);
   } else {
     envSpec = F_Schlick(NoV, f0) * ambient * (1.0 - rough * 0.7);
@@ -249,11 +276,13 @@ void main() {
     vec3 Hp = normalize(Ld + V);
     vec3 Fp = F_Schlick(max(dot(Ld, Hp), 0.0), f0);
     vec3 specP = D_GGX(max(dot(N, Hp), 0.0), a) * V_SmithGGXCorrelated(NoV, nl, a) * Fp;
-    local += (diffuseColor / PI * (1.0 - Fp) + specP) * frame.pointColor[i].rgb * nl * atten;
+    // On a near-mirror the lamp's fixture already shows in the reflection: a highlight would double it.
+    if (frame.lighting.y > 0.0) specP *= smoothstep(0.06, 0.3, rough);
+    local += diffuseColor / PI * (1.0 - Fp) * frame.pointColor[i].rgb * nl * atten + min(specP * frame.pointColor[i].rgb * nl * atten, vec3(5.0));
   }
   float specAo = clamp(ao * ao + 0.05, 0.0, 1.0);
   vec3 color = direct * mix(1.0, ao, 0.3) + local * mix(1.0, ao, 0.55) + (fill + rimLight) * ao +
                (ambient + envDiffuse) * diffuseColor * ao + envSpec * specAo + emissive;
 
-  outColor = vec4(applyFog(color, length(vPos)), base.a);  // linear HDR radiance
+  outColor = vec4(applyFog(color, length(vPos - frame.viewOrigin.xyz)), base.a);  // linear HDR radiance
 }

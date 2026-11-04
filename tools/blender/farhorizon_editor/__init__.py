@@ -8,7 +8,7 @@
 bl_info = {
     "name": "FARHORIZON Editor",
     "author": "FARHORIZON",
-    "version": (0, 8, 0),
+    "version": (0, 8, 1),
     "blender": (4, 2, 0),
     "location": "3D Viewport > Sidebar (N) > FARHORIZON",
     "description": "Build maps and ships for FARHORIZON and play them with one button",
@@ -40,6 +40,8 @@ ENTITIES = {
                  "A message the player can read"),
     "terminal": ("Terminal", "screen", (0.75, 0.75, 1.0), {"fh_prompt": "Terminal", "fh_radius": 1.6},
                  "A station services terminal"),
+    "reflection_probe": ("Reflection Probe", "probe", (0.7, 0.9, 1.0), {},
+                         "Scale the box to fit a room. Shiny surfaces inside it reflect that room"),
     "enemy_spawn": ("Enemy Spawn", "skull", (1.0, 0.3, 0.25), {"fh_kind": ""},
                     "Placed now, used when enemies arrive. Shows as a red glow in the game"),
     "loot": ("Loot", "crate", (1.0, 0.7, 0.2), {"fh_kind": ""},
@@ -72,6 +74,8 @@ GLYPHS = {
     "crate": [(-0.8, -0.75), (0.8, -0.75), (0.8, 0.75), (-0.8, 0.75), (-0.8, -0.75), None, (-0.8, 0.25), (0.8, 0.25), None, (-0.15, 0.25),
               (-0.15, -0.1), (0.15, -0.1), (0.15, 0.25)],
     "seat": [(-0.45, 0.95), (-0.45, -0.1), (0.6, -0.1), (0.6, -0.9), None, (-0.45, -0.1), (-0.45, -0.9)],
+    "probe": [(0, 0.9), (0.64, 0.64), (0.9, 0), (0.64, -0.64), (0, -0.9), (-0.64, -0.64), (-0.9, 0), (-0.64, 0.64), (0, 0.9), None,
+              (-0.3, 0.5), (0.1, 0.5), None, (-0.5, 0.2), (-0.15, 0.2)],
     "socket": [(-0.8, 0), (-0.25, 0), None, (0.25, 0), (0.8, 0), None, (0, 0.8), (0, 0.25), None, (0, -0.25), (0, -0.8), None, (-0.25, 0),
                (0, 0.25), (0.25, 0), (0, -0.25), (-0.25, 0)],
 }
@@ -190,6 +194,15 @@ def run_checks(scene):
             flat = (o.matrix_world.to_quaternion() @ Vector((0, 1, 0)))
             if abs(flat.z) > 0.3:
                 warnings.append(f"'{o.name}' is tilted. Players always stand upright")
+        probes = [o for o in objects if o.get("fh_type") == "reflection_probe"]
+        if len(probes) > 8:
+            warnings.append(f"{len(probes)} Reflection Probes: the game uses the first 8")
+        for o in probes:
+            rot = o.matrix_world.to_euler()
+            if any(abs(a) > 0.01 for a in rot):
+                warnings.append(f"'{o.name}' is rotated. Probe boxes always line up with the world axes")
+            if o.empty_display_size != 1.0:
+                warnings.append(f"'{o.name}' has a changed display size. Use Scale to size the box")
         if not any(o.get("fh_type") == "exit" for o in objects):
             warnings.append("No Exit: players can only leave through the menu")
         solid = [o for o in meshes if o.get("fh_collide", "both") != "none"]
@@ -401,6 +414,10 @@ class FH_OT_add_entity(bpy.types.Operator):
         obj["fh_type"] = self.kind
         for key, value in extra.items():
             obj[key] = value
+        if self.kind == "reflection_probe":
+            obj.empty_display_type = "CUBE"
+            obj.empty_display_size = 1.0
+            obj.scale = (4.0, 4.0, 1.5)
         return {"FINISHED"}
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 — Reflections you can place (2026-11-04)
+* **Reflection Probe entity:** place it in a room and scale its box to fit. Shiny surfaces inside reflect
+  that room, sharper than before and lined up with the walls. Up to 8 per map, captured once at load.
+* **Plain materials work as set:** a Blender material with no textures now keeps your exact roughness,
+  so chrome and polished metal need only the sliders. Maps and ships from Blender get no automatic grime.
+* The sample derelict has a polished panel, standing water and two probes.
+* Near-mirrors no longer show a lamp's highlight on top of its reflection.
+
 ## 0.8.0 — Blender is the editor (2026-11-04)
 * **FARHORIZON add-on for Blender** (`tools/blender/`, guide in `docs/BLENDER_GUIDE.md`): build maps and
   ships in Blender and press **Play in Game**. Entities with icons in the viewport, a player-sized guide,

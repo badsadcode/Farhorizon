@@ -52,3 +52,5 @@
 | 48 | open | render | No transparency in materials: everything is opaque. Spot lights act as point lights, and Area lights do not export. |
 | 49 | open | maps | A map's visible geometry merges into one mesh, with no per-object culling, and each lamp's shadow pass redraws it. Very large maps will need splitting. |
 | 50 | info | blender | The add-on was run in Blender 5.1 only. It declares 4.2 as the minimum, untested there. |
+| 51 | open | render | Placed probes are captured once at load: moving things and the player never appear in them, and they are not recaptured when a save or hot reload changes the map. |
+| 52 | open | render | Probe mips are a plain box filter, so glossy reflections are less accurate than a prefiltered probe, and the first frames of a map use the live view until each probe is ready. Glow sprites, particles, clouds and stars are not in any probe. |

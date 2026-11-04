@@ -71,6 +71,12 @@ struct CloudDraw {
   float seed = 1;
 };
 
+// A placed reflection probe. Everything is camera-relative, as all render data is.
+struct ReflectionProbeDraw {
+  Vec3 position{};
+  Vec3 boxMin{}, boxMax{};
+};
+
 // Travel drive tunnel around the flight path; drawn when amount > 0.
 struct TunnelDraw {
   Vec3 forward{0, 0, -1};
@@ -123,6 +129,10 @@ struct RenderFrameParams {
   std::vector<CloudDraw> clouds;   // drawn in order: far to near
   std::vector<RibbonVertex> ribbons;  // exhaust trails, triangle list
   TunnelDraw tunnel;
+  // Placed reflection probes are baked once per generation: change it when the set changes. 0 = none.
+  std::vector<ReflectionProbeDraw> reflectionProbes;
+  std::uint32_t probeGeneration = 0;
+  std::vector<PointLight> probeLights;  // every lamp, at full steady strength, for the bake
 };
 
 struct GlowSprite {
@@ -207,6 +217,7 @@ class Renderer {
   void ensureTargets();  // depth + HDR colour sized to the swapchain
   void createLightingResources();
   void destroyLightingResources();
+  void allocateProbeArray(std::uint32_t count);
   VkDescriptorSet allocateMaterialSet(VkImageView view, VkSampler sampler = VK_NULL_HANDLE,
                                       VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   GpuImage uiAtlas_;
@@ -285,6 +296,14 @@ class Renderer {
   VkPipelineLayout particlePipelineLayout_ = VK_NULL_HANDLE;
   GpuImage particleAtlas_;
   VkDescriptorSet particleAtlasSet_ = VK_NULL_HANDLE;
+  static constexpr std::uint32_t kPlacedProbeSize = 512;
+  static constexpr std::uint32_t kPlacedProbeMips = 10;
+  GpuImage probeArray_, probeArrayDepth_;
+  GpuImage blackProbeArray_;  // for probe passes: a surface being rendered cannot also be read
+  std::vector<VkImageView> probeArrayFaceViews_;
+  std::uint32_t probeArrayCount_ = 0;     // layers allocated, in probes
+  std::uint32_t probesBaked_ = 0;
+  std::uint32_t probeGeneration_ = 0;
   std::uint32_t probeFace_ = 0;
   bool probeFilled_ = false;
 

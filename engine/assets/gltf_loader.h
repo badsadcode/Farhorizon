@@ -17,6 +17,7 @@ struct GltfNodeInfo {
   std::string extras;  // raw JSON of the node's custom properties; empty when it has none
   Vec3 position{};
   Quat rotation{};
+  Vec3 scale{1, 1, 1};
 };
 struct GltfLightInfo {
   enum class Type { Point, Spot, Sun } type = Type::Point;

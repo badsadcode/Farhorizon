@@ -30,6 +30,10 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 viewForward;      // xyz camera forward in render space
   vec4 skyNebulaB;       // rgb second nebula colour
   vec4 skyNebulaC;       // rgb nebula core colour
+  vec4 viewOrigin;       // xyz the viewpoint in render space (0 except for probes), w placed probes in use
+  vec4 probePos[8];      // placed reflection probes: snapshot position
+  vec4 probeMin[8];      // box
+  vec4 probeMax[8];
 } frame;
 
 vec3 applyFog(vec3 color, float dist) {

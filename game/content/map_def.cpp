@@ -45,6 +45,7 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
 
   LoadedMap map;
   map.mesh = std::move(*mesh);
+  for (MaterialData& m : map.mesh.materials) m.proceduralDetail = false;  // Blender's material is the truth
   InteriorDef& d = map.def;
   d.id = "map";
   d.name = path.stem().string();
@@ -92,6 +93,13 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
       use("takeSeat", "Take the pilot seat");
     } else if (type == "airlock") {
       use("exitShip", "Cycle the airlock");
+    } else if (type == "reflection_probe") {
+      // The box is the Empty's cube: its scale gives the half size, and boxes stay axis-aligned.
+      if (d.reflectionProbes.size() >= kMaxReflectionProbes) {
+        map.warnings.push_back("more than " + std::to_string(kMaxReflectionProbes) + " reflection probes: '" + n.name + "' is ignored");
+      } else {
+        d.reflectionProbes.push_back({n.position, n.position - n.scale, n.position + n.scale});
+      }
     } else if (type == "enemy_spawn" || type == "loot") {
       const bool enemy = type == "enemy_spawn";
       map.markers.push_back({type, n.name, str(extras, "fh_kind"), n.position, yaw});

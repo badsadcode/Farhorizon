@@ -26,6 +26,18 @@ status lives in `STATUS.md`._
    Port suitable algorithms from the owner's Thornwake project (noise, mountains, canyons, biomes;
    C#/Godot, so ported rather than linked). Start with dry worlds; skip rivers and lakes at first.
 
+## Graphics features to add as the game grows
+Picked up when a map or scene calls for them, not as one big step. Rough order of value:
+* **Screen-space reflections:** sharp reflections of whatever is on screen, including moving things, on
+  top of the probes. They cannot show anything off screen, so they need the probes as a fallback.
+* **Real planar mirrors:** a surface you mark as a mirror, for when a map needs one.
+* **Transparency:** glass, visors, holograms.
+* **Depth of field:** best kept for menus, cutscenes and ship views. In first person and in flight it
+  tends to hide what you are trying to see, so it would be subtle or off by default, with an option.
+* **Motion blur and temporal anti-aliasing:** TAA also cleans up shimmer on thin details.
+* **Volumetric light shafts:** for example sun through a hull breach.
+* **Ray tracing:** as an option only, for cards that have it.
+
 ## Decisions already made
 * **Money and cargo:** personal wallets, plus a shared hold on a shared ship.
 * **World:** pauses when nobody is connected.

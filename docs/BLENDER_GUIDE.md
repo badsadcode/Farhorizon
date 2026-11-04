@@ -53,6 +53,7 @@ Each one shows as an icon with its name. They can be moved, rotated, duplicated 
 | **Data Log** | Shows a message when used. Write it in **Text** |
 | **Terminal** | A station services terminal |
 | **Pilot Seat**, **Airlock** | For ship interiors |
+| **Reflection Probe** | Makes shiny surfaces in a room reflect that room. See [Shiny surfaces](#shiny-surfaces) |
 | **Enemy Spawn**, **Loot** | Placed and saved now, but nothing happens yet. They show as red and amber glows until those systems arrive |
 
 **Prompt** is what the player sees, and **Reach** is how close they must be.
@@ -88,10 +89,31 @@ Set data images (normal, roughness, metallic) to **Non-Color**. Things to avoid:
 * **Procedural nodes** (Noise, Musgrave and so on) cannot export. Bake them to images first. The Check
   names any it finds.
 * **Transparency** is not drawn yet. Everything is opaque.
-* A material with a base colour image gets none of the game's built-in grime, so what you paint is what
-  you see. Materials without one do get it.
+* Materials from Blender get none of the game's built-in grime, so what you set is what you see.
 
 Images are packed into the exported file, so you only need to keep them for your own use.
+
+## Shiny surfaces
+Set **Roughness** low. Metallic 1 gives chrome and polished metal. Metallic 0 with a dark colour gives
+water or wet floors, which reflect most at shallow angles. No texture is needed.
+
+Then add a **Reflection Probe** to the room:
+1. Put it in the middle of the room, roughly at head height. It takes its picture from there.
+2. Use **Scale** to make its box match the room's walls, floor and ceiling. The default size is a start.
+3. Press **Play in Game**.
+
+Without a probe, shiny surfaces still reflect, from a small blurry view around the player. Up to 8
+probes per map. Keep the boxes from overlapping much: where they do, the first one wins. Boxes always
+line up with the world axes, so a rotated probe is treated as unrotated, and the Check warns you.
+
+**What to expect:** probes are excellent on floors and walls in box-shaped rooms, and less exact in
+round rooms. They are not true mirrors:
+* The picture is taken once when the map loads, so moving things do not appear, and neither does the
+  player. A flickering lamp is captured as steady.
+* Curved and small objects look right. A big flat mirror will look slightly off near objects in the
+  middle of the room.
+* A lamp on a very polished surface (Roughness below about 0.06) shows only through its reflection, so
+  give the fixture an emissive material or the lamp will not appear in it.
 
 ## Making a ship
 1. Choose **Ship Exterior**. Model with the nose along **+Y**.

@@ -492,6 +492,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   visuals.ship = [&](const ShipDef&) {
     VisualInfo v;
     if (shipMeshOverride) {  // straight from Blender: nose along -Z, 1 unit = 1 metre
+      for (MaterialData& m : shipMeshOverride->materials) m.proceduralDetail = false;
       shipMesh->data = *shipMeshOverride;
       shipMesh->meshFix = Mat4::identity();
     }
@@ -1565,6 +1566,14 @@ int GameApp::run() {
     params.ambientOcclusion = settings_.ambientOcclusion;
     params.reflections = settings_.reflections ? 1.0f : 0.0f;
     params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
+    if (localScene && !localScene->reflectionProbes.empty() && !surface) {
+      params.probeGeneration = 1;
+      for (const ReflectionProbeDef& pr : localScene->reflectionProbes)
+        params.reflectionProbes.push_back({pr.position - view.position, pr.boxMin - view.position, pr.boxMax - view.position});
+      for (const auto& l : localScene->lights)
+        if (l.range > 0)  // steady: a flickering lamp should not be caught mid-dropout for good
+          params.probeLights.push_back({l.position - view.position, l.range, l.color * l.intensity});
+    }
     params.clouds.clear();
     if (settings_.volumetricClouds && !localScene) {
       for (const CloudDef& c : scene_.clouds) {

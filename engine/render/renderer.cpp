@@ -43,8 +43,12 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 viewForward;
   Vec4 skyNebulaB;
   Vec4 skyNebulaC;
+  Vec4 viewOrigin;
+  Vec4 probePos[8];
+  Vec4 probeMin[8];
+  Vec4 probeMax[8];
 };
-static_assert(sizeof(FrameUniforms) == 960);
+static_assert(sizeof(FrameUniforms) == 1360);
 
 // Vulkan cube map table: sc, tc and ma for each face, as row vectors over (x, y, z).
 struct CubeFace {
@@ -310,10 +314,10 @@ void Renderer::createDescriptors() {
   li.pBindings = mb;
   VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &meshMaterialLayout_));
 
-  VkDescriptorSetLayoutBinding lb[4]{};
-  for (std::uint32_t i = 0; i < 4; ++i)
+  VkDescriptorSetLayoutBinding lb[5]{};
+  for (std::uint32_t i = 0; i < 5; ++i)
     lb[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
-  li.bindingCount = 4;
+  li.bindingCount = 5;
   li.pBindings = lb;
   VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &lightingLayout_));
 
@@ -715,7 +719,11 @@ void Renderer::createLightingResources() {
                            VK_ACCESS_2_TRANSFER_WRITE_BIT, frag, read, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6);
   });
 
-  auto allocate = [&](VkImageView env, VkImageView ao) {
+  allocateProbeArray(0);  // one black probe, so the sets are always complete
+  blackProbeArray_ = probeArray_;
+  probeArray_ = {};
+  allocateProbeArray(0);
+  auto allocate = [&](VkImageView env, VkImageView ao, VkImageView placed) {
     VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     ai.descriptorPool = descriptorPool_;
     ai.descriptorSetCount = 1;
@@ -723,12 +731,13 @@ void Renderer::createLightingResources() {
     VkDescriptorSet set;
     VK_CHECK(vkAllocateDescriptorSets(d, &ai, &set));
     const VkImageLayout ro = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    const VkDescriptorImageInfo infos[4] = {{shadowSampler_, sunShadow_.view, ro},
+    const VkDescriptorImageInfo infos[5] = {{shadowSampler_, sunShadow_.view, ro},
                                             {shadowSampler_, pointShadow_.view, ro},
                                             {clampSampler_, ao, ro},
-                                            {clampSampler_, env, ro}};
-    VkWriteDescriptorSet writes[4]{};
-    for (std::uint32_t i = 0; i < 4; ++i) {
+                                            {clampSampler_, env, ro},
+                                            {clampSampler_, placed, ro}};
+    VkWriteDescriptorSet writes[5]{};
+    for (std::uint32_t i = 0; i < 5; ++i) {
       writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
       writes[i].dstSet = set;
       writes[i].dstBinding = i;
@@ -736,15 +745,65 @@ void Renderer::createLightingResources() {
       writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       writes[i].pImageInfo = &infos[i];
     }
-    vkUpdateDescriptorSets(d, 4, writes, 0, nullptr);
+    vkUpdateDescriptorSets(d, 5, writes, 0, nullptr);
     return set;
   };
-  lightingSet_ = allocate(probe_.view, whiteTexture_.view);  // ensureTargets points AO at its target
-  probeLightingSet_ = allocate(blackCube_.view, whiteTexture_.view);
+  lightingSet_ = allocate(probe_.view, whiteTexture_.view, probeArray_.view);  // ensureTargets points AO at its target
+  probeLightingSet_ = allocate(blackCube_.view, whiteTexture_.view, blackProbeArray_.view);
+}
+
+void Renderer::allocateProbeArray(std::uint32_t count) {
+  VkDevice d = ctx_.device();
+  for (VkImageView v : probeArrayFaceViews_) vkDestroyImageView(d, v, nullptr);
+  probeArrayFaceViews_.clear();
+  gpu::destroy(ctx_, probeArray_);
+  gpu::destroy(ctx_, probeArrayDepth_);
+  probeArrayCount_ = count;
+  gpu::ImageDesc desc;
+  desc.format = kHdrFormat;
+  desc.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+               VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  desc.cubeCompatible = true;
+  desc.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+  desc.layers = std::max(1u, count) * 6;
+  desc.extent = count ? VkExtent2D{kPlacedProbeSize, kPlacedProbeSize} : VkExtent2D{1, 1};
+  desc.mips = count ? kPlacedProbeMips : 1;
+  probeArray_ = gpu::createImage(ctx_, desc);
+  ctx_.immediateSubmit([&](VkCommandBuffer cmd) {
+    gpu::imageBarrierRange(cmd, probeArray_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.mips, 0, desc.layers);
+    const VkClearColorValue zero{{0, 0, 0, 0}};
+    const VkImageSubresourceRange all{VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.mips, 0, desc.layers};
+    vkCmdClearColorImage(cmd, probeArray_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1, &all);
+    gpu::imageBarrierRange(cmd, probeArray_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.mips, 0, desc.layers);
+  });
+  if (count > 0) {
+    for (std::uint32_t i = 0; i < count * 6; ++i)
+      probeArrayFaceViews_.push_back(gpu::createSubView(ctx_, probeArray_, VK_IMAGE_ASPECT_COLOR_BIT, 0, i));
+    probeArrayDepth_ = gpu::createImage(ctx_, {kPlacedProbeSize, kPlacedProbeSize}, kDepthFormat,
+                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+  }
+  if (lightingSet_) {  // not on the first call, before the set exists
+    VkDescriptorImageInfo info{clampSampler_, probeArray_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    w.dstSet = lightingSet_;
+    w.dstBinding = 4;
+    w.descriptorCount = 1;
+    w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    w.pImageInfo = &info;
+    vkUpdateDescriptorSets(d, 1, &w, 0, nullptr);
+  }
 }
 
 void Renderer::destroyLightingResources() {
   VkDevice d = ctx_.device();
+  for (VkImageView v : probeArrayFaceViews_) vkDestroyImageView(d, v, nullptr);
+  gpu::destroy(ctx_, probeArray_);
+  gpu::destroy(ctx_, probeArrayDepth_);
+  gpu::destroy(ctx_, blackProbeArray_);
   for (VkImageView v : sunLayerViews_) vkDestroyImageView(d, v, nullptr);
   for (VkImageView v : pointFaceViews_) vkDestroyImageView(d, v, nullptr);
   for (VkImageView v : probeFaceViews_) vkDestroyImageView(d, v, nullptr);
@@ -816,7 +875,7 @@ MeshHandle Renderer::uploadMesh(const MeshData& mesh) {
     gm.metallic = m.metallic;
     gm.roughness = m.roughness;
     gm.panels = m.panels;
-    gm.textured = m.baseColorImage >= 0;
+    gm.textured = m.baseColorImage >= 0 || !m.proceduralDetail;
     gm.normalMapped = m.normalImage >= 0;
     g.materials.push_back(gm);
   }
@@ -866,6 +925,12 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                       const std::vector<GlowSprite>& glows, const std::vector<ParticleSprite>& particles,
                       const std::vector<OverlayVertex>& overlay,
                       const std::filesystem::path* screenshotPath) {
+  if (p.probeGeneration != probeGeneration_) {  // a different set of placed probes: start again
+    vkDeviceWaitIdle(ctx_.device());
+    probeGeneration_ = p.probeGeneration;
+    probesBaked_ = 0;
+    allocateProbeArray(std::uint32_t(std::min<size_t>(8, p.reflectionProbes.size())));
+  }
   std::uint32_t imageIndex = 0;
   if (!ctx_.beginFrame(imageIndex)) return false;
   ensureTargets();
@@ -916,6 +981,15 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   // Rows of the rotation-only view: the camera looks down -Z.
   const Vec3 forward{-p.viewRotation.at(2, 0), -p.viewRotation.at(2, 1), -p.viewRotation.at(2, 2)};
   u.viewForward = Vec4(forward, 0);
+  // Only finished snapshots are used, so a probe never shows black while its turn is coming.
+  const std::uint32_t probesUsable = std::min<std::uint32_t>(probesBaked_, std::uint32_t(p.reflectionProbes.size()));
+  u.viewOrigin = Vec4(0, 0, 0, p.reflections > 0.0f ? float(probesUsable) : 0.0f);
+  for (std::uint32_t i = 0; i < 8; ++i) {
+    const bool used = i < p.reflectionProbes.size();
+    u.probePos[i] = used ? Vec4(p.reflectionProbes[i].position, 0) : Vec4(0, 0, 0, 0);
+    u.probeMin[i] = used ? Vec4(p.reflectionProbes[i].boxMin, 0) : Vec4(0, 0, 0, 0);
+    u.probeMax[i] = used ? Vec4(p.reflectionProbes[i].boxMax, 0) : Vec4(0, 0, 0, 0);
+  }
   u.lighting = Vec4(p.ambientOcclusion ? 1.0f : 0.0f, p.reflections, p.post.surfaceDetail, float(kProbeMips));
   const std::uint32_t shadowedLights =
       p.pointShadows ? std::min<std::uint32_t>(kPointShadowLights, std::uint32_t(nLights)) : 0;
@@ -1088,7 +1162,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   }
 
   // ---- Lamp shadows: a cube map for each of the nearest lamps ----
-  if (shadowedLights > 0 && !items.empty()) {
+  auto lampShadowPass = [&](const PointLight* lights, std::uint32_t shadowedLights) {
+    if (shadowedLights == 0 || items.empty()) return;
     gpu::imageBarrierRange(cmd, pointShadow_.image, kShaderRead, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, kDepthStages,
                            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0,
@@ -1098,7 +1173,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
       Vec4 farFace;
     };
     for (std::uint32_t li = 0; li < shadowedLights; ++li) {
-      const PointLight& light = p.pointLights[li];
+      const PointLight& light = lights[li];
       // Only what the lamp can reach. Lamp fixtures glow and must not shadow their own light.
       std::vector<std::uint32_t> visible;
       for (std::uint32_t k = 0; k < drawOrder_.size(); ++k) {
@@ -1140,7 +1215,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0,
                            kPointShadowLights * 6);
-  }
+  };
 
   // Shaded opaque geometry, shared by the probe and the main pass.
   auto drawMeshes = [&](VkPipeline pipeline, VkDescriptorSet frameSet, VkDescriptorSet lightSet) {
@@ -1223,105 +1298,142 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     vkCmdSetScissor(cmd, 0, 1, &full);
   };
 
-  // ---- Reflection probe: one cube face per frame around the camera, then its mip chain ----
+  // One face of a reflection probe, then that face's mip chain. Roughness reads blurrier mips.
+  auto renderProbeFace = [&](GpuImage& target, VkImageView faceView, GpuImage& depth, std::uint32_t layer, std::uint32_t face,
+                             std::uint32_t mips, const FrameUniforms& base, const Vec3& position) {
+    const std::uint32_t size = target.extent.width;
+    const CubeFace& cf = kCubeFaces[face];
+    FrameUniforms pu = base;
+    Mat4 vp;
+    for (int col = 0; col < 3; ++col) {
+      vp.at(0, col) = cf.sc[col];
+      vp.at(1, col) = cf.tc[col];
+      vp.at(2, col) = 0.0f;
+      vp.at(3, col) = cf.ma[col];
+    }
+    vp.at(2, 3) = p.nearPlane;  // reversed-Z, infinite far plane
+    vp.at(3, 3) = 0.0f;
+    vp = vp * Mat4::translation(-position);
+    pu.viewProj = vp;
+    pu.invViewProj = vp.inverse();
+    pu.viewport = Vec4(float(size), float(size), 1.0f / float(size), 1.0f / float(size));
+    pu.viewOrigin = Vec4(position, 0.0f);
+    pu.skyBase.w = 0.0f;     // no sun disc: direct light already counts the sun
+    pu.lighting.x = 0.0f;    // no AO
+    pu.lighting.y = 0.0f;    // no reflections of reflections
+    pu.viewForward = Vec4(cf.ma, 0);
+    // Cascades follow the camera's view, but the widest one covers everything near it, so probes
+    // use only that one: coarse shadows are fine in a reflection, and sunlight stops at walls.
+    pu.shadowSplits = p.sunShadows ? Vec4(-1e9f, -1e9f, 1e9f, 1.0f) : Vec4(0, 0, 0, 0);
+    vkCmdUpdateBuffer(cmd, fr.probeUniforms.buffer, 0, sizeof(pu), &pu);
+    VkMemoryBarrier2 mb{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    mb.srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+    mb.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    mb.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    mb.dstAccessMask = VK_ACCESS_2_UNIFORM_READ_BIT;
+    VkDependencyInfo di{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    di.memoryBarrierCount = 1;
+    di.pMemoryBarriers = &mb;
+    vkCmdPipelineBarrier2(cmd, &di);
+
+    gpu::imageBarrierRange(cmd, target.image, kShaderRead, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, layer, 1);
+    gpu::imageBarrier(cmd, depth.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                      kDepthStages, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                      VK_IMAGE_ASPECT_DEPTH_BIT);
+    VkRenderingAttachmentInfo pc{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    pc.imageView = faceView;
+    pc.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    pc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    pc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    pc.clearValue.color = {{p.skyBase.x, p.skyBase.y, p.skyBase.z, 1}};
+    VkRenderingAttachmentInfo pd{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    pd.imageView = depth.view;
+    pd.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    pd.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    pd.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    pd.clearValue.depthStencil = {0.0f, 0};
+    VkRenderingInfo pri{VK_STRUCTURE_TYPE_RENDERING_INFO};
+    const VkExtent2D ps{size, size};
+    pri.renderArea = {{0, 0}, ps};
+    pri.layerCount = 1;
+    pri.colorAttachmentCount = 1;
+    pri.pColorAttachments = &pc;
+    pri.pDepthAttachment = &pd;
+    vkCmdBeginRendering(cmd, &pri);
+    const VkViewport pv{0, 0, float(size), float(size), 0.0f, 1.0f};
+    const VkRect2D pr{{0, 0}, ps};
+    vkCmdSetViewport(cmd, 0, 1, &pv);
+    vkCmdSetScissor(cmd, 0, 1, &pr);
+    drawBackground(vp, ps, fr.probeSet, false);
+    drawMeshes(meshProbePipeline_, fr.probeSet, probeLightingSet_);
+    vkCmdEndRendering(cmd);
+
+    gpu::imageBarrierRange(cmd, target.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                           VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, layer, 1);
+    std::int32_t mipSize = std::int32_t(size);
+    for (std::uint32_t mip = 1; mip < mips; ++mip) {
+      gpu::imageBarrierRange(cmd, target.image, kShaderRead, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                             VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layer, 1);
+      VkImageBlit blit{};
+      blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, layer, 1};
+      blit.srcOffsets[1] = {mipSize, mipSize, 1};
+      const std::int32_t next = std::max(1, mipSize / 2);
+      blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, layer, 1};
+      blit.dstOffsets[1] = {next, next, 1};
+      vkCmdBlitImage(cmd, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+      gpu::imageBarrierRange(cmd, target.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                             VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                             VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layer, 1);
+      mipSize = next;
+    }
+    gpu::imageBarrierRange(cmd, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, kShaderRead,
+                           VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT, 0, mips, layer, 1);
+  };
+
+  // ---- Placed reflection probes: one each frame until all are done, lit by the lamps around them ----
+  if (p.reflections > 0.0f && probesBaked_ < probeArrayCount_ && probesBaked_ < p.reflectionProbes.size()) {
+    const std::uint32_t index = probesBaked_;
+    const Vec3 at = p.reflectionProbes[index].position;
+    std::vector<PointLight> lamps = p.probeLights;
+    std::sort(lamps.begin(), lamps.end(), [&](const PointLight& a, const PointLight& b) {
+      return dot(a.position - at, a.position - at) < dot(b.position - at, b.position - at);
+    });
+    const std::uint32_t lampCount = std::uint32_t(std::min<size_t>(8, lamps.size()));
+    FrameUniforms base = u;
+    base.lightCount = Vec4(float(lampCount), 0, 0, 0);
+    for (std::uint32_t i = 0; i < lampCount; ++i) {
+      base.pointPosRange[i] = Vec4(lamps[i].position, lamps[i].range);
+      base.pointColor[i] = Vec4(lamps[i].color, 0);
+    }
+    const std::uint32_t shadowed = p.pointShadows ? std::min(kPointShadowLights, lampCount) : 0;
+    base.shadowInfo.w = float(shadowed);
+    lampShadowPass(lamps.data(), shadowed);
+    for (std::uint32_t face = 0; face < 6; ++face) {
+      const std::uint32_t layer = index * 6 + face;
+      renderProbeFace(probeArray_, probeArrayFaceViews_[layer], probeArrayDepth_, layer, face, kPlacedProbeMips, base, at);
+    }
+    ++probesBaked_;
+  }
+
+  lampShadowPass(p.pointLights.data(), shadowedLights);
+
+  // ---- Live reflection probe: one cube face per frame around the camera ----
   if (p.reflections > 0.0f) {
     const std::uint32_t faces = probeFilled_ ? 1 : 6;  // the first frame fills the whole cube
     for (std::uint32_t n = 0; n < faces; ++n) {
       const std::uint32_t face = probeFace_;
       probeFace_ = (probeFace_ + 1) % 6;
-      const CubeFace& cf = kCubeFaces[face];
-      FrameUniforms pu = u;
-      Mat4 vp;
-      for (int col = 0; col < 3; ++col) {
-        vp.at(0, col) = cf.sc[col];
-        vp.at(1, col) = cf.tc[col];
-        vp.at(2, col) = 0.0f;
-        vp.at(3, col) = cf.ma[col];
-      }
-      vp.at(2, 3) = p.nearPlane;  // reversed-Z, infinite far plane
-      vp.at(3, 3) = 0.0f;
-      pu.viewProj = vp;
-      pu.invViewProj = vp.inverse();
-      pu.viewport = Vec4(float(kProbeSize), float(kProbeSize), 1.0f / float(kProbeSize), 1.0f / float(kProbeSize));
-      pu.skyBase.w = 0.0f;     // no sun disc: direct light already counts the sun
-      pu.lighting.x = 0.0f;    // no AO
-      pu.lighting.y = 0.0f;    // no reflections of reflections
-      pu.viewForward = Vec4(cf.ma, 0);
-      pu.shadowSplits.w = 0.0f;  // cascades only cover the camera's own view
-      vkCmdUpdateBuffer(cmd, fr.probeUniforms.buffer, 0, sizeof(pu), &pu);
-      VkMemoryBarrier2 mb{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
-      mb.srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-      mb.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-      mb.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-      mb.dstAccessMask = VK_ACCESS_2_UNIFORM_READ_BIT;
-      VkDependencyInfo di{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-      di.memoryBarrierCount = 1;
-      di.pMemoryBarriers = &mb;
-      vkCmdPipelineBarrier2(cmd, &di);
-
-      gpu::imageBarrierRange(cmd, probe_.image, kShaderRead, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, face, 1);
-      gpu::imageBarrier(cmd, probeDepth_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                        kDepthStages, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                        VK_IMAGE_ASPECT_DEPTH_BIT);
-      VkRenderingAttachmentInfo pc{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-      pc.imageView = probeFaceViews_[face];
-      pc.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      pc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      pc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      pc.clearValue.color = {{p.skyBase.x, p.skyBase.y, p.skyBase.z, 1}};
-      VkRenderingAttachmentInfo pd{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-      pd.imageView = probeDepth_.view;
-      pd.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-      pd.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      pd.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-      pd.clearValue.depthStencil = {0.0f, 0};
-      VkRenderingInfo pri{VK_STRUCTURE_TYPE_RENDERING_INFO};
-      const VkExtent2D ps{kProbeSize, kProbeSize};
-      pri.renderArea = {{0, 0}, ps};
-      pri.layerCount = 1;
-      pri.colorAttachmentCount = 1;
-      pri.pColorAttachments = &pc;
-      pri.pDepthAttachment = &pd;
-      vkCmdBeginRendering(cmd, &pri);
-      const VkViewport pv{0, 0, float(kProbeSize), float(kProbeSize), 0.0f, 1.0f};
-      const VkRect2D pr{{0, 0}, ps};
-      vkCmdSetViewport(cmd, 0, 1, &pv);
-      vkCmdSetScissor(cmd, 0, 1, &pr);
-      drawBackground(vp, ps, fr.probeSet, false);
-      drawMeshes(meshProbePipeline_, fr.probeSet, probeLightingSet_);
-      vkCmdEndRendering(cmd);
-
-      // Roughness reads blurrier mips; the smallest are the ambient light from around the camera.
-      gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
-                             VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, face, 1);
-      std::int32_t size = std::int32_t(kProbeSize);
-      for (std::uint32_t mip = 1; mip < kProbeMips; ++mip) {
-        gpu::imageBarrierRange(cmd, probe_.image, kShaderRead, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_BLIT_BIT,
-                               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, face, 1);
-        VkImageBlit blit{};
-        blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, face, 1};
-        blit.srcOffsets[1] = {size, size, 1};
-        const std::int32_t next = std::max(1, size / 2);
-        blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, face, 1};
-        blit.dstOffsets[1] = {next, next, 1};
-        vkCmdBlitImage(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, probe_.image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
-        gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT,
-                               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
-                               VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, face, 1);
-        size = next;
-      }
-      gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, kShaderRead,
-                             VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
-                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-                             VK_IMAGE_ASPECT_COLOR_BIT, 0, kProbeMips, face, 1);
+      renderProbeFace(probe_, probeFaceViews_[face], probeDepth_, face, face, kProbeMips, u, {0, 0, 0});
     }
     probeFilled_ = true;
   }

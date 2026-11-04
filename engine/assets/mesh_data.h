@@ -35,6 +35,7 @@ struct MaterialData {
   int emissiveImage = -1;
   int occlusionImage = -1;           // R
   float panels = 1.0f;               // procedural panel seams: 1 for built surfaces, 0 for rock and ground
+  bool proceduralDetail = true;      // automatic grime; off for anything authored in Blender
 };
 
 struct SubMesh {

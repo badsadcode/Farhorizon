@@ -64,6 +64,14 @@ struct SurfaceSkyDef {
   float starVisibility = 0.0f;
 };
 
+// A snapshot of a room's surroundings, taken once. Surfaces inside the box reflect it, corrected for
+// where they are in the box, so reflections line up with the room.
+struct ReflectionProbeDef {
+  Vec3 position{};  // where the snapshot is taken
+  Vec3 boxMin{}, boxMax{};
+};
+constexpr std::size_t kMaxReflectionProbes = 8;  // matches the renderer
+
 struct InteriorDef {
   std::string id;
   std::string name;
@@ -84,6 +92,7 @@ struct InteriorDef {
   std::optional<SurfaceSkyDef> surfaceSky;  // surface scenes: atmospheric sky
   std::shared_ptr<const TriangleCollider> meshCollider;  // maps made in Blender
   bool keyCastsShadows = false;             // the key light is a real sun, as in a breached hull
+  std::vector<ReflectionProbeDef> reflectionProbes;
 
   // All colliders in interior space (templates placed, rotated and scaled + authored ones).
   std::vector<Aabb> buildColliders() const;

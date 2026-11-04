@@ -180,6 +180,26 @@ TEST(map_sample_derelict_loads_with_everything_the_add_on_exports) {
   }
   CHECK(exitFound);
   CHECK(logFound);
+  CHECK(map->def.reflectionProbes.size() == 2);
+  if (map->def.reflectionProbes.size() == 2) {
+    // Corridor: Blender (0, 8, 1.5) half size (2, 9, 1.5), which is glTF (0, 1.5, -8) half size (2, 1.5, 9).
+    const ReflectionProbeDef* corridor = nullptr;
+    for (const auto& pr : map->def.reflectionProbes)
+      if (pr.position.z > -12.0f) corridor = &pr;
+    CHECK(corridor != nullptr);
+    if (corridor) {
+      CHECK_VEC_NEAR(corridor->position, (Vec3{0, 1.5f, -8}), 1e-3);
+      CHECK_VEC_NEAR(corridor->boxMin, (Vec3{-2, 0, -17}), 1e-3);
+      CHECK_VEC_NEAR(corridor->boxMax, (Vec3{2, 3, 1}), 1e-3);
+    }
+  }
+  // Blender's material is the truth: a plain untextured chrome stays exactly as set.
+  bool plainChrome = false;
+  for (const auto& m : map->mesh.materials) {
+    CHECK(!m.proceduralDetail);
+    plainChrome |= m.name == "polished_steel" && m.baseColorImage < 0 && m.metallic > 0.99f && m.roughness < 0.05f;
+  }
+  CHECK(plainChrome);
   bool enemy = false, loot = false;
   for (const auto& m : map->markers) {
     enemy |= m.type == "enemy_spawn";

@@ -141,6 +141,21 @@ def glow_material(name, color, strength):
 hull = textured_material("hull_plate", (0.62, 0.66, 0.68), (0.36, 0.31, 0.25), 3, 0.55, 0.3, 10)
 deck = textured_material("deck_grate", (0.5, 0.5, 0.48), (0.3, 0.25, 0.19), 6, 0.6, 0.3, 20)
 paint = textured_material("hazard_paint", (0.8, 0.55, 0.12), (0.36, 0.26, 0.12), 2, 0.7, 0.1, 30)
+
+
+def plain_material(name, color, metallic, roughness):
+    """No textures at all: just the sliders, as anyone would set them in Blender."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (*color, 1)
+    bsdf.inputs["Metallic"].default_value = metallic
+    bsdf.inputs["Roughness"].default_value = roughness
+    return mat
+
+
+chrome = plain_material("polished_steel", (0.82, 0.84, 0.86), 1.0, 0.04)
+standing_water = plain_material("standing_water", (0.012, 0.014, 0.016), 0.0, 0.03)
 lamp_on = glow_material("lamp_warm", (1.0, 0.72, 0.42), 1.3)
 screen = glow_material("screen_green", (0.15, 1.0, 0.45), 0.9)
 
@@ -270,6 +285,11 @@ sun.rotation_euler = (math.radians(68), 0, math.radians(180))
 bpy.context.scene.collection.objects.link(sun)
 s.show_sky = True
 
+# Things that shine: a polished panel in the corridor and standing water on the bay floor.
+box("polished_panel", (-1.96, 5.6, 1.55), (0.04, 2.6, 1.7), chrome, solid=False)
+box("water_corridor", (0.1, 6.2, 0.006), (2.2, 3.2, 0.012), standing_water, solid=False)
+box("water_bay", (-1.0, 25.0, 0.006), (6.0, 7.0, 0.012), standing_water, solid=False)
+
 # A terminal that still has power.
 box("console", (-1.6, 12.5, 0.55), (0.6, 1.2, 1.1), hull)
 box("console_screen", (-1.28, 12.5, 1.0), (0.03, 1.0, 0.6), screen, solid=False)
@@ -284,6 +304,9 @@ entity("enemy_spawn", (-3, 30, 0), rotation_z=math.radians(170), fh_kind="crawle
 entity("enemy_spawn", (3, 31, 0), rotation_z=math.radians(190), fh_kind="crawler")
 entity("loot", (-6, 31, 3.75), fh_kind="salvage")
 entity("loot", (7.1, 34, CATWALK + 0.2), fh_kind="medical")
+for location, half_size in (((0, 8, 1.5), (2.0, 9.0, 1.5)), ((0, 26, 4.0), (8.0, 9.0, 4.0))):
+    probe = entity("reflection_probe", location)
+    probe.scale = half_size
 bpy.context.scene.cursor.location = (0, 0, 0)
 
 errors, warnings = editor.run_checks(bpy.context.scene)
