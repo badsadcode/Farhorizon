@@ -1,6 +1,7 @@
 #include "engine/render/renderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <utility>
 
@@ -35,8 +36,22 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 atmoZenith;
   Vec4 atmoHorizon;
   Vec4 atmoGround;
+  Mat4 sunShadow[3];
+  Vec4 shadowSplits;
+  Vec4 shadowInfo;
+  Vec4 lighting;
+  Vec4 viewForward;
 };
-static_assert(sizeof(FrameUniforms) == 672);
+static_assert(sizeof(FrameUniforms) == 928);
+
+// Vulkan cube map table: sc, tc and ma for each face, as row vectors over (x, y, z).
+struct CubeFace {
+  Vec3 sc, tc, ma;
+};
+constexpr float kPointNear = 0.15f;  // matches shaders/mesh.frag
+const CubeFace kCubeFaces[6] = {{{0, 0, -1}, {0, -1, 0}, {1, 0, 0}}, {{0, 0, 1}, {0, -1, 0}, {-1, 0, 0}},
+                                {{1, 0, 0}, {0, 0, 1}, {0, 1, 0}},   {{1, 0, 0}, {0, 0, -1}, {0, -1, 0}},
+                                {{1, 0, 0}, {0, -1, 0}, {0, 0, 1}},  {{-1, 0, 0}, {0, -1, 0}, {0, 0, -1}}};
 
 struct PlanetPush {  // must match planet.frag
   Vec4 centerRadius;
@@ -74,6 +89,7 @@ struct PipelineDesc {
   bool depthTest = false;
   bool depthWrite = false;
   VkCullModeFlags cull = VK_CULL_MODE_NONE;
+  VkCompareOp depthOp = VK_COMPARE_OP_GREATER;  // reversed-Z; shadow maps use forward depth
 };
 
 VkPipeline buildPipeline(VkDevice device, const PipelineDesc& d, VkFormat colorFormat, VkFormat depthFormat) {
@@ -108,7 +124,7 @@ VkPipeline buildPipeline(VkDevice device, const PipelineDesc& d, VkFormat colorF
   VkPipelineDepthStencilStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
   ds.depthTestEnable = d.depthTest;
   ds.depthWriteEnable = d.depthWrite;
-  ds.depthCompareOp = VK_COMPARE_OP_GREATER;  // reversed-Z
+  ds.depthCompareOp = d.depthOp;
 
   VkPipelineColorBlendAttachmentState att{};
   att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
@@ -139,7 +155,7 @@ VkPipeline buildPipeline(VkDevice device, const PipelineDesc& d, VkFormat colorF
     att.alphaBlendOp = VK_BLEND_OP_ADD;
   }
   VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  cb.attachmentCount = 1;
+  cb.attachmentCount = colorFormat == VK_FORMAT_UNDEFINED ? 0 : 1;
   cb.pAttachments = &att;
 
   const VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
@@ -148,13 +164,13 @@ VkPipeline buildPipeline(VkDevice device, const PipelineDesc& d, VkFormat colorF
   dy.pDynamicStates = dyn;
 
   VkPipelineRenderingCreateInfo rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering.colorAttachmentCount = 1;
+  rendering.colorAttachmentCount = colorFormat == VK_FORMAT_UNDEFINED ? 0 : 1;
   rendering.pColorAttachmentFormats = &colorFormat;
   rendering.depthAttachmentFormat = depthFormat;
 
   VkGraphicsPipelineCreateInfo ci{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
   ci.pNext = &rendering;
-  ci.stageCount = 2;
+  ci.stageCount = d.frag ? 2 : 1;  // depth-only passes need no fragment shader
   ci.pStages = stages;
   ci.pVertexInputState = &vi;
   ci.pInputAssemblyState = &ia;
@@ -188,9 +204,12 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
 
   const std::uint8_t white[4] = {255, 255, 255, 255};
   whiteTexture_ = gpu::createTextureRGBA8(ctx_, white, 1, 1);
+  createLightingResources();
 
   for (auto& f : frames_) {
     f.uniforms = gpu::createBuffer(ctx_, sizeof(FrameUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, true);
+    f.probeUniforms = gpu::createBuffer(ctx_, sizeof(FrameUniforms),
+                                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, false);
     VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     ai.descriptorPool = descriptorPool_;
     ai.descriptorSetCount = 1;
@@ -202,6 +221,11 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
     w.descriptorCount = 1;
     w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     w.pBufferInfo = &bi;
+    vkUpdateDescriptorSets(ctx_.device(), 1, &w, 0, nullptr);
+    VK_CHECK(vkAllocateDescriptorSets(ctx_.device(), &ai, &f.probeSet));
+    VkDescriptorBufferInfo pbi{f.probeUniforms.buffer, 0, sizeof(FrameUniforms)};
+    w.dstSet = f.probeSet;
+    w.pBufferInfo = &pbi;
     vkUpdateDescriptorSets(ctx_.device(), 1, &w, 0, nullptr);
   }
 
@@ -220,6 +244,7 @@ Renderer::~Renderer() {
   gpu::destroy(ctx_, starBuffer_);
   for (auto& f : frames_) {
     gpu::destroy(ctx_, f.uniforms);
+    gpu::destroy(ctx_, f.probeUniforms);
     gpu::destroy(ctx_, f.overlayVertices);
     gpu::destroy(ctx_, f.instances);
     gpu::destroy(ctx_, f.glows);
@@ -230,19 +255,22 @@ Renderer::~Renderer() {
   gpu::destroy(ctx_, whiteTexture_);
   gpu::destroy(ctx_, uiAtlas_);
   gpu::destroy(ctx_, depth_);
+  destroyLightingResources();
   VkDevice d = ctx_.device();
   if (queryPool_) vkDestroyQueryPool(d, queryPool_, nullptr);
   vkDestroySampler(d, sampler_, nullptr);
   vkDestroySampler(d, clampSampler_, nullptr);
   for (VkPipeline p : {skyPipeline_, starPipeline_, meshPipeline_, overlayPipeline_, tonemapPipeline_,
-                       bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_, planetPipeline_})
+                       bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_, planetPipeline_, sunShadowPipeline_,
+                       pointShadowPipeline_, depthPrepassPipeline_, meshProbePipeline_, ssaoPipeline_, ssaoBlurPipeline_})
     vkDestroyPipeline(d, p, nullptr);
   for (VkPipelineLayout l : {scenePipelineLayout_, meshPipelineLayout_, overlayPipelineLayout_, tonemapPipelineLayout_,
-                             bloomPipelineLayout_, planetPipelineLayout_})
+                             bloomPipelineLayout_, planetPipelineLayout_, shadowPipelineLayout_, ssaoPipelineLayout_})
     vkDestroyPipelineLayout(d, l, nullptr);
   vkDestroyDescriptorPool(d, descriptorPool_, nullptr);
   vkDestroyDescriptorSetLayout(d, frameLayout_, nullptr);
   vkDestroyDescriptorSetLayout(d, materialLayout_, nullptr);
+  vkDestroyDescriptorSetLayout(d, lightingLayout_, nullptr);
 }
 
 void Renderer::createDescriptors() {
@@ -258,7 +286,14 @@ void Renderer::createDescriptors() {
   li.pBindings = &tb;
   VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &materialLayout_));
 
-  const VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 8},
+  VkDescriptorSetLayoutBinding lb[4]{};
+  for (std::uint32_t i = 0; i < 4; ++i)
+    lb[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+  li.bindingCount = 4;
+  li.pBindings = lb;
+  VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &lightingLayout_));
+
+  const VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16},
                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512}};
   VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -291,9 +326,9 @@ void Renderer::createPipelines() {
   li.pSetLayouts = &frameLayout_;
   VK_CHECK(vkCreatePipelineLayout(d, &li, nullptr, &scenePipelineLayout_));
 
-  const VkDescriptorSetLayout meshSets[] = {frameLayout_, materialLayout_};
+  const VkDescriptorSetLayout meshSets[] = {frameLayout_, materialLayout_, lightingLayout_};
   VkPushConstantRange meshPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPush)};
-  li.setLayoutCount = 2;
+  li.setLayoutCount = 3;
   li.pSetLayouts = meshSets;
   li.pushConstantRangeCount = 1;
   li.pPushConstantRanges = &meshPush;
@@ -321,6 +356,18 @@ void Renderer::createPipelines() {
     bl.pushConstantRangeCount = 1;
     bl.pPushConstantRanges = &bloomPush;
     VK_CHECK(vkCreatePipelineLayout(d, &bl, nullptr, &bloomPipelineLayout_));
+    const VkDescriptorSetLayout ssaoSets[] = {frameLayout_, materialLayout_};
+    VkPipelineLayoutCreateInfo sl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    sl.setLayoutCount = 2;
+    sl.pSetLayouts = ssaoSets;
+    sl.pushConstantRangeCount = 1;
+    sl.pPushConstantRanges = &bloomPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &sl, nullptr, &ssaoPipelineLayout_));
+    VkPushConstantRange shadowPush{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Mat4)};
+    VkPipelineLayoutCreateInfo shl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    shl.pushConstantRangeCount = 1;
+    shl.pPushConstantRanges = &shadowPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &shl, nullptr, &shadowPipelineLayout_));
   }
 
   VkPushConstantRange overlayPush{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2};
@@ -377,7 +424,9 @@ void Renderer::createPipelines() {
   mesh.vert = load("mesh.vert");
   mesh.frag = load("mesh.frag");
   mesh.layout = meshPipelineLayout_;
-  mesh.depthTest = mesh.depthWrite = true;
+  mesh.depthTest = true;
+  mesh.depthWrite = false;                     // the depth prepass already wrote it
+  mesh.depthOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
   mesh.cull = VK_CULL_MODE_BACK_BIT;
   mesh.bindings = {{0, sizeof(MeshVertex), VK_VERTEX_INPUT_RATE_VERTEX},
                    {1, sizeof(Mat4), VK_VERTEX_INPUT_RATE_INSTANCE}};
@@ -389,6 +438,31 @@ void Renderer::createPipelines() {
                      {5, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 32},
                      {6, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 48}};
   meshPipeline_ = buildPipeline(d, mesh, color, kDepthFormat);
+
+  PipelineDesc prepass = mesh;
+  prepass.frag = VK_NULL_HANDLE;
+  prepass.depthWrite = true;
+  prepass.depthOp = VK_COMPARE_OP_GREATER;
+  depthPrepassPipeline_ = buildPipeline(d, prepass, VK_FORMAT_UNDEFINED, kDepthFormat);
+
+  // Cube faces are left-handed, so the probe sees every triangle with reversed winding.
+  PipelineDesc meshProbe = mesh;
+  meshProbe.depthWrite = true;
+  meshProbe.depthOp = VK_COMPARE_OP_GREATER;
+  meshProbe.cull = VK_CULL_MODE_FRONT_BIT;
+  meshProbePipeline_ = buildPipeline(d, meshProbe, color, kDepthFormat);
+
+  PipelineDesc shadow;
+  shadow.vert = load("shadow_sun.vert");
+  shadow.layout = shadowPipelineLayout_;
+  shadow.depthTest = shadow.depthWrite = true;
+  shadow.depthOp = VK_COMPARE_OP_LESS;
+  shadow.cull = VK_CULL_MODE_NONE;             // thin placeholder geometry must still cast
+  shadow.bindings = mesh.bindings;
+  shadow.attributes = mesh.attributes;
+  sunShadowPipeline_ = buildPipeline(d, shadow, VK_FORMAT_UNDEFINED, kDepthFormat);
+  shadow.vert = load("shadow_point.vert");
+  pointShadowPipeline_ = buildPipeline(d, shadow, VK_FORMAT_UNDEFINED, kDepthFormat);
 
   PipelineDesc overlay;
   overlay.vert = load("overlay.vert");
@@ -414,6 +488,16 @@ void Renderer::createPipelines() {
   PipelineDesc bloomBlur = bloomDown;
   bloomBlur.frag = load("bloom_blur.frag");
   bloomBlurPipeline_ = buildPipeline(d, bloomBlur, kHdrFormat, VK_FORMAT_UNDEFINED);
+  PipelineDesc ssao;
+  ssao.vert = tonemap.vert;
+  ssao.frag = load("ssao.frag");
+  ssao.layout = ssaoPipelineLayout_;
+  ssaoPipeline_ = buildPipeline(d, ssao, kAoFormat, VK_FORMAT_UNDEFINED);
+  PipelineDesc ssaoBlur;
+  ssaoBlur.vert = tonemap.vert;
+  ssaoBlur.frag = load("ssao_blur.frag");
+  ssaoBlur.layout = bloomPipelineLayout_;
+  ssaoBlurPipeline_ = buildPipeline(d, ssaoBlur, kAoFormat, VK_FORMAT_UNDEFINED);
   log::info("render", "pipelines created (sky, stars, mesh, bloom, tonemap, overlay)");
 }
 
@@ -423,7 +507,8 @@ void Renderer::ensureTargets() {
   vkDeviceWaitIdle(ctx_.device());
   gpu::destroy(ctx_, depth_);
   gpu::destroy(ctx_, hdr_);
-  depth_ = gpu::createImage(ctx_, e, kDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+  depth_ = gpu::createImage(ctx_, e, kDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_IMAGE_ASPECT_DEPTH_BIT);
   hdr_ = gpu::createImage(ctx_, e, kHdrFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                           VK_IMAGE_ASPECT_COLOR_BIT);
   gpu::destroy(ctx_, bloomA_);
@@ -438,16 +523,156 @@ void Renderer::ensureTargets() {
   tonemapSet_ = allocateMaterialSet(hdr_.view, clampSampler_);  // same layout: one combined image sampler
   bloomSetA_ = allocateMaterialSet(bloomA_.view, clampSampler_);
   bloomSetB_ = allocateMaterialSet(bloomB_.view, clampSampler_);
+
+  // Ambient occlusion targets, half resolution.
+  gpu::destroy(ctx_, aoRaw_);
+  gpu::destroy(ctx_, ao_);
+  const VkExtent2D ae{std::max(1u, e.width / 2), std::max(1u, e.height / 2)};
+  aoRaw_ = gpu::createImage(ctx_, ae, kAoFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_IMAGE_ASPECT_COLOR_BIT);
+  ao_ = gpu::createImage(ctx_, ae, kAoFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                         VK_IMAGE_ASPECT_COLOR_BIT);
+  ctx_.immediateSubmit([&](VkCommandBuffer cmd) {
+    for (GpuImage* img : {&aoRaw_, &ao_})
+      gpu::imageBarrier(cmd, img->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  });
+  for (VkDescriptorSet* set : {&aoDepthSet_, &aoRawSet_})
+    if (*set) vkFreeDescriptorSets(ctx_.device(), descriptorPool_, 1, set);
+  aoDepthSet_ = allocateMaterialSet(depth_.view, nearestSampler_, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
+  aoRawSet_ = allocateMaterialSet(aoRaw_.view, clampSampler_);
+  VkDescriptorImageInfo aoInfo{clampSampler_, ao_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkWriteDescriptorSet aoWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+  aoWrite.dstSet = lightingSet_;
+  aoWrite.dstBinding = 2;
+  aoWrite.descriptorCount = 1;
+  aoWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  aoWrite.pImageInfo = &aoInfo;
+  vkUpdateDescriptorSets(ctx_.device(), 1, &aoWrite, 0, nullptr);
 }
 
-VkDescriptorSet Renderer::allocateMaterialSet(VkImageView view, VkSampler sampler) {
+void Renderer::createLightingResources() {
+  VkDevice d = ctx_.device();
+  VkSamplerCreateInfo si{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+  si.magFilter = si.minFilter = VK_FILTER_LINEAR;
+  si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  si.compareEnable = VK_TRUE;
+  si.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+  si.maxLod = 0.0f;
+  VK_CHECK(vkCreateSampler(d, &si, nullptr, &shadowSampler_));
+  si.compareEnable = VK_FALSE;
+  si.magFilter = si.minFilter = VK_FILTER_NEAREST;
+  VK_CHECK(vkCreateSampler(d, &si, nullptr, &nearestSampler_));
+
+  gpu::ImageDesc sun;
+  sun.extent = {kSunShadowSize, kSunShadowSize};
+  sun.format = kDepthFormat;
+  sun.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  sun.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+  sun.layers = 3;
+  sun.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+  sunShadow_ = gpu::createImage(ctx_, sun);
+  for (std::uint32_t i = 0; i < sunLayerViews_.size(); ++i)
+    sunLayerViews_[i] = gpu::createSubView(ctx_, sunShadow_, VK_IMAGE_ASPECT_DEPTH_BIT, 0, i);
+
+  gpu::ImageDesc point = sun;
+  point.extent = {kPointShadowSize, kPointShadowSize};
+  point.layers = kPointShadowLights * 6;
+  point.cubeCompatible = true;
+  point.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+  pointShadow_ = gpu::createImage(ctx_, point);
+  for (std::uint32_t i = 0; i < pointFaceViews_.size(); ++i)
+    pointFaceViews_[i] = gpu::createSubView(ctx_, pointShadow_, VK_IMAGE_ASPECT_DEPTH_BIT, 0, i);
+
+  gpu::ImageDesc probe;
+  probe.extent = {kProbeSize, kProbeSize};
+  probe.format = kHdrFormat;
+  probe.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  probe.mips = kProbeMips;
+  probe.layers = 6;
+  probe.cubeCompatible = true;
+  probe.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+  probe_ = gpu::createImage(ctx_, probe);
+  for (std::uint32_t i = 0; i < 6; ++i)
+    probeFaceViews_[i] = gpu::createSubView(ctx_, probe_, VK_IMAGE_ASPECT_COLOR_BIT, 0, i);
+  probeDepth_ = gpu::createImage(ctx_, {kProbeSize, kProbeSize}, kDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                 VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  gpu::ImageDesc black = probe;
+  black.extent = {1, 1};
+  black.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  black.mips = 1;
+  blackCube_ = gpu::createImage(ctx_, black);
+
+  ctx_.immediateSubmit([&](VkCommandBuffer cmd) {
+    const VkPipelineStageFlags2 frag = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    const VkAccessFlags2 read = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    const VkImageLayout ro = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    gpu::imageBarrierRange(cmd, sunShadow_.image, VK_IMAGE_LAYOUT_UNDEFINED, ro, VK_PIPELINE_STAGE_2_NONE, 0, frag, read,
+                           VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 3);
+    gpu::imageBarrierRange(cmd, pointShadow_.image, VK_IMAGE_LAYOUT_UNDEFINED, ro, VK_PIPELINE_STAGE_2_NONE, 0, frag, read,
+                           VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, kPointShadowLights * 6);
+    gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_UNDEFINED, ro, VK_PIPELINE_STAGE_2_NONE, 0, frag, read,
+                           VK_IMAGE_ASPECT_COLOR_BIT, 0, kProbeMips, 0, 6);
+    gpu::imageBarrierRange(cmd, blackCube_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6);
+    const VkClearColorValue zero{{0, 0, 0, 0}};
+    const VkImageSubresourceRange all{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
+    vkCmdClearColorImage(cmd, blackCube_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1, &all);
+    gpu::imageBarrierRange(cmd, blackCube_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, ro, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                           VK_ACCESS_2_TRANSFER_WRITE_BIT, frag, read, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6);
+  });
+
+  auto allocate = [&](VkImageView env, VkImageView ao) {
+    VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    ai.descriptorPool = descriptorPool_;
+    ai.descriptorSetCount = 1;
+    ai.pSetLayouts = &lightingLayout_;
+    VkDescriptorSet set;
+    VK_CHECK(vkAllocateDescriptorSets(d, &ai, &set));
+    const VkImageLayout ro = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const VkDescriptorImageInfo infos[4] = {{shadowSampler_, sunShadow_.view, ro},
+                                            {shadowSampler_, pointShadow_.view, ro},
+                                            {clampSampler_, ao, ro},
+                                            {clampSampler_, env, ro}};
+    VkWriteDescriptorSet writes[4]{};
+    for (std::uint32_t i = 0; i < 4; ++i) {
+      writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      writes[i].dstSet = set;
+      writes[i].dstBinding = i;
+      writes[i].descriptorCount = 1;
+      writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      writes[i].pImageInfo = &infos[i];
+    }
+    vkUpdateDescriptorSets(d, 4, writes, 0, nullptr);
+    return set;
+  };
+  lightingSet_ = allocate(probe_.view, whiteTexture_.view);  // ensureTargets points AO at its target
+  probeLightingSet_ = allocate(blackCube_.view, whiteTexture_.view);
+}
+
+void Renderer::destroyLightingResources() {
+  VkDevice d = ctx_.device();
+  for (VkImageView v : sunLayerViews_) vkDestroyImageView(d, v, nullptr);
+  for (VkImageView v : pointFaceViews_) vkDestroyImageView(d, v, nullptr);
+  for (VkImageView v : probeFaceViews_) vkDestroyImageView(d, v, nullptr);
+  for (GpuImage* img : {&sunShadow_, &pointShadow_, &probe_, &probeDepth_, &blackCube_, &aoRaw_, &ao_})
+    gpu::destroy(ctx_, *img);
+  vkDestroySampler(d, shadowSampler_, nullptr);
+  vkDestroySampler(d, nearestSampler_, nullptr);
+}
+
+VkDescriptorSet Renderer::allocateMaterialSet(VkImageView view, VkSampler sampler, VkImageLayout layout) {
   VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   ai.descriptorPool = descriptorPool_;
   ai.descriptorSetCount = 1;
   ai.pSetLayouts = &materialLayout_;
   VkDescriptorSet set;
   VK_CHECK(vkAllocateDescriptorSets(ctx_.device(), &ai, &set));
-  VkDescriptorImageInfo ii{sampler ? sampler : sampler_, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo ii{sampler ? sampler : sampler_, view, layout};
   VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
   w.dstSet = set;
   w.descriptorCount = 1;
@@ -474,6 +699,7 @@ MeshHandle Renderer::uploadMesh(const MeshData& mesh) {
     gm.emissive = m.emissive;
     gm.metallic = m.metallic;
     gm.roughness = m.roughness;
+    gm.panels = m.panels;
     g.materials.push_back(gm);
   }
   GpuMaterial fallback;  // default material for primitives without one
@@ -482,6 +708,8 @@ MeshHandle Renderer::uploadMesh(const MeshData& mesh) {
   g.materials.push_back(fallback);
   g.submeshes = mesh.submeshes;
   g.triangles = mesh.triangleCount();
+  g.boundsRadius = mesh.boundsRadius();
+  g.boundsCenter = mesh.boundsCenter();
   meshes_.push_back(std::move(g));
   return static_cast<MeshHandle>(meshes_.size() - 1);
 }
@@ -564,6 +792,50 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     u.pointPosRange[i] = Vec4(p.pointLights[i].position, p.pointLights[i].range);
     u.pointColor[i] = Vec4(p.pointLights[i].color, 0);
   }
+  // Rows of the rotation-only view: the camera looks down -Z.
+  const Vec3 forward{-p.viewRotation.at(2, 0), -p.viewRotation.at(2, 1), -p.viewRotation.at(2, 2)};
+  u.viewForward = Vec4(forward, 0);
+  u.lighting = Vec4(p.ambientOcclusion ? 1.0f : 0.0f, p.reflections, p.post.surfaceDetail, float(kProbeMips));
+  const std::uint32_t shadowedLights =
+      p.pointShadows ? std::min<std::uint32_t>(kPointShadowLights, std::uint32_t(nLights)) : 0;
+  u.shadowInfo = Vec4(0, 0, 0, float(shadowedLights));
+  u.shadowSplits = Vec4(0, 0, 0, 0);
+  {
+    // Sun cascades: a bounding sphere per slice of the view frustum keeps the size constant as the
+    // camera turns, and snapping to whole texels keeps shadow edges still as it moves.
+    const float splits[3] = {40.0f, 220.0f, 1400.0f};
+    const float tanY = std::tan(p.fovYRadians * 0.5f), tanX = tanY * aspect, k2 = tanX * tanX + tanY * tanY;
+    const Vec3 L = normalize(p.sunDirection);
+    const Vec3 upRef = std::fabs(L.y) < 0.95f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+    const Vec3 R = normalize(cross(upRef, L)), U = cross(L, R);
+    float nearSplit = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+      const float d0 = nearSplit, d1 = splits[i];
+      const float z = std::min(d1, 0.5f * (d0 + d1) * (1.0f + k2));
+      const float r = std::sqrt((d1 - z) * (d1 - z) + d1 * d1 * k2);
+      const float texel = 2.0f * r / float(kSunShadowSize);
+      Vec3 c = forward * z;
+      const Vec3 world = c + p.cameraPosition;
+      const float wx = dot(world, R), wy = dot(world, U);
+      c = c + R * (std::floor(wx / texel) * texel - wx) + U * (std::floor(wy / texel) * texel - wy);
+      const float zNear = r + 4000.0f, zFar = -r;  // reach casters well beyond the slice, toward the sun
+      const float range = zNear - zFar;
+      Mat4 m;
+      for (int col = 0; col < 3; ++col) {
+        m.at(0, col) = R[col] / r;
+        m.at(1, col) = U[col] / r;
+        m.at(2, col) = -L[col] / range;
+      }
+      m.at(0, 3) = -dot(c, R) / r;
+      m.at(1, 3) = -dot(c, U) / r;
+      m.at(2, 3) = (zNear + dot(c, L)) / range;
+      u.sunShadow[i] = m;
+      u.shadowInfo[i] = texel;
+      u.shadowSplits[i] = d1;
+      nearSplit = d1;
+    }
+    u.shadowSplits.w = p.sunShadows ? 1.0f : 0.0f;
+  }
   std::memcpy(fr.uniforms.mapped, &u, sizeof(u));
 
   // ---- Overlay vertices (grow buffer as needed; this slot's GPU work is complete) ----
@@ -615,15 +887,381 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   }
 
   const VkImage swapImage = ctx_.swapchainImage(imageIndex);
+  RenderStats st;
+  st.gpuMs = stats_.gpuMs;
+  const VkPipelineStageFlags2 kDepthStages =
+      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+  const VkImageLayout kShaderRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  // Geometry only, instanced per mesh. `firstInstance`/`instanceCount` come from the mesh groups.
+  auto forEachGroup = [&](auto&& fn) {
+    std::uint32_t begin = 0;
+    while (begin < drawOrder_.size()) {
+      const MeshHandle handle = items[drawOrder_[begin]].mesh;
+      std::uint32_t end = begin;
+      while (end < drawOrder_.size() && items[drawOrder_[end]].mesh == handle) ++end;
+      if (handle < meshes_.size()) fn(meshes_[handle], begin, end - begin);
+      begin = end;
+    }
+  };
+  auto bindGeometry = [&](const GpuMesh& m) {
+    const VkBuffer buffers[2] = {m.vertices.buffer, fr.instances.buffer};
+    const VkDeviceSize offsets[2] = {0, 0};
+    vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+    vkCmdBindIndexBuffer(cmd, m.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+  };
+  auto depthPass = [&](VkImageView view, VkExtent2D size, float clear) {
+    VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    att.imageView = view;
+    att.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    att.clearValue.depthStencil = {clear, 0};
+    VkRenderingInfo info{VK_STRUCTURE_TYPE_RENDERING_INFO};
+    info.renderArea = {{0, 0}, size};
+    info.layerCount = 1;
+    info.pDepthAttachment = &att;
+    vkCmdBeginRendering(cmd, &info);
+    const VkViewport v{0, 0, float(size.width), float(size.height), 0.0f, 1.0f};
+    const VkRect2D r{{0, 0}, size};
+    vkCmdSetViewport(cmd, 0, 1, &v);
+    vkCmdSetScissor(cmd, 0, 1, &r);
+  };
+
+  // ---- Sun shadow cascades ----
+  if (p.sunShadows && !items.empty()) {
+    gpu::imageBarrierRange(cmd, sunShadow_.image, kShaderRead, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, kDepthStages,
+                           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 3);
+    for (int c = 0; c < 3; ++c) {
+      depthPass(sunLayerViews_[size_t(c)], {kSunShadowSize, kSunShadowSize}, 1.0f);
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, sunShadowPipeline_);
+      vkCmdPushConstants(cmd, shadowPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Mat4), &u.sunShadow[c]);
+      forEachGroup([&](const GpuMesh& m, std::uint32_t first, std::uint32_t count) {
+        bindGeometry(m);
+        for (const auto& sm : m.submeshes) {
+          vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, first);
+          ++st.drawCalls;
+          st.triangles += std::uint64_t(sm.indexCount / 3) * count;
+        }
+      });
+      vkCmdEndRendering(cmd);
+    }
+    gpu::imageBarrierRange(cmd, sunShadow_.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kShaderRead, kDepthStages,
+                           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 3);
+  }
+
+  // ---- Lamp shadows: a cube map for each of the nearest lamps ----
+  if (shadowedLights > 0 && !items.empty()) {
+    gpu::imageBarrierRange(cmd, pointShadow_.image, kShaderRead, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, kDepthStages,
+                           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0,
+                           kPointShadowLights * 6);
+    struct PointPush {
+      Vec4 lightPosNear;
+      Vec4 farFace;
+    };
+    for (std::uint32_t li = 0; li < shadowedLights; ++li) {
+      const PointLight& light = p.pointLights[li];
+      // Only what the lamp can reach. Lamp fixtures glow and must not shadow their own light.
+      std::vector<std::uint32_t> visible;
+      for (std::uint32_t k = 0; k < drawOrder_.size(); ++k) {
+        const MeshDrawItem& it = items[drawOrder_[k]];
+        if (it.mesh >= meshes_.size()) continue;
+        const GpuMesh& m = meshes_[it.mesh];
+        const float scale = length(Vec3{it.model.at(0, 0), it.model.at(1, 0), it.model.at(2, 0)});
+        const Vec3 center = it.model.transformPoint(m.boundsCenter);
+        const float reach = light.range + m.boundsRadius * scale;
+        if (dot(center - light.position, center - light.position) <= reach * reach) visible.push_back(k);
+      }
+      for (std::uint32_t face = 0; face < 6; ++face) {
+        depthPass(pointFaceViews_[li * 6 + face], {kPointShadowSize, kPointShadowSize}, 1.0f);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pointShadowPipeline_);
+        const PointPush push{Vec4(light.position, kPointNear), Vec4(light.range, float(face), 0, 0)};
+        vkCmdPushConstants(cmd, shadowPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        MeshHandle bound = ~MeshHandle(0);
+        for (std::uint32_t k : visible) {
+          const MeshHandle handle = items[drawOrder_[k]].mesh;
+          const GpuMesh& m = meshes_[handle];
+          if (handle != bound) {
+            bindGeometry(m);
+            bound = handle;
+          }
+          for (const auto& sm : m.submeshes) {
+            const size_t mi = (sm.material >= 0 && size_t(sm.material) + 1 < m.materials.size()) ? size_t(sm.material)
+                                                                                                 : m.materials.size() - 1;
+            const Vec3& e = m.materials[mi].emissive;
+            if (e.x + e.y + e.z > 0.01f) continue;
+            vkCmdDrawIndexed(cmd, sm.indexCount, 1, sm.firstIndex, 0, k);
+            ++st.drawCalls;
+            st.triangles += sm.indexCount / 3;
+          }
+        }
+        vkCmdEndRendering(cmd);
+      }
+    }
+    gpu::imageBarrierRange(cmd, pointShadow_.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kShaderRead, kDepthStages,
+                           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0,
+                           kPointShadowLights * 6);
+  }
+
+  // Shaded opaque geometry, shared by the probe and the main pass.
+  auto drawMeshes = [&](VkPipeline pipeline, VkDescriptorSet frameSet, VkDescriptorSet lightSet) {
+    if (items.empty()) return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 0, 1, &frameSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 2, 1, &lightSet, 0, nullptr);
+    forEachGroup([&](const GpuMesh& m, std::uint32_t first, std::uint32_t count) {
+      bindGeometry(m);
+      for (const auto& sm : m.submeshes) {
+        const size_t matIndex = (sm.material >= 0 && size_t(sm.material) + 1 < m.materials.size())
+                                    ? size_t(sm.material)
+                                    : m.materials.size() - 1;
+        const GpuMaterial& mat = m.materials[matIndex];
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 1, 1, &mat.set, 0, nullptr);
+        MeshPush push{mat.baseColor, Vec4(mat.emissive, mat.metallic), Vec4(mat.roughness, mat.panels, 0, 0)};
+        vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+        vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, first);
+        ++st.drawCalls;
+        st.triangles += std::uint64_t(sm.indexCount / 3) * count;
+      }
+      st.meshInstances += count;
+    });
+  };
+  // Sky and planets for any view.
+  auto drawBackground = [&](const Mat4& viewProj, VkExtent2D size, VkDescriptorSet frameSet, bool withStars) {
+    const VkRect2D full{{0, 0}, size};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipelineLayout_, 0, 1, &frameSet, 0, nullptr);
+    if (p.drawSky) {
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline_);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      ++st.drawCalls;
+      ++st.triangles;
+    }
+    if (withStars && starCount_ > 0 && p.drawStars) {
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, starPipeline_);
+      VkDeviceSize off = 0;
+      vkCmdBindVertexBuffers(cmd, 0, 1, &starBuffer_.buffer, &off);
+      vkCmdDraw(cmd, 6, starCount_, 0, 0);
+      ++st.drawCalls;
+      st.triangles += 2ull * starCount_;
+      st.stars = starCount_;
+    }
+    if (p.planets.empty()) return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipelineLayout_, 0, 1, &frameSet, 0, nullptr);
+    for (const PlanetDraw& pd : p.planets) {
+      const float outer = pd.radius * (1.0f + pd.atmosphereThickness);
+      // Screen bounds from the 8 corners of the bounding cube (full screen if any is behind).
+      float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+      bool fullScreen = length(pd.center) < outer * 1.05f;
+      for (int k = 0; k < 8 && !fullScreen; ++k) {
+        const Vec3 corner = pd.center + Vec3{(k & 1) ? outer : -outer, (k & 2) ? outer : -outer, (k & 4) ? outer : -outer};
+        const Vec4 clip = viewProj * Vec4(corner, 1.0f);
+        if (clip.w <= 1.0f) {
+          fullScreen = true;
+          break;
+        }
+        const float sx = (clip.x / clip.w * 0.5f + 0.5f) * float(size.width);
+        const float sy = (clip.y / clip.w * 0.5f + 0.5f) * float(size.height);
+        minX = std::min(minX, sx), maxX = std::max(maxX, sx), minY = std::min(minY, sy), maxY = std::max(maxY, sy);
+      }
+      VkRect2D rect = full;
+      if (!fullScreen) {
+        const int x0 = std::clamp(int(std::floor(minX)), 0, int(size.width));
+        const int y0 = std::clamp(int(std::floor(minY)), 0, int(size.height));
+        const int x1 = std::clamp(int(std::ceil(maxX)), 0, int(size.width));
+        const int y1 = std::clamp(int(std::ceil(maxY)), 0, int(size.height));
+        if (x1 <= x0 || y1 <= y0) continue;  // off screen
+        rect = {{x0, y0}, {std::uint32_t(x1 - x0), std::uint32_t(y1 - y0)}};
+      }
+      vkCmdSetScissor(cmd, 0, 1, &rect);
+      const PlanetPush push{Vec4(pd.center, pd.radius), Vec4(pd.colorA, pd.seed), Vec4(pd.colorB, pd.craters),
+                            Vec4(pd.atmosphereColor, pd.atmosphereThickness)};
+      vkCmdPushConstants(cmd, planetPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      ++st.drawCalls;
+    }
+    vkCmdSetScissor(cmd, 0, 1, &full);
+  };
+
+  // ---- Reflection probe: one cube face per frame around the camera, then its mip chain ----
+  if (p.reflections > 0.0f) {
+    const std::uint32_t faces = probeFilled_ ? 1 : 6;  // the first frame fills the whole cube
+    for (std::uint32_t n = 0; n < faces; ++n) {
+      const std::uint32_t face = probeFace_;
+      probeFace_ = (probeFace_ + 1) % 6;
+      const CubeFace& cf = kCubeFaces[face];
+      FrameUniforms pu = u;
+      Mat4 vp;
+      for (int col = 0; col < 3; ++col) {
+        vp.at(0, col) = cf.sc[col];
+        vp.at(1, col) = cf.tc[col];
+        vp.at(2, col) = 0.0f;
+        vp.at(3, col) = cf.ma[col];
+      }
+      vp.at(2, 3) = p.nearPlane;  // reversed-Z, infinite far plane
+      vp.at(3, 3) = 0.0f;
+      pu.viewProj = vp;
+      pu.invViewProj = vp.inverse();
+      pu.viewport = Vec4(float(kProbeSize), float(kProbeSize), 1.0f / float(kProbeSize), 1.0f / float(kProbeSize));
+      pu.skyBase.w = 0.0f;     // no sun disc: direct light already counts the sun
+      pu.lighting.x = 0.0f;    // no AO
+      pu.lighting.y = 0.0f;    // no reflections of reflections
+      pu.viewForward = Vec4(cf.ma, 0);
+      pu.shadowSplits.w = 0.0f;  // cascades only cover the camera's own view
+      vkCmdUpdateBuffer(cmd, fr.probeUniforms.buffer, 0, sizeof(pu), &pu);
+      VkMemoryBarrier2 mb{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+      mb.srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+      mb.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+      mb.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      mb.dstAccessMask = VK_ACCESS_2_UNIFORM_READ_BIT;
+      VkDependencyInfo di{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+      di.memoryBarrierCount = 1;
+      di.pMemoryBarriers = &mb;
+      vkCmdPipelineBarrier2(cmd, &di);
+
+      gpu::imageBarrierRange(cmd, probe_.image, kShaderRead, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, face, 1);
+      gpu::imageBarrier(cmd, probeDepth_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                        kDepthStages, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                        VK_IMAGE_ASPECT_DEPTH_BIT);
+      VkRenderingAttachmentInfo pc{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      pc.imageView = probeFaceViews_[face];
+      pc.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      pc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      pc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      pc.clearValue.color = {{p.skyBase.x, p.skyBase.y, p.skyBase.z, 1}};
+      VkRenderingAttachmentInfo pd{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      pd.imageView = probeDepth_.view;
+      pd.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+      pd.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      pd.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      pd.clearValue.depthStencil = {0.0f, 0};
+      VkRenderingInfo pri{VK_STRUCTURE_TYPE_RENDERING_INFO};
+      const VkExtent2D ps{kProbeSize, kProbeSize};
+      pri.renderArea = {{0, 0}, ps};
+      pri.layerCount = 1;
+      pri.colorAttachmentCount = 1;
+      pri.pColorAttachments = &pc;
+      pri.pDepthAttachment = &pd;
+      vkCmdBeginRendering(cmd, &pri);
+      const VkViewport pv{0, 0, float(kProbeSize), float(kProbeSize), 0.0f, 1.0f};
+      const VkRect2D pr{{0, 0}, ps};
+      vkCmdSetViewport(cmd, 0, 1, &pv);
+      vkCmdSetScissor(cmd, 0, 1, &pr);
+      drawBackground(vp, ps, fr.probeSet, false);
+      drawMeshes(meshProbePipeline_, fr.probeSet, probeLightingSet_);
+      vkCmdEndRendering(cmd);
+
+      // Roughness reads blurrier mips; the smallest are the ambient light from around the camera.
+      gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                             VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, face, 1);
+      std::int32_t size = std::int32_t(kProbeSize);
+      for (std::uint32_t mip = 1; mip < kProbeMips; ++mip) {
+        gpu::imageBarrierRange(cmd, probe_.image, kShaderRead, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, face, 1);
+        VkImageBlit blit{};
+        blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, face, 1};
+        blit.srcOffsets[1] = {size, size, 1};
+        const std::int32_t next = std::max(1, size / 2);
+        blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, face, 1};
+        blit.dstOffsets[1] = {next, next, 1};
+        vkCmdBlitImage(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, probe_.image,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+        gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                               VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, face, 1);
+        size = next;
+      }
+      gpu::imageBarrierRange(cmd, probe_.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, kShaderRead,
+                             VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                             VK_IMAGE_ASPECT_COLOR_BIT, 0, kProbeMips, face, 1);
+    }
+    probeFilled_ = true;
+  }
+
+  // ---- Depth prepass: ambient occlusion needs depth before shading ----
+  gpu::imageBarrier(cmd, depth_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
+                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                    VK_IMAGE_ASPECT_DEPTH_BIT);
+  depthPass(depth_.view, extent, 0.0f);  // reversed-Z: 0 is infinitely far
+  if (!items.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, depthPrepassPipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
+    forEachGroup([&](const GpuMesh& m, std::uint32_t first, std::uint32_t count) {
+      bindGeometry(m);
+      for (const auto& sm : m.submeshes) {
+        vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, first);
+        ++st.drawCalls;
+        st.triangles += std::uint64_t(sm.indexCount / 3) * count;
+      }
+    });
+  }
+  vkCmdEndRendering(cmd);
+  gpu::imageBarrier(cmd, depth_.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                    kDepthStages, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    kDepthStages | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                    VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  // ---- Ambient occlusion: half resolution, then a small blur ----
+  if (p.ambientOcclusion) {
+    auto aoPass = [&](GpuImage& target, auto&& bindAndDraw) {
+      gpu::imageBarrier(cmd, target.image, kShaderRead, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+      VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      att.imageView = target.view;
+      att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+      att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      VkRenderingInfo info{VK_STRUCTURE_TYPE_RENDERING_INFO};
+      info.renderArea = {{0, 0}, target.extent};
+      info.layerCount = 1;
+      info.colorAttachmentCount = 1;
+      info.pColorAttachments = &att;
+      vkCmdBeginRendering(cmd, &info);
+      const VkViewport v{0, 0, float(target.extent.width), float(target.extent.height), 0.0f, 1.0f};
+      const VkRect2D r{{0, 0}, target.extent};
+      vkCmdSetViewport(cmd, 0, 1, &v);
+      vkCmdSetScissor(cmd, 0, 1, &r);
+      bindAndDraw();
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      vkCmdEndRendering(cmd);
+      gpu::imageBarrier(cmd, target.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, kShaderRead,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+      ++st.drawCalls;
+    };
+    aoPass(aoRaw_, [&] {
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssaoPipeline_);
+      const VkDescriptorSet sets[2] = {fr.frameSet, aoDepthSet_};
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssaoPipelineLayout_, 0, 2, sets, 0, nullptr);
+      const Vec4 push(0.9f, 1.1f, 0.02f, 0.0f);  // radius (m), intensity, radius growth with distance
+      vkCmdPushConstants(cmd, ssaoPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    });
+    aoPass(ao_, [&] {
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ssaoBlurPipeline_);
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloomPipelineLayout_, 0, 1, &aoRawSet_, 0, nullptr);
+      const Vec4 push(1.0f / float(ao_.extent.width), 1.0f / float(ao_.extent.height), 0.0f, 0.0f);
+      vkCmdPushConstants(cmd, bloomPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    });
+  }
+
   gpu::imageBarrier(cmd, hdr_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-  gpu::imageBarrier(cmd, depth_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                    VK_IMAGE_ASPECT_DEPTH_BIT);
 
   VkRenderingAttachmentInfo colorAtt{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   colorAtt.imageView = hdr_.view;
@@ -633,10 +1271,9 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   colorAtt.clearValue.color = {{p.skyBase.x, p.skyBase.y, p.skyBase.z, 1}};  // visible when the sky is off
   VkRenderingAttachmentInfo depthAtt{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   depthAtt.imageView = depth_.view;
-  depthAtt.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  depthAtt.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  depthAtt.clearValue.depthStencil = {0.0f, 0};  // reversed-Z: 0 is infinitely far
+  depthAtt.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;  // from the prepass; also sampled by AO
+  depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  depthAtt.storeOp = VK_ATTACHMENT_STORE_OP_NONE;
   VkRenderingInfo ri{VK_STRUCTURE_TYPE_RENDERING_INFO};
   ri.renderArea = {{0, 0}, extent};
   ri.layerCount = 1;
@@ -650,102 +1287,9 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   vkCmdSetViewport(cmd, 0, 1, &vp);
   vkCmdSetScissor(cmd, 0, 1, &sc);
 
-  RenderStats st;
-  st.gpuMs = stats_.gpuMs;
+  drawBackground(u.viewProj, extent, fr.frameSet, true);
 
-  // Sky
-  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
-  if (p.drawSky) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline_);
-    vkCmdDraw(cmd, 3, 1, 0, 0);
-    ++st.drawCalls;
-    ++st.triangles;
-  }
-
-  // Stars (instanced)
-  if (starCount_ > 0 && p.drawStars) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, starPipeline_);
-    VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(cmd, 0, 1, &starBuffer_.buffer, &off);
-    vkCmdDraw(cmd, 6, starCount_, 0, 0);
-    ++st.drawCalls;
-    st.triangles += 2ull * starCount_;
-    st.stars = starCount_;
-  }
-
-  // Planets / moons: impostors behind all local geometry, scissored to their screen bounds.
-  if (!p.planets.empty()) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipeline_);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
-    for (const PlanetDraw& pd : p.planets) {
-      const float outer = pd.radius * (1.0f + pd.atmosphereThickness);
-      // Screen bounds from the 8 corners of the bounding cube (full screen if any is behind).
-      float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
-      bool full = length(pd.center) < outer * 1.05f;
-      for (int k = 0; k < 8 && !full; ++k) {
-        const Vec3 corner = pd.center + Vec3{(k & 1) ? outer : -outer, (k & 2) ? outer : -outer, (k & 4) ? outer : -outer};
-        const Vec4 clip = u.viewProj * Vec4(corner, 1.0f);
-        if (clip.w <= 1.0f) {
-          full = true;
-          break;
-        }
-        const float sx = (clip.x / clip.w * 0.5f + 0.5f) * float(extent.width);
-        const float sy = (clip.y / clip.w * 0.5f + 0.5f) * float(extent.height);
-        minX = std::min(minX, sx), maxX = std::max(maxX, sx), minY = std::min(minY, sy), maxY = std::max(maxY, sy);
-      }
-      VkRect2D rect = sc;
-      if (!full) {
-        const int x0 = std::clamp(int(std::floor(minX)), 0, int(extent.width));
-        const int y0 = std::clamp(int(std::floor(minY)), 0, int(extent.height));
-        const int x1 = std::clamp(int(std::ceil(maxX)), 0, int(extent.width));
-        const int y1 = std::clamp(int(std::ceil(maxY)), 0, int(extent.height));
-        if (x1 <= x0 || y1 <= y0) continue;  // off screen
-        rect = {{x0, y0}, {std::uint32_t(x1 - x0), std::uint32_t(y1 - y0)}};
-      }
-      vkCmdSetScissor(cmd, 0, 1, &rect);
-      const PlanetPush push{Vec4(pd.center, pd.radius), Vec4(pd.colorA, pd.seed), Vec4(pd.colorB, pd.craters),
-                            Vec4(pd.atmosphereColor, pd.atmosphereThickness)};
-      vkCmdPushConstants(cmd, planetPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-      vkCmdDraw(cmd, 3, 1, 0, 0);
-      ++st.drawCalls;
-    }
-    vkCmdSetScissor(cmd, 0, 1, &sc);
-  }
-
-  // Meshes (instanced per mesh group)
-  if (!items.empty()) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline_);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
-    std::uint32_t begin = 0;
-    while (begin < drawOrder_.size()) {
-      const MeshHandle handle = items[drawOrder_[begin]].mesh;
-      std::uint32_t end = begin;
-      while (end < drawOrder_.size() && items[drawOrder_[end]].mesh == handle) ++end;
-      const std::uint32_t count = end - begin;
-      if (handle < meshes_.size()) {
-        const GpuMesh& m = meshes_[handle];
-        const VkBuffer buffers[2] = {m.vertices.buffer, fr.instances.buffer};
-        const VkDeviceSize offsets[2] = {0, VkDeviceSize(begin) * sizeof(Mat4)};
-        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
-        vkCmdBindIndexBuffer(cmd, m.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-        for (const auto& sm : m.submeshes) {
-          const size_t matIndex = (sm.material >= 0 && size_t(sm.material) + 1 < m.materials.size())
-                                      ? size_t(sm.material)
-                                      : m.materials.size() - 1;
-          const GpuMaterial& mat = m.materials[matIndex];
-          vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 1, 1, &mat.set, 0,
-                                  nullptr);
-          MeshPush push{mat.baseColor, Vec4(mat.emissive, mat.metallic), Vec4(mat.roughness, 0, 0, 0)};
-          vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-          vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, 0);
-          ++st.drawCalls;
-          st.triangles += std::uint64_t(sm.indexCount / 3) * count;
-        }
-        st.meshInstances += count;
-      }
-      begin = end;
-    }
-  }
+  drawMeshes(meshPipeline_, fr.frameSet, lightingSet_);
 
   // Glow sprites (additive, depth-tested against hulls, after opaque geometry)
   if (!glows.empty()) {

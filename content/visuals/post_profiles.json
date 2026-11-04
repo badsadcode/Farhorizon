@@ -22,11 +22,12 @@
       ],
       "saturation": 0.78,
       "contrast": 1.12,
-      "vignette": 0.5,
-      "scanlines": 0.14,
+      "vignette": 0.35,
+      "scanlines": 0.05,
       "scanlinePeriod": 3.0,
-      "chromaticAberration": 0.01,
-      "grain": 0.05,
+      "chromaticAberration": 0.003,
+      "grain": 0.012,
+      "surfaceDetail": 1.0,
       "hud": {
         "primary": [
           255,
@@ -75,10 +76,11 @@
       "saturation": 1.18,
       "contrast": 1.04,
       "vignette": 0.32,
-      "scanlines": 0.1,
+      "scanlines": 0.06,
       "scanlinePeriod": 3.0,
-      "chromaticAberration": 0.014,
-      "grain": 0.025,
+      "chromaticAberration": 0.006,
+      "grain": 0.012,
+      "surfaceDetail": 0.8,
       "hud": {
         "primary": [
           255,

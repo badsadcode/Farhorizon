@@ -33,6 +33,7 @@ struct VisualProfile {
   float scanlinePeriod = 3.0f;
   float chromaticAberration = 0.0f;
   float grain = 0.0f;
+  float surfaceDetail = 0.5f;    // procedural grime and panel seams on untextured models
   HudPalette hud;
 };
 

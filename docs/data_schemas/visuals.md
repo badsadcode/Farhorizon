@@ -18,3 +18,6 @@
 | `hud.primary/nav/field/warn` | HUD colours as [r,g,b(,a)] 0–255 sRGB |
 
 F4 cycles profiles in file order. `--look <id>` picks one at startup.
+
+`surfaceDetail` (optional, default 0.5) sets the strength of the procedural grime, panel seams and
+fine bump that stand in for textures. 0 turns them off. See ADR 0011.

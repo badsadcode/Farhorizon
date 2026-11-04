@@ -15,16 +15,8 @@
       0.17,
       0.16
     ],
-    "ambientSky": [
-      0.018,
-      0.02,
-      0.022
-    ],
-    "ambientGround": [
-      0.012,
-      0.011,
-      0.01
-    ],
+    "ambientSky": [0.027, 0.03, 0.033],
+    "ambientGround": [0.018, 0.0165, 0.015],
     "fillDirection": [
       -0.5,
       0.2,
@@ -564,11 +556,7 @@
     },
     {
       "template": "hatch",
-      "position": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.02, 0, 0],
       "yawDeg": 180,
       "scale": 3
     }

@@ -4,7 +4,7 @@
 |---|---|---|---|
 | 1 | fixed (0.7) | build | Windows MSVC build + tests green in CI. The game now also builds and runs on a Windows GPU (RTX 3080). |
 | 2 | fixed (0.2) | render | HDR target + tonemap pass + bloom (ADR 0004). |
-| 3 | open | render | No image-based lighting. The shadow side of ships relies on a hemispheric ambient approximation. |
+| 3 | fixed (0.7.1) | render | Live reflection probe supplies reflections and ambient light. Simple box-filtered mips, no parallax (ADR 0011). |
 | 4 | open | render | One device allocation per buffer/image. Fine for Stage 1, needs a sub-allocator before asset counts grow. |
 | 5 | partial (0.2) | assets | Sockets (`socket_*`, `hardpoint_*`) are imported. Collision helpers and LOD nodes are still baked into the visual mesh. |
 | 6 | open | assets | Hot reload is manual (F5). There is no file watcher yet. |
@@ -20,7 +20,7 @@
 | 16 | open | interiors | Interior transitions are instant cuts (no seat/airlock animation or loading fade). |
 | 17 | open | interiors | The on-foot camera is not interpolated between fixed steps (possible slight judder at high refresh rates). |
 | 18 | open | audio | The placeholder sounds have only been verified by signal analysis (SDL disk driver), not by listening. The mix needs a human pass. |
-| 19 | open | render | Point lights have no shadows and shine through walls; lamp placement accounts for it. |
+| 19 | partly fixed (0.7.1) | render | The 4 nearest lamps in local scenes cast shadows. Lamps 5-8 and flight-scene flares still shine through geometry. |
 | 20 | fixed (0.5) | economy | Gale Ridge Supply Shed creates the first trade route. |
 | 21 | open | mining | Asteroids do not shrink visually as they deplete (yield only). |
 | 22 | fixed (0.7) | ui | Main, pause, options, load/save screens and a restyled terminal. |
@@ -40,3 +40,6 @@
 | 36 | open | hud | Marker labels can overlap when objects line up on screen (station and target, for example). |
 | 37 | open | hud | At 720p and 100% scale the small text is about 11 px, which is hard to read; Interface scale helps. Not judged by a human yet. |
 | 38 | fixed (0.7) | tools | Loader messages about third-party Vulkan layers on the player's PC (seen with ReShade, which declines apps it is not set up for) no longer count as validation messages. They are logged at info level. |
+| 39 | open | content | Overlapping coplanar placeholder pieces show as stripes or moire, for example on the hangar's back wall near the terminals and on the station hull. Blender-built maps replace them. |
+| 40 | open | render | Reflections come from one probe at the camera: no parallax, and up to 6 frames of lag. Fast lighting changes may visibly trail. |
+| 41 | open | render | Procedural surface detail uses object-space coordinates, so identical pieces share a pattern, and it does not yet understand real textures. Revisit with the Blender pipeline. |

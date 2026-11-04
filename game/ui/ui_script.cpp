@@ -12,9 +12,13 @@
 namespace fh {
 
 namespace {
+// Marks events as ours. Real devices can report id 0, so "not 0" would not identify them.
+constexpr Uint32 kScriptDevice = 0x46484955;
+
 void pushKey(int scancode, bool down, bool repeat = false) {
   SDL_Event e{};
   e.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+  e.key.which = kScriptDevice;
   e.key.scancode = SDL_Scancode(scancode);
   e.key.down = down;
   e.key.repeat = repeat;
@@ -23,6 +27,7 @@ void pushKey(int scancode, bool down, bool repeat = false) {
 void pushMotion(float x, float y, float dx, float dy) {
   SDL_Event e{};
   e.type = SDL_EVENT_MOUSE_MOTION;
+  e.motion.which = kScriptDevice;
   e.motion.x = x;
   e.motion.y = y;
   e.motion.xrel = dx;
@@ -32,6 +37,7 @@ void pushMotion(float x, float y, float dx, float dy) {
 void pushButton(float x, float y, bool down) {
   SDL_Event e{};
   e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+  e.button.which = kScriptDevice;
   e.button.button = SDL_BUTTON_LEFT;
   e.button.down = down;
   e.button.x = x;
@@ -61,17 +67,17 @@ bool UiScript::load(const std::filesystem::path& path, std::string* error) {
     lines_.push_back(line.substr(b));
   }
   loaded_ = true;
-  // Only scripted input counts (real devices have a non-zero `which`): someone touching the mouse
-  // or keyboard during a run must not change the result.
+  // Only scripted input counts: someone touching the mouse or keyboard during a run, or the cursor
+  // resting where the window opens, must not change the result.
   SDL_SetEventFilter(
       [](void*, SDL_Event* e) -> bool {
         switch (e->type) {
           case SDL_EVENT_KEY_DOWN:
-          case SDL_EVENT_KEY_UP: return e->key.which == 0;
-          case SDL_EVENT_MOUSE_MOTION: return e->motion.which == 0;
+          case SDL_EVENT_KEY_UP: return e->key.which == kScriptDevice;
+          case SDL_EVENT_MOUSE_MOTION: return e->motion.which == kScriptDevice;
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
-          case SDL_EVENT_MOUSE_BUTTON_UP: return e->button.which == 0;
-          case SDL_EVENT_MOUSE_WHEEL: return e->wheel.which == 0;
+          case SDL_EVENT_MOUSE_BUTTON_UP: return e->button.which == kScriptDevice;
+          case SDL_EVENT_MOUSE_WHEEL: return e->wheel.which == kScriptDevice;
           default: return true;
         }
       },
@@ -157,6 +163,7 @@ void UiScript::step(const UiScriptHost& host) {
     in >> ticks;
     SDL_Event e{};
     e.type = SDL_EVENT_MOUSE_WHEEL;
+    e.wheel.which = kScriptDevice;
     e.wheel.y = ticks;
     SDL_PushEvent(&e);
   } else if (cmd == "wait") {

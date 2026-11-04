@@ -23,6 +23,9 @@ TEST(settings_round_trip_keeps_every_field) {
   a.fovOffsetDeg = 12;
   a.uiScale = 1.25f;
   a.cameraShake = false;
+  a.shadows = false;
+  a.ambientOcclusion = false;
+  a.reflections = false;
   a.masterVolume = 0.5f;
   a.ambienceVolume = 0.25f;
   a.effectsVolume = 0.75f;
@@ -45,6 +48,9 @@ TEST(settings_round_trip_keeps_every_field) {
   CHECK_NEAR(b->fovOffsetDeg, 12, 1e-5);
   CHECK_NEAR(b->uiScale, 1.25, 1e-5);
   CHECK(!b->cameraShake);
+  CHECK(!b->shadows);
+  CHECK(!b->ambientOcclusion);
+  CHECK(!b->reflections);
   CHECK_NEAR(b->masterVolume, 0.5, 1e-5);
   CHECK_NEAR(b->ambienceVolume, 0.25, 1e-5);
   CHECK_NEAR(b->effectsVolume, 0.75, 1e-5);

@@ -1428,6 +1428,16 @@ int GameApp::run() {
       }
     }
 
+    // Interior "key" lights are fake sky light, so only open scenes shadow them.
+    const bool onFootOrSurface = !cockpit || surface;
+    const InteriorDef* localScene = onFootOrSurface ? (surface ? surface : session_->activeInterior()) : nullptr;
+    params.cameraPosition = view.position;
+    params.sunShadows = settings_.shadows && (!localScene || localScene->surfaceSky.has_value());
+    params.pointShadows = settings_.shadows && localScene != nullptr;
+    params.ambientOcclusion = settings_.ambientOcclusion;
+    params.reflections = settings_.reflections ? 1.0f : 0.0f;
+    params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
+
     buildOverlay(view, viewProj, ship);
     updateAudio(float(dt), engineDemandForAudio, speedFractionForAudio);
 

@@ -63,8 +63,9 @@ applying it live moves the bar under the mouse and feeds back on itself.
 ## Scripted UI tests (`--ui-script`, `game/ui/ui_script.*`, `tests/ui_scripts/`)
 A small script pushes real SDL events into the normal event queue, so menus, rebinding and the
 terminal run exactly as they do for a player, then asserts on bindings and screens and takes
-screenshots. A failed expectation exits with code 3. An event filter drops real devices' events
-during a run, so touching the mouse cannot change the result.
+screenshots. A failed expectation exits with code 3. Scripted events carry their own device id and an event
+filter drops everything else, so touching the mouse cannot change the result. Real devices can
+report id 0, so "not 0" is not a safe test.
 
 **Why:** the unit tests cover the Ui logic but not the app wiring. The same-frame close of the pause
 menu, the focus jump after a fullscreen toggle and the capture bugs all lived in that wiring, and

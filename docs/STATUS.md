@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 7 (polish) in progress: UI pass done, awaiting the owner's playtest._
+_Last updated: 2026-11-04 · Stage 7 (polish) in progress: UI and lighting done, awaiting the owner's playtest. Order ahead: `docs/ROADMAP.md`._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -118,7 +118,9 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Fill + rim lighting | ✅ | scene data |
 | Engine glow, running lights | ✅ | additive billboards |
 | Instanced meshes | ✅ | |
-| Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
+| Shadows, AO, reflections | ✅ | ADR 0011 |
+| PBR texture maps | ⬜ | with the Blender pipeline (roadmap step 2) |
+| LOD, GPU particles, TAA | ⬜ | later |
 
 ## Stage 7 — polish
 | Item | State | Notes |
@@ -133,7 +135,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Scripted UI tests | ✅ | `--ui-script`; on Windows here; in the Linux CI job, not yet run there |
 | Owner playtest of the UI | ⬜ | next |
 | Blender pipeline | ⬜ | PBR textures, `KHR_lights_punctual`, whole-level maps, scale reference scene, artist guide |
-| Lighting on real GPUs | ⬜ | cascaded sun shadows, interior spot shadows, IBL, tonemapping |
+| Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
 
 ## Later stages
 Not started.

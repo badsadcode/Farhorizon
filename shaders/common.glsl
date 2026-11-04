@@ -23,6 +23,11 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 atmoZenith;       // rgb zenith colour, a = 1 for atmospheric sky (planet surface)
   vec4 atmoHorizon;      // rgb horizon colour, a haze (sun glow spread)
   vec4 atmoGround;       // rgb below-horizon colour, a star visibility (0..1)
+  mat4 sunShadow[3];     // render space -> cascade clip space
+  vec4 shadowSplits;     // xyz far view depth of each cascade (m), w > 0 when sun shadows are on
+  vec4 shadowInfo;       // xyz world size of a texel per cascade, w number of shadowed point lights
+  vec4 lighting;         // x AO on, y reflection strength (0 = off), z surface detail, w env mip count
+  vec4 viewForward;      // xyz camera forward in render space
 } frame;
 
 vec3 applyFog(vec3 color, float dist) {

@@ -108,6 +108,7 @@ MeshData generateAsteroidMesh(const AsteroidMeshParams& p) {
   mat.baseColorFactor = Vec4(p.color * v, 1.0f);
   mat.metallic = 0.0f;
   mat.roughness = 0.92f;
+  mat.panels = 0.0f;
   m.materials.push_back(mat);
 
   // Flat shading: three unique vertices per triangle with the face normal (low-poly look).

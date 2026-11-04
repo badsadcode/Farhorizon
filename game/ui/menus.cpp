@@ -155,6 +155,8 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
   auto pct = [](float v) { return std::format("{:.0f}%", v * 100.0f); };
   switch (optionsTab_) {
     case 0: {
+      // Nine rows must clear the BACK button at any interface scale.
+      const float gRow = std::min(row, (py + ph - 84 - y) / 9.0f);
       int look = 0;
       for (size_t i = 0; i < env.lookIds.size(); ++i)
         if (env.lookIds[i] == s.look) look = int(i);
@@ -162,14 +164,14 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
         s.look = env.lookIds[size_t(look)];
         changed = true;
       }
-      y += row;
+      y += gRow;
       changed |= ui.toggleRow(rx, y, rw, "Fullscreen", s.fullscreen);
-      y += row;
+      y += gRow;
       changed |= ui.toggleRow(rx, y, rw, "Vertical sync", s.vsync);
-      y += row;
+      y += gRow;
       changed |= ui.sliderRow(rx, y, rw, "Field of view", s.fovOffsetDeg, -15, 20, 1,
                               std::format("{:+.0f} deg", s.fovOffsetDeg));
-      y += row;
+      y += gRow;
       {  // Applied on release: the slider itself moves when the scale changes.
         if (pendingUiScale_ < 0) pendingUiScale_ = s.uiScale;
         ui.sliderRow(rx, y, rw, "Interface scale", pendingUiScale_, 0.75f, 1.5f, 0.05f, pct(pendingUiScale_));
@@ -178,8 +180,14 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
           changed = true;
         }
       }
-      y += row;
+      y += gRow;
       changed |= ui.toggleRow(rx, y, rw, "Camera shake", s.cameraShake);
+      y += gRow;
+      changed |= ui.toggleRow(rx, y, rw, "Shadows", s.shadows);
+      y += gRow;
+      changed |= ui.toggleRow(rx, y, rw, "Ambient occlusion", s.ambientOcclusion);
+      y += gRow;
+      changed |= ui.toggleRow(rx, y, rw, "Reflections", s.reflections);
       break;
     }
     case 1:

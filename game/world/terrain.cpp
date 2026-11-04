@@ -82,6 +82,7 @@ MeshData HeightField::buildMesh() const {
   mat.baseColorFactor = Vec4(p_.color, 1.0f);
   mat.metallic = 0.0f;
   mat.roughness = 0.95f;
+  mat.panels = 0.0f;
   m.materials.push_back(mat);
   m.vertices.reserve(size_t(n_) * size_t(n_));
   for (int iz = 0; iz < n_; ++iz)

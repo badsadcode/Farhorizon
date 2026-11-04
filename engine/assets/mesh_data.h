@@ -29,6 +29,7 @@ struct MaterialData {
   float roughness = 1.0f;
   Vec3 emissive{0, 0, 0};            // linear
   int baseColorImage = -1;           // index into MeshData::images, -1 = none
+  float panels = 1.0f;               // procedural panel seams: 1 for built surfaces, 0 for rock and ground
 };
 
 struct SubMesh {

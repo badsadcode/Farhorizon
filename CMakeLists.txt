@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.7.0 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.7.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -94,7 +94,9 @@ if(FH_BUILD_GAME)
     shaders/tonemap.vert shaders/tonemap.frag
     shaders/bloom_down.frag shaders/bloom_blur.frag
     shaders/glow.vert shaders/glow.frag
-    shaders/planet.frag)
+    shaders/planet.frag
+    shaders/shadow_sun.vert shaders/shadow_point.vert
+    shaders/ssao.frag shaders/ssao_blur.frag)
 
   add_executable(farhorizon
     game/main.cpp

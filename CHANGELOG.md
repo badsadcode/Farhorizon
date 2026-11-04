@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.1 — Stage 7, part 2: lighting (2026-11-04)
+The first version that lights the world properly. Before and after:
+`docs/screenshots/stage7_lighting_before_after.jpg`.
+* **Sun shadows:** three cascades out to 1.4 km, stable while the camera moves.
+* **Lamp shadows:** the 4 nearest lamps in interiors and on planets cast real shadows, so light no
+  longer passes through walls.
+* **Ambient occlusion:** contact darkening where surfaces meet, from a new depth prepass.
+* **Live reflections:** a probe around the camera supplies reflections and ambient light from the
+  real surroundings, including interiors. It updates one cube face per frame.
+* **Surface detail in the shader:** grime, panel seams, per-panel tone and fine bump, since the models
+  have no textures yet. Strength is per look (`surfaceDetail`).
+* **Much calmer picture:** grain, scanlines and chromatic aberration turned well down on the default
+  looks. Shadow sides of ships and the hangar lifted so they stay readable.
+* **Options > Graphics:** new toggles for Shadows, Ambient occlusion and Reflections.
+* **Fixed:** vertical stripes on the Sparrow's cabin wall, where a hatch sat exactly in the wall's plane.
+* **Docs:** `docs/ROADMAP.md` records the agreed order: Blender as the content and point-of-interest
+  editor, FPS exploration, co-op, then planets. ADR 0011 covers the lighting.
+* Requires the `imageCubeArray` Vulkan feature. Tests: 101, plus scripted runs of the new toggles.
+
 ## 0.7.0 — Stage 7, part 1: the UI pass (2026-11-04)
 First version built and run on a real GPU (RTX 3080). Stage 7 continues with the Blender pipeline
 and lighting.

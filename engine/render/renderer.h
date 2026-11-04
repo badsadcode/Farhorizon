@@ -39,6 +39,7 @@ struct PostProcessParams {
   Vec3 fadeColor{1, 1, 1};
   float fadeAmount = 0.0f;         // scene-swap fades (cloud deck)
   float heat = 0.0f;               // re-entry heat overlay
+  float surfaceDetail = 0.0f;      // procedural grime and panel seams
 };
 
 struct PointLight {
@@ -93,6 +94,12 @@ struct RenderFrameParams {
   float atmoHaze = 1.0f;
   float starVisibility = 1.0f;
   PostProcessParams post;
+  // Lighting features (Options > Graphics, and what each scene allows).
+  Vec3 cameraPosition{};           // keeps shadow texels fixed in the world while the camera moves
+  bool sunShadows = false;
+  bool pointShadows = false;       // the nearest lamps cast shadows
+  bool ambientOcclusion = false;
+  float reflections = 0.0f;        // live reflection probe strength; 0 disables it
 };
 
 struct GlowSprite {
@@ -144,6 +151,7 @@ class Renderer {
     Vec3 emissive{0, 0, 0};
     float metallic = 0.0f;
     float roughness = 0.5f;
+    float panels = 1.0f;
   };
   struct GpuMesh {
     GpuBuffer vertices, indices;
@@ -151,6 +159,8 @@ class Renderer {
     std::vector<GpuMaterial> materials;   // last entry is the default material
     std::vector<GpuImage> textures;
     std::uint64_t triangles = 0;
+    float boundsRadius = 1.0f;
+    Vec3 boundsCenter{};
   };
   struct FrameResources {
     GpuBuffer uniforms;
@@ -158,6 +168,8 @@ class Renderer {
     GpuBuffer overlayVertices;
     GpuBuffer instances;  // per-instance model matrices
     GpuBuffer glows;      // glow sprite instances
+    GpuBuffer probeUniforms;  // frame uniforms for the reflection probe's view
+    VkDescriptorSet probeSet = VK_NULL_HANDLE;
     bool timestampsWritten = false;
   };
 
@@ -165,7 +177,10 @@ class Renderer {
   void createPipelines();
   VkShaderModule loadShader(const char* name);
   void ensureTargets();  // depth + HDR colour sized to the swapchain
-  VkDescriptorSet allocateMaterialSet(VkImageView view, VkSampler sampler = VK_NULL_HANDLE);
+  void createLightingResources();
+  void destroyLightingResources();
+  VkDescriptorSet allocateMaterialSet(VkImageView view, VkSampler sampler = VK_NULL_HANDLE,
+                                      VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   GpuImage uiAtlas_;
   VkDescriptorSet overlaySet_ = VK_NULL_HANDLE;
   void writeScreenshot(const std::filesystem::path& path, const GpuBuffer& readback, VkExtent2D extent);
@@ -203,6 +218,34 @@ class Renderer {
   static constexpr VkFormat kHdrFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
   std::vector<std::uint32_t> drawOrder_;  // scratch, reused every frame
   std::vector<Mat4> instanceScratch_;
+
+  // Lighting: sun cascades, lamp cube shadows, ambient occlusion, reflection probe. ADR 0011.
+  static constexpr std::uint32_t kSunShadowSize = 2048;
+  static constexpr std::uint32_t kPointShadowSize = 512;
+  static constexpr std::uint32_t kPointShadowLights = 4;
+  static constexpr std::uint32_t kProbeSize = 128;
+  static constexpr std::uint32_t kProbeMips = 8;
+  static constexpr VkFormat kAoFormat = VK_FORMAT_R8_UNORM;
+  GpuImage sunShadow_, pointShadow_, probe_, probeDepth_, blackCube_, aoRaw_, ao_;
+  std::array<VkImageView, 3> sunLayerViews_{};
+  std::array<VkImageView, kPointShadowLights * 6> pointFaceViews_{};
+  std::array<VkImageView, 6> probeFaceViews_{};
+  VkSampler shadowSampler_ = VK_NULL_HANDLE;
+  VkSampler nearestSampler_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout lightingLayout_ = VK_NULL_HANDLE;
+  VkDescriptorSet lightingSet_ = VK_NULL_HANDLE;       // main pass: probe and AO
+  VkDescriptorSet probeLightingSet_ = VK_NULL_HANDLE;  // probe pass: the probe cannot read itself
+  VkDescriptorSet aoDepthSet_ = VK_NULL_HANDLE, aoRawSet_ = VK_NULL_HANDLE;
+  VkPipelineLayout shadowPipelineLayout_ = VK_NULL_HANDLE;
+  VkPipelineLayout ssaoPipelineLayout_ = VK_NULL_HANDLE;
+  VkPipeline sunShadowPipeline_ = VK_NULL_HANDLE;
+  VkPipeline pointShadowPipeline_ = VK_NULL_HANDLE;
+  VkPipeline depthPrepassPipeline_ = VK_NULL_HANDLE;
+  VkPipeline meshProbePipeline_ = VK_NULL_HANDLE;
+  VkPipeline ssaoPipeline_ = VK_NULL_HANDLE;
+  VkPipeline ssaoBlurPipeline_ = VK_NULL_HANDLE;
+  std::uint32_t probeFace_ = 0;
+  bool probeFilled_ = false;
 
   std::array<FrameResources, VkContext::kFramesInFlight> frames_{};
   std::vector<GpuMesh> meshes_;

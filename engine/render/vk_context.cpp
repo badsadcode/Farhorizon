@@ -172,7 +172,7 @@ void VkContext::pickPhysicalDevice() {
     f2.pNext = &f13;
     vkGetPhysicalDeviceFeatures2(pd, &f2);
     const bool versionOk = props.apiVersion >= VK_API_VERSION_1_3;
-    const bool featuresOk = f13.dynamicRendering && f13.synchronization2;
+    const bool featuresOk = f13.dynamicRendering && f13.synchronization2 && f2.features.imageCubeArray;
 
     std::uint32_t qn = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(pd, &qn, nullptr);
@@ -220,9 +220,9 @@ void VkContext::createDevice() {
   f13.dynamicRendering = VK_TRUE;
   f13.synchronization2 = VK_TRUE;
   f13.shaderDemoteToHelperInvocation = VK_TRUE;  // SPIR-V 1.6 `discard` (core and mandatory in 1.3)
-  f13.shaderDemoteToHelperInvocation = VK_TRUE;  // SPIR-V 1.6 `discard` (core and mandatory in 1.3)
   VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
   f2.pNext = &f13;
+  f2.features.imageCubeArray = VK_TRUE;  // lamp shadow maps
 
   const char* exts[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
   VkDeviceCreateInfo ci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};

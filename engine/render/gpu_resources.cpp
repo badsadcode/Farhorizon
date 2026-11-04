@@ -94,6 +94,47 @@ GpuImage createImage(VkContext& ctx, VkExtent2D extent, VkFormat format, VkImage
   return img;
 }
 
+GpuImage createImage(VkContext& ctx, const ImageDesc& d) {
+  GpuImage img;
+  img.format = d.format;
+  img.extent = d.extent;
+  VkImageCreateInfo ci{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+  ci.flags = d.cubeCompatible ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+  ci.imageType = VK_IMAGE_TYPE_2D;
+  ci.format = d.format;
+  ci.extent = {d.extent.width, d.extent.height, 1};
+  ci.mipLevels = d.mips;
+  ci.arrayLayers = d.layers;
+  ci.samples = VK_SAMPLE_COUNT_1_BIT;
+  ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+  ci.usage = d.usage;
+  ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VK_CHECK(vkCreateImage(ctx.device(), &ci, nullptr, &img.image));
+  VkMemoryRequirements req;
+  vkGetImageMemoryRequirements(ctx.device(), img.image, &req);
+  img.memory = allocate(ctx, req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  VK_CHECK(vkBindImageMemory(ctx.device(), img.image, img.memory, 0));
+  VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  vi.image = img.image;
+  vi.viewType = d.viewType;
+  vi.format = d.format;
+  vi.subresourceRange = {d.aspect, 0, d.mips, 0, d.layers};
+  VK_CHECK(vkCreateImageView(ctx.device(), &vi, nullptr, &img.view));
+  return img;
+}
+
+VkImageView createSubView(VkContext& ctx, const GpuImage& image, VkImageAspectFlags aspect, std::uint32_t mip,
+                          std::uint32_t layer) {
+  VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  vi.image = image.image;
+  vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  vi.format = image.format;
+  vi.subresourceRange = {aspect, mip, 1, layer, 1};
+  VkImageView view;
+  VK_CHECK(vkCreateImageView(ctx.device(), &vi, nullptr, &view));
+  return view;
+}
+
 GpuImage createTextureRGBA8(VkContext& ctx, const std::uint8_t* pixels, std::uint32_t w, std::uint32_t h) {
   const VkDeviceSize size = VkDeviceSize(w) * h * 4;
   GpuBuffer staging = createBuffer(ctx, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
@@ -140,6 +181,27 @@ void imageBarrier(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, V
   b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   b.image = image;
   b.subresourceRange = {aspect, 0, 1, 0, 1};
+  VkDependencyInfo di{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+  di.imageMemoryBarrierCount = 1;
+  di.pImageMemoryBarriers = &b;
+  vkCmdPipelineBarrier2(cmd, &di);
+}
+
+void imageBarrierRange(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+                       VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage,
+                       VkAccessFlags2 dstAccess, VkImageAspectFlags aspect, std::uint32_t baseMip, std::uint32_t mips,
+                       std::uint32_t baseLayer, std::uint32_t layers) {
+  VkImageMemoryBarrier2 b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+  b.srcStageMask = srcStage;
+  b.srcAccessMask = srcAccess;
+  b.dstStageMask = dstStage;
+  b.dstAccessMask = dstAccess;
+  b.oldLayout = oldLayout;
+  b.newLayout = newLayout;
+  b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  b.image = image;
+  b.subresourceRange = {aspect, baseMip, mips, baseLayer, layers};
   VkDependencyInfo di{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   di.imageMemoryBarrierCount = 1;
   di.pImageMemoryBarriers = &b;

@@ -21,23 +21,14 @@ _Written 2026-11-04 at the end of the cloud session and updated by the first loc
   * Input: `app.menu` = Esc, `app.toggleMouse` = backtick; clicking the game window recaptures
     the mouse. Benchmarks and `--frames` runs ignore settings and skip menus.
 
-## Next steps (agreed order with the owner)
-1. **UI pass: done in code (0.7.0), waiting for the owner's playtest and feedback.** See ADR 0010.
-   Feedback may send work back here before step 2 starts.
-2. **Blender pipeline:**
-   * Normal, metallic-roughness, emissive and occlusion textures in the glTF loader and mesh
-     shader.
-   * `KHR_lights_punctual` lights from Blender.
-   * Whole-level `.glb` maps with naming conventions (`COL_` colliders, `SPAWN_` / `USE_` empties).
-   * A Blender Python script that builds a scale-reference scene: 1.8 m player capsule,
-     doorways, Sparrow bounds and sockets, landing pad, raider.
-   * An artist guide (axes: nose along Blender +Y; 1 unit = 1 m; `socket_*` / `hardpoint_*`
-     empties).
-3. **Lighting and shading on real GPUs:**
-   * Sun shadow maps (cascades) and shadows from interior spot lamps.
-   * IBL / environment reflections.
-   * Better tonemapping, keeping the retro looks.
-   * The owner has an RTX 3080; the old software-rasteriser budget no longer limits this.
+## Next steps
+**See `docs/ROADMAP.md` for the agreed order.** UI (0.7.0, ADR 0010) and lighting (0.7.1, ADR 0011) are
+done in code and waiting for the owner's playtest. Feedback may send work back there. Next is
+**Blender as the content and point-of-interest editor**: PBR texture maps in the glTF loader and mesh
+shader, `KHR_lights_punctual`, whole-level `.glb` maps with naming conventions (`COL_` colliders,
+`SPAWN_` / `USE_` empties, later `ENEMY_` / `LOOT_`), a Blender Python script for a scale-reference
+scene (1.8 m player capsule, doorways, Sparrow bounds and sockets, landing pad, raider), and an artist
+guide (axes: nose along Blender +Y; 1 unit = 1 m; `socket_*` / `hardpoint_*` empties).
 
 The owner's constraint: **all content original.** Atmosphere inspired by 70s/80s lonely
 "used future" sci-fi, but never copy assets, names or designs from existing works.

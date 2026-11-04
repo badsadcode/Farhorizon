@@ -17,6 +17,9 @@ struct Settings {
   float fovOffsetDeg = 0.0f;    // added to the ship cameras' field of view (-15..+20)
   float uiScale = 1.0f;         // 0.75..1.5, on top of the resolution scale
   bool cameraShake = true;
+  bool shadows = true;
+  bool ambientOcclusion = true;
+  bool reflections = true;
   // Audio (0..1).
   float masterVolume = 0.9f;
   float ambienceVolume = 1.0f;

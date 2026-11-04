@@ -54,6 +54,7 @@ std::optional<VisualProfileSet> parseVisualProfiles(const std::string& json, con
     p.scanlinePeriod = float(r.num(pj, "scanlinePeriod", false, p.scanlinePeriod));
     p.chromaticAberration = float(r.num(pj, "chromaticAberration", false, p.chromaticAberration));
     p.grain = float(r.num(pj, "grain", false, p.grain));
+    p.surfaceDetail = float(r.num(pj, "surfaceDetail", false, p.surfaceDetail));
     if (pj.contains("hud")) {
       const auto& h = pj["hud"];
       p.hud.primary = colour(h, "primary", p.hud.primary);

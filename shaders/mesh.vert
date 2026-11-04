@@ -13,6 +13,11 @@ layout(location = 6) in vec4 inModel3;
 layout(location = 0) out vec3 vPos;
 layout(location = 1) out vec3 vNormal;
 layout(location = 2) out vec2 vUv;
+layout(location = 3) out vec3 vObjPos;     // object space in metres, for surface detail
+layout(location = 4) out vec3 vObjNormal;
+
+// The depth prepass and the shaded pass use this shader, and must produce identical depth.
+invariant gl_Position;
 
 void main() {
   mat4 model = mat4(inModel0, inModel1, inModel2, inModel3);
@@ -20,5 +25,7 @@ void main() {
   vPos = world.xyz;
   vNormal = normalize(mat3(model) * inNormal);
   vUv = inUv;
+  vObjPos = inPos * length(model[0].xyz);
+  vObjNormal = inNormal;
   gl_Position = frame.viewProj * world;
 }
