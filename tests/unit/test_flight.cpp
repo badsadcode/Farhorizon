@@ -125,5 +125,11 @@ TEST(flight_is_deterministic) {
   in.thrust = {0.4f, -0.2f, 0.0f};
   run(a, in, p, 7.0f);
   run(b, in, p, 7.0f);
-  CHECK(std::memcmp(&a, &b, sizeof(FlightState)) == 0);
+  // Field-by-field: memcmp would also compare padding bytes, which are unspecified (MSVC differs).
+  CHECK(a.position == b.position);
+  CHECK(a.velocity == b.velocity);
+  CHECK(a.orientation.x == b.orientation.x && a.orientation.y == b.orientation.y &&
+        a.orientation.z == b.orientation.z && a.orientation.w == b.orientation.w);
+  CHECK(a.angularVelocity == b.angularVelocity);
+  CHECK(a.boostEnergy == b.boostEnergy && a.boosting == b.boosting && a.boostLockout == b.boostLockout);
 }
