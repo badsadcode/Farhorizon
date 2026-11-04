@@ -227,6 +227,10 @@
     "bench.combat_skirmish": {
       "type": "benchmark",
       "source": "benchmarks/combat_skirmish.json"
+    },
+    "ui.theme": {
+      "type": "ui_theme",
+      "source": "ui/theme.json"
     }
   }
 }

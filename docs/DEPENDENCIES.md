@@ -12,6 +12,8 @@ Versions are pinned. Any new dependency needs an entry here and a mention in an 
 | stb_image | v2.30 (commit `d14d46f`) | MIT / Public Domain | PNG/JPEG decoding | Vendored `third_party/stb/` |
 | stb_image_write | commit `d14d46f` | MIT / Public Domain | Screenshot PNG encoding | Vendored |
 | stb_easy_font | v1.1 (commit `d14d46f`) | MIT / Public Domain | Developer overlay text quads (dev tool only, not game UI) | Vendored |
+| stb_truetype | v1.26 (master, 2026-11) | MIT / Public Domain | TrueType glyph baking for the UI font atlas | Vendored `third_party/stb/` |
+| Share Tech / Share Tech Mono fonts | Google Fonts `ofl/` (2026-11) | SIL Open Font License 1.1 | UI typefaces | `content/fonts/` (+ OFL texts) |
 | nlohmann/json | v3.11.3 | MIT | JSON parsing for content and config | Vendored `third_party/nlohmann/json.hpp` |
 
 The license texts sit next to each vendored library in `third_party/`.

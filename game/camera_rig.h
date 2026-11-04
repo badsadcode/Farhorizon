@@ -30,6 +30,7 @@ class CameraRig {
   void cycleShipCamera(const Transform& ship);  // chase <-> cockpit
   void toggleDev(const Transform& ship);        // ship camera -> orbit -> free -> ship camera
   void toggleAutoRotate() { autoRotate_ = !autoRotate_; }
+  bool autoRotating() const { return autoRotate_; }
 
   void fixedUpdate(float step);
   // Per-frame update. Developer cameras read mouse/keys only when `devInput` is true.

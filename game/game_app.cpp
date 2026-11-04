@@ -33,13 +33,27 @@ struct LoadedMesh {
 }  // namespace
 
 GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
-  showDevOverlay_ = options_.devOverlay;
+  scripted_ = !options_.benchmarkId.empty() || options_.exitAfterFrames > 0;
+  // Benchmarks and scripted runs use defaults (reproducible); players get their settings.json.
+  if (!scripted_) settings_ = loadSettings(settingsPath_);
+  if (scripted_ || !options_.devOverlay) settings_.showDevOverlay = scripted_ && options_.devOverlay;
+  showDevOverlay_ = settings_.showDevOverlay;
   window_ = std::make_unique<Window>("FARHORIZON", options_.width, options_.height);
-  ctx_ = std::make_unique<VkContext>(*window_, VkContextOptions{options_.validation, options_.vsync});
+  if (!scripted_ && settings_.fullscreen && !window_->isFullscreen()) window_->toggleFullscreen();
+  ctx_ = std::make_unique<VkContext>(*window_, VkContextOptions{options_.validation, options_.vsync && settings_.vsync});
   renderer_ = std::make_unique<Renderer>(*ctx_, options_.shaderDir);
   if (!loadContent(contentErrors_))
     throw std::runtime_error("initial content load failed:\n  " +
                              (contentErrors_.empty() ? std::string("unknown error") : contentErrors_.front()));
+  {  // UI font atlas (TrueType -> one RGBA texture shared by HUD, terminal and menus)
+    std::string err;
+    if (font_.build({theme_.monoFont, theme_.sansFont}, &err)) {
+      renderer_->setUiAtlas(font_.pixels().data(), font_.width(), font_.height());
+      OverlayBuilder::setFont(&font_);
+    } else {
+      log::warn("ui", "font atlas failed ({}); using the debug font", err);
+    }
+  }
   if (benchmark_ && !benchmark_->startIn.empty()) options_.startIn = benchmark_->startIn;
   {
     std::vector<std::string> audioErrors;
@@ -64,9 +78,215 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
       if (options_.startIn == "station") session_->perform("exitShip");
     }
   }
-  const bool scripted = !options_.benchmarkId.empty() || options_.exitAfterFrames > 0;
-  if (!scripted) setMouseCapture(true);
+  applySettings();
+  const bool directStart = options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
+                           !options_.loadPath.empty() || options_.autofly;
+  if (!scripted_ && !directStart) openMenu(MenuSystem::Screen::Main);
+  else if (!scripted_) setMouseCapture(true);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Front end: settings, menus, save slots (Stage 7)
+
+void GameApp::applyBindingOverrides() {
+  for (const auto& [action, keys] : settings_.bindings)
+    if (!input_.setBinding(action, keys)) log::warn("settings", "ignoring invalid binding for '{}'", action);
+}
+
+void GameApp::applySettings() {
+  settings_.clamp();
+  if (!settings_.look.empty())
+    if (const int i = looks_.indexOf(settings_.look); i >= 0) activeLook_ = i;
+  const bool vsync = options_.vsync && settings_.vsync;
+  if (ctx_->vsync() != vsync) ctx_->setVsync(vsync);
+  if (!scripted_ && window_->isFullscreen() != settings_.fullscreen) window_->toggleFullscreen();
+  audio_.setVolumes(settings_.masterVolume, settings_.ambienceVolume, settings_.effectsVolume, settings_.engineVolume,
+                    settings_.uiVolume);
+  input_.setMouseOverrides(settings_.mouseSensitivity, settings_.invertY);
+  showDevOverlay_ = settings_.showDevOverlay;
+}
+
+void GameApp::persistSettings() {
+  if (scripted_) return;
+  std::string err;
+  if (!saveSettings(settingsPath_, settings_, &err)) log::warn("settings", "{}", err);
+}
+
+void GameApp::refreshSaveSlots() {
+  struct Def {
+    const char* label;
+    const char* file;
+    bool writable;
+  };
+  static constexpr Def defs[] = {{"Slot 1", "saves/slot1.json", true},
+                                 {"Slot 2", "saves/slot2.json", true},
+                                 {"Slot 3", "saves/slot3.json", true},
+                                 {"Quicksave (F7)", "saves/quicksave.json", true},
+                                 {"Autosave", "saves/autosave.json", false}};
+  slots_.clear();
+  for (const auto& d : defs) {
+    SaveSlotInfo si;
+    si.label = d.label;
+    si.path = d.file;
+    si.writable = d.writable;
+    std::error_code ec;
+    if (std::filesystem::exists(si.path, ec)) {
+      si.exists = true;
+      std::string err;
+      if (auto s = readSaveFile(si.path, &err)) {
+        std::string where = "In flight";
+        for (const auto& p : scene_.props)
+          if (s->docked && p.id == s->dockedStation) where = "Docked at " + p.name;
+        for (const auto& pl : scene_.planets)
+          for (const auto& site : pl.sites)
+            if (!s->landedSite.empty() && site.id == s->landedSite) where = "Landed at " + site.name;
+        std::string cr = std::to_string(s->credits);
+        for (int i = int(cr.size()) - 3; i > 0; i -= 3) cr.insert(size_t(i), ",");
+        si.summary = std::format("{}  ·  {} cr  ·  {} contract(s)", where, cr, s->contracts.size());
+      } else {
+        si.summary = "Unreadable: " + err;
+      }
+      const auto ft = std::filesystem::last_write_time(si.path, ec);
+      if (!ec) {
+        const auto sys = std::chrono::clock_cast<std::chrono::system_clock>(ft);
+        const std::time_t tt = std::chrono::system_clock::to_time_t(sys);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &tt);
+#else
+        localtime_r(&tt, &tm);
+#endif
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+        si.when = buf;
+      }
+    }
+    slots_.push_back(si);
+  }
+}
+
+void GameApp::openMenu(MenuSystem::Screen s) {
+  if (market_.isOpen()) market_.close();
+  refreshSaveSlots();
+  menus_.open(s);
+  setMouseCapture(false);
+  if (s == MenuSystem::Screen::Main) {  // the world turns slowly behind the title
+    camera_.setMode(CameraMode::Orbit, world().playerRenderTransform(1.0f));
+    if (!camera_.autoRotating()) camera_.toggleAutoRotate();
+  }
+}
+
+void GameApp::resumeGame() {
+  menus_.close();
+  if (camera_.isDev()) camera_.setMode(CameraMode::Chase, world().playerRenderTransform(1.0f));
+  camera_.snap();
+  setMouseCapture(true);
+}
+
+void GameApp::startNewGame() {
+  freshStart_ = true;
+  std::vector<std::string> errors;
+  const bool ok = loadContent(errors);
+  freshStart_ = false;
+  if (!ok) {
+    contentErrors_ = errors;
+    log::error("app", "new game failed to load content");
+    return;
+  }
+  market_.close();
+  miningMode_ = false;
+  resumeGame();
+  session_->notify("Kestrel traffic control: welcome to the Cinder Reach, pilot.");
+  log::info("app", "new game");
+}
+
+UiInput GameApp::uiInput() {
+  UiInput in;
+  const float ps = window_->pixelScale();
+  in.mouseX = input_.mouseX() * ps;
+  in.mouseY = input_.mouseY() * ps;
+  in.mouseMoved = in.mouseX != lastUiMouseX_ || in.mouseY != lastUiMouseY_;
+  lastUiMouseX_ = in.mouseX;
+  lastUiMouseY_ = in.mouseY;
+  in.mouseDown = input_.mouseLeft();
+  in.mousePressed = input_.mouseLeftPressed();
+  in.mouseReleased = input_.mouseLeftReleased();
+  in.wheel = input_.wheel();
+  in.up = input_.pressedOrRepeat("ui.up");
+  in.down = input_.pressedOrRepeat("ui.down");
+  in.left = input_.pressedOrRepeat("ui.left");
+  in.right = input_.pressedOrRepeat("ui.right");
+  in.accept = input_.pressed("ui.accept");
+  in.back = input_.pressed("ui.back");
+  in.tabNext = input_.pressed("ui.tabNext");
+  return in;
+}
+
+void GameApp::buildMenus() {
+  const VkExtent2D ext = renderer_->extent();
+  std::vector<std::string> lookNames, lookIds;
+  for (const auto& p : looks_.profiles) {
+    lookNames.push_back(p.name);
+    lookIds.push_back(p.id);
+  }
+  if (settings_.look.empty() && !looks_.profiles.empty()) settings_.look = looks_.profiles[size_t(activeLook_)].id;
+  bool canContinue = false;
+  for (const auto& s : slots_) canContinue |= s.exists;
+  MenuEnv env{settings_, input_, lookNames, lookIds, slots_, canContinue, "FARHORIZON 0.7  ·  test build"};
+  ui_.begin(overlay_, theme_, float(ext.width), float(ext.height), settings_.uiScale, uiInput(), runTime_);
+  auto actions = menus_.update(ui_, env);
+  ui_.end();
+  pendingMenuActions_.insert(pendingMenuActions_.end(), actions.begin(), actions.end());
+}
+
+void GameApp::handleMenuActions() {
+  auto actions = std::exchange(pendingMenuActions_, {});
+  for (const auto& a : actions) {
+    using T = MenuAction::Type;
+    switch (a.type) {
+      case T::Resume: resumeGame(); break;
+      case T::NewGame: startNewGame(); return;
+      case T::Continue: {
+        std::filesystem::path best;
+        std::filesystem::file_time_type bestTime{};
+        std::error_code ec;
+        for (const auto& s : slots_) {
+          if (!s.exists) continue;
+          const auto t = std::filesystem::last_write_time(s.path, ec);
+          if (!ec && (best.empty() || t > bestTime)) {
+            best = s.path;
+            bestTime = t;
+          }
+        }
+        if (!best.empty() && loadGame(best)) resumeGame();
+        return;
+      }
+      case T::Load:
+        if (loadGame(a.path)) resumeGame();
+        else refreshSaveSlots();
+        return;
+      case T::Save:
+        saveGame(a.path);
+        refreshSaveSlots();
+        menus_.open(MenuSystem::Screen::Pause);
+        break;
+      case T::QuitToMenu: openMenu(MenuSystem::Screen::Main); break;
+      case T::Quit: quit_ = true; break;
+      case T::SettingsChanged: applySettings(); break;
+      case T::BindingsChanged: applyBindingOverrides(); break;
+      case T::ResetBindings:
+        if (manifest_)
+          if (auto path = manifest_->resolve("config.input", "config")) {
+            std::vector<std::string> errs;
+            input_.loadBindings(*path, &errs);
+          }
+        applySettings();
+        break;
+      case T::SettingsClosed: persistSettings(); break;
+    }
+  }
+}
+
 
 GameApp::~GameApp() {
   audioDevice_.close();  // before SDL_Quit (Window dtor) and before the mixer goes away
@@ -89,6 +309,9 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
 
   if (auto inputPath = manifest->resolve("config.input", "config")) input_.loadBindings(*inputPath, &errors);
   else errors.push_back("config.input missing from manifest");
+  if (!scripted_) applyBindingOverrides();
+  auto theme = loadUiTheme(*manifest, "ui.theme", &errors);
+  if (!theme) return false;
 
   std::optional<BenchmarkDef> bench;
   std::string sceneId = options_.sceneId;
@@ -206,7 +429,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   // ---- Commit. Hot reload and save loading share one path: snapshot -> rebuild -> apply. ----
   std::optional<SaveGame> restore;
   if (pendingSave_) restore = std::move(pendingSave_);
-  else if (session_ && !bench) restore = captureSave(*session_, scene_.id);
+  else if (session_ && !bench && !freshStart_) restore = captureSave(*session_, scene_.id);
   pendingSave_.reset();
   std::optional<SystemPosition> keepPos;
   if (restore) keepPos = SystemPosition{restore->shipPosition};
@@ -279,6 +502,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   activeLook_ = std::max(0, looks_.indexOf(lookId));
   if (looks_.indexOf(lookId) < 0) log::warn("content", "look '{}' not found; using '{}'", lookId, looks_.profiles[0].id);
   manifest_ = std::move(manifest);
+  theme_ = *theme;
   benchmark_ = bench;
   scene_ = std::move(*scene);
   session_ = std::move(newSession);   // the old session dies before the old content below
@@ -462,7 +686,18 @@ void GameApp::updateAudio(float dt, float engineDemand, float speedFraction) {
 void GameApp::handleAppInput() {
   const Transform ship = world().playerRenderTransform(1.0f);
   const bool cockpit = session_->location() == Location::Cockpit;
+  handleMenuActions();
   if (input_.pressed("app.quit")) quit_ = true;
+  if (menus_.active()) {  // menus own input; the simulation is paused (see run())
+    if (input_.pressed("debug.screenshot"))
+      pendingScreenshot_ = std::filesystem::path("screenshots") / std::format("farhorizon_{:03}.png", screenshotCounter_++);
+    if (input_.pressed("window.fullscreen")) {
+      window_->toggleFullscreen();
+      settings_.fullscreen = window_->isFullscreen();
+      persistSettings();
+    }
+    return;
+  }
   if (market_.isOpen()) {  // the terminal owns the keyboard while open
     const VkExtent2D ext = renderer_->extent();
     const float ps = window_->pixelScale();
@@ -478,14 +713,33 @@ void GameApp::handleAppInput() {
     loadGame("saves/quicksave.json");
     return;
   }
+  if (input_.pressed("app.menu") && !scripted_) {
+    openMenu(MenuSystem::Screen::Pause);
+    return;
+  }
   if (input_.pressed("app.toggleMouse")) setMouseCapture(!mouseCaptured_);
-  if (input_.pressed("debug.overlay")) showDevOverlay_ = !showDevOverlay_;
-  if (input_.pressed("window.fullscreen")) window_->toggleFullscreen();
+  // Clicking into the game window takes the mouse back (the click is not a shot).
+  if (!mouseCaptured_ && input_.mouseLeftPressed() && !scripted_ && !camera_.isDev()) {
+    setMouseCapture(true);
+    suppressFireUntilRelease_ = true;
+  }
+  if (input_.pressed("debug.overlay")) {
+    showDevOverlay_ = !showDevOverlay_;
+    settings_.showDevOverlay = showDevOverlay_;
+    persistSettings();
+  }
+  if (input_.pressed("window.fullscreen")) {
+    window_->toggleFullscreen();
+    settings_.fullscreen = window_->isFullscreen();
+    persistSettings();
+  }
   if (input_.pressed("debug.screenshot"))
     pendingScreenshot_ = std::filesystem::path("screenshots") / std::format("farhorizon_{:03}.png", screenshotCounter_++);
   if (input_.pressed("visual.cycleLook") && !looks_.profiles.empty()) {
     activeLook_ = (activeLook_ + 1) % int(looks_.profiles.size());
     lookShownUntil_ = runTime_ + 2.0;
+    settings_.look = looks_.profiles[size_t(activeLook_)].id;
+    persistSettings();
     log::info("render", "look: {}", looks_.profiles[size_t(activeLook_)].name);
   }
   if (input_.pressed("interact")) session_->interact();
@@ -650,6 +904,12 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   hc.damageFlash = float(std::clamp((damageFlashUntil_ - runTime_) / 0.35, 0.0, 1.0));
   hc.shieldFlash = float(std::clamp((shieldFlashUntil_ - runTime_) / 0.25, 0.0, 1.0)) * 0.6f;
   hc.missileWarning = runTime_ < missileWarnUntil_ + 0.3;
+  hc.showContractTracker = settings_.showContractTracker;
+  hc.showHints = settings_.showHints;
+  if (menus_.atMainMenu()) {  // title screen: no HUD, just the slowly turning world
+    buildMenus();
+    return;
+  }
   if (market_.isOpen()) {  // the terminal takes the whole screen's attention
     market_.draw(overlay_, *session_, look.hud, float(ext.width), float(ext.height), runTime_);
     return;
@@ -663,7 +923,8 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
     InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
     drawInteriorHud(overlay_, ic);
   }
-  if (showDevOverlay_) buildDevOverlay();
+  if (showDevOverlay_ && !menus_.active()) buildDevOverlay();
+  if (menus_.active()) buildMenus();
 }
 
 int GameApp::run() {
@@ -688,10 +949,13 @@ int GameApp::run() {
     if (mouseCaptured_ && !window_->hasFocus()) setMouseCapture(false);
 
     handleAppInput();
+    const bool simPaused = menus_.active();
     const bool cockpit = session_->location() == Location::Cockpit;
     const bool devCam = camera_.isDev();
     const bool freeCam = camera_.mode() == CameraMode::Free;
-    if (cockpit) {
+    if (simPaused) {
+      // Menus: the world holds still behind them.
+    } else if (cockpit) {
       controller_.update(input_, float(dt), mouseCaptured_ && !devCam, world().player().state.boostEnergy,
                          world().player().input);
     } else {
@@ -710,7 +974,8 @@ int GameApp::run() {
 
     {  // Triggers: LMB fires the selected system (guns or mining laser), RMB rockets.
       const bool controls = cockpit && !market_.isOpen() && !devCam;
-      const bool lmb = mouseCaptured_ && input_.mouseLeft();
+      if (!input_.mouseLeft()) suppressFireUntilRelease_ = false;
+      const bool lmb = mouseCaptured_ && input_.mouseLeft() && !suppressFireUntilRelease_;
       const bool rmb = mouseCaptured_ && input_.mouseRight();
       session_->setMiningTrigger(controls && ((miningMode_ && lmb) || input_.down("ship.mine")));
       session_->setFireTriggers(controls && ((!miningMode_ && lmb) || input_.down("ship.firePrimary")),
@@ -750,7 +1015,7 @@ int GameApp::run() {
         }
       session_->setFireTriggers(fire, rockets);
     }
-    const int steps = clock_.advance(dt);
+    const int steps = simPaused ? 0 : clock_.advance(dt);
     for (int i = 0; i < steps; ++i) {
       const auto delta = session_->fixedUpdate(float(clock_.step()));
       if (delta) {
@@ -782,11 +1047,15 @@ int GameApp::run() {
       const Transform off = session_->landing().surfaceOffset();
       ship = {ps.position + padRot.rotate(off.position), normalize(padRot * off.rotation)};
     }
-    CameraView view = camera_.update(ship, world().player(), input_, float(dt), devCam || !mouseCaptured_);
+    CameraView view = camera_.update(ship, world().player(), input_, float(dt),
+                                     (devCam || !mouseCaptured_) && !menus_.active());
+    if (camera_.mode() == CameraMode::Chase || camera_.mode() == CameraMode::Cockpit)
+      view.fovDeg = std::clamp(view.fovDeg + settings_.fovOffsetDeg, 40.0f, 110.0f);
     {  // re-entry / touchdown shake and transit field-of-view stretch
       const float heat = session_->landing().heat();
       const bool approach = session_->landing().state() == LandState::SurfaceApproach;
-      const float shake = heat * 0.012f + (approach ? 0.004f : 0.0f) + combatShake_ * combatShake_ * 0.02f;
+      const float shake = (heat * 0.012f + (approach ? 0.004f : 0.0f) + combatShake_ * combatShake_ * 0.02f) *
+                          (settings_.cameraShake ? 1.0f : 0.0f);
       if (shake > 0) {
         const float t = float(runTime_);
         view.rotation = normalize(view.rotation * Quat::fromAxisAngle({1, 0, 0}, shake * std::sin(t * 41.0f)) *

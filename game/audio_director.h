@@ -29,6 +29,8 @@ class AudioDirector {
   Mixer& mixer() { return mixer_; }
   void update(const AudioState& s, float dt);
   void event(const std::string& name, float gain = 1.0f, float pitch = 1.0f, float pan = 0.0f);
+  // Player volumes (Options), multiplied onto the bus gains from audio.json.
+  void setVolumes(float master, float ambience, float effects, float engine, float ui);
 
  private:
   struct SoundDef {
@@ -61,6 +63,9 @@ class AudioDirector {
   double clock_ = 0;
   VoiceId engine_ = kNoVoice, laser_ = kNoVoice;
   std::uint32_t rng_ = 0x1234567u;
+  float baseGain_[4] = {0.8f, 0.9f, 0.7f, 0.6f};  // ambience, effects, engine, ui (from audio.json)
+  float volume_[4] = {1, 1, 1, 1};
+  void applyBusGains();
 };
 
 }  // namespace fh

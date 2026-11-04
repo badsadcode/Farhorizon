@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "_comment": "UI theme (docs/data_schemas/ui_theme.md). Placeholder 'used future' style until the reference art arrives. Colours are sRGB 0-255 RGBA. Sizes are pixels at 1080p.",
+  "fonts": {
+    "mono": "fonts/ShareTechMono-Regular.ttf",
+    "sans": "fonts/ShareTech-Regular.ttf"
+  },
+  "colors": {
+    "text":        [226, 172, 98, 255],
+    "textDim":     [226, 172, 98, 130],
+    "textBright":  [255, 218, 160, 255],
+    "accent":      [112, 196, 222, 255],
+    "danger":      [222, 76, 54, 255],
+    "ok":          [150, 208, 124, 255],
+    "panel":       [7, 8, 9, 228],
+    "panelBorder": [226, 172, 98, 150],
+    "highlight":   [226, 172, 98, 46],
+    "backdrop":    [0, 0, 0, 165]
+  },
+  "sizes": {
+    "small": 15,
+    "body": 20,
+    "heading": 26,
+    "title": 88,
+    "subtitle": 18
+  },
+  "panel": { "chamfer": 14, "border": 1.5, "padding": 22 },
+  "rowHeight": 40,
+  "letterSpacing": 0.32
+}

@@ -1,0 +1,291 @@
+#include "game/ui/menus.h"
+
+#include <algorithm>
+#include <cmath>
+#include <format>
+
+namespace fh {
+
+namespace {
+struct Bindable {
+  const char* action;
+  const char* label;
+};
+// Rebindable actions, in the order the Controls tab shows them.
+constexpr Bindable kBindables[] = {
+    {"ship.throttleUp", "Throttle up"},          {"ship.throttleDown", "Throttle down"},
+    {"ship.throttleZero", "Zero throttle"},      {"ship.strafeLeft", "Strafe left"},
+    {"ship.strafeRight", "Strafe right"},        {"ship.strafeUp", "Strafe up"},
+    {"ship.strafeDown", "Strafe down"},          {"ship.rollLeft", "Roll left"},
+    {"ship.rollRight", "Roll right"},            {"ship.boost", "Boost"},
+    {"ship.toggleAssist", "Flight assist"},      {"ship.togglePrecision", "Precision mode"},
+    {"weapon.guns", "Select guns"},              {"weapon.mining", "Select mining laser"},
+    {"ship.firePrimary", "Fire (keyboard)"},     {"ship.fireSecondary", "Rocket (keyboard)"},
+    {"ship.mine", "Mining laser (hold)"},        {"ship.scan", "Scan asteroid"},
+    {"target.next", "Next target"},              {"target.nearestHostile", "Nearest hostile"},
+    {"target.nearestAsteroid", "Nearest asteroid"}, {"target.clear", "Clear target"},
+    {"nav.next", "Next destination"},            {"travel.engage", "Travel drive"},
+    {"dock.request", "Dock / land / launch"},    {"dock.autopilot", "Docking autopilot"},
+    {"interact", "Interact / leave seat"},       {"ui.market", "Terminal"},
+    {"camera.cycle", "Chase / cockpit camera"},  {"foot.forward", "Walk forward"},
+    {"foot.back", "Walk back"},                  {"foot.left", "Walk left"},
+    {"foot.right", "Walk right"},                {"foot.run", "Run"},
+    {"foot.jump", "Jump"},                       {"game.save", "Quicksave"},
+    {"game.load", "Quickload"},                  {"app.toggleMouse", "Free / capture mouse"},
+};
+
+std::string joinKeys(const std::vector<std::string>& keys) {
+  std::string s;
+  for (const auto& k : keys) s += (s.empty() ? "" : " / ") + k;
+  return s.empty() ? std::string("--") : s;
+}
+}  // namespace
+
+void MenuSystem::open(Screen s) {
+  if (s == Screen::Main || s == Screen::Pause) root_ = s;
+  screen_ = s;
+  pendingFocusFor_ = s;
+  listening_.clear();
+}
+
+void MenuSystem::back() {
+  listening_.clear();
+  switch (screen_) {
+    case Screen::Pause: screen_ = Screen::None; break;
+    case Screen::Main: open(Screen::ConfirmQuit); break;
+    default: open(root_); break;
+  }
+}
+
+std::vector<MenuAction> MenuSystem::update(Ui& ui, MenuEnv& env) {
+  std::vector<MenuAction> out;
+  if (pendingFocusFor_ == screen_ && screen_ != Screen::None) {
+    ui.resetFocus();
+    pendingFocusFor_ = Screen::None;
+  }
+  // Key capture for rebinding swallows everything (Escape cancels).
+  if (!listening_.empty()) {
+    const int key = env.input.firstKeyPressed();
+    if (key >= 0) {
+      const std::string name = InputState::keyName(key);
+      if (name != "Escape" && !name.empty()) {
+        env.settings.bindings[listening_] = {name};
+        out.push_back({MenuAction::Type::BindingsChanged, {}});
+      }
+      listening_.clear();
+    }
+  } else if (ui.input().back) {
+    const Screen before = screen_;
+    if (before == Screen::Options) out.push_back({MenuAction::Type::SettingsClosed, {}});
+    back();
+    if (before == Screen::Pause) out.push_back({MenuAction::Type::Resume, {}});
+    return out;
+  }
+  switch (screen_) {
+    case Screen::None: break;
+    case Screen::Main: mainMenu(ui, env, out); break;
+    case Screen::Pause: pauseMenu(ui, env, out); break;
+    case Screen::Options: options(ui, env, out); break;
+    case Screen::Load: slots(ui, env, out, false); break;
+    case Screen::Save: slots(ui, env, out, true); break;
+    case Screen::ConfirmQuit: confirm(ui, out, "Quit to desktop?", MenuAction::Type::Quit); break;
+    case Screen::ConfirmNew: confirm(ui, out, "Start a new game? Unsaved progress is lost.", MenuAction::Type::NewGame); break;
+    case Screen::ConfirmMenu:
+      confirm(ui, out, "Quit to the main menu? Unsaved progress is lost.", MenuAction::Type::QuitToMenu);
+      break;
+  }
+  return out;
+}
+
+void MenuSystem::mainMenu(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
+  const UiTheme& t = ui.theme();
+  ui.leftShade(0.62f);
+  const float x = 120;
+  ui.spacedTitle(x, 190, "FARHORIZON", t.title, t.textBright);
+  ui.label(x + 6, 304, "A QUIET FRONTIER", t.subtitle, t.text, FontFace::Sans);
+  ui.draw().line(ui.s(x + 6), ui.s(340), ui.s(x + 520), ui.s(340), 1.0f, t.textDim);
+  float y = 400;
+  const float step = 58, w = 460;
+  if (ui.menuItem(x, y, w, "CONTINUE", env.canContinue)) out.push_back({MenuAction::Type::Continue, {}});
+  y += step;
+  if (ui.menuItem(x, y, w, "NEW GAME")) {
+    if (env.canContinue) open(Screen::ConfirmNew);
+    else out.push_back({MenuAction::Type::NewGame, {}});
+  }
+  y += step;
+  if (ui.menuItem(x, y, w, "LOAD GAME")) open(Screen::Load);
+  y += step;
+  if (ui.menuItem(x, y, w, "OPTIONS")) open(Screen::Options);
+  y += step;
+  if (ui.menuItem(x, y, w, "QUIT")) open(Screen::ConfirmQuit);
+  ui.label(x + 6, ui.height() / ui.scale() - 92, env.version, t.small, t.textDim);
+  ui.hintBar("UP/DOWN select    ENTER confirm    ESC quit    Mouse works too");
+}
+
+void MenuSystem::pauseMenu(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
+  const UiTheme& t = ui.theme();
+  (void)env;
+  ui.backdrop(0.85f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = 520, ph = 6 * 58 + 150, px = (W - pw) * 0.5f, py = (H - ph) * 0.5f;
+  ui.panel(px, py, pw, ph);
+  ui.spacedTitle(px + 40, py + 30, "PAUSED", t.heading + 8, t.textBright);
+  ui.draw().line(ui.s(px + 40), ui.s(py + 84), ui.s(px + pw - 40), ui.s(py + 84), 1.0f, t.textDim);
+  float y = py + 106;
+  const float step = 58, w = pw - 60;
+  if (ui.menuItem(px + 30, y, w, "RESUME")) out.push_back({MenuAction::Type::Resume, {}});
+  y += step;
+  if (ui.menuItem(px + 30, y, w, "SAVE GAME")) open(Screen::Save);
+  y += step;
+  if (ui.menuItem(px + 30, y, w, "LOAD GAME")) open(Screen::Load);
+  y += step;
+  if (ui.menuItem(px + 30, y, w, "OPTIONS")) open(Screen::Options);
+  y += step;
+  if (ui.menuItem(px + 30, y, w, "MAIN MENU")) open(Screen::ConfirmMenu);
+  y += step;
+  if (ui.menuItem(px + 30, y, w, "QUIT TO DESKTOP")) open(Screen::ConfirmQuit);
+  ui.hintBar("UP/DOWN select    ENTER confirm    ESC resume");
+}
+
+void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
+  const UiTheme& t = ui.theme();
+  Settings& s = env.settings;
+  ui.backdrop(root_ == Screen::Main ? 0.55f : 0.85f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = std::min(1180.0f, W - 80), ph = std::min(820.0f, H - 120);
+  const float px = (W - pw) * 0.5f, py = (H - ph) * 0.5f - 10;
+  ui.panel(px, py, pw, ph);
+  ui.spacedTitle(px + 40, py + 28, "OPTIONS", t.heading + 8, t.textBright);
+  const int tab = ui.tabs(px + 40, py + 84, {"GRAPHICS", "AUDIO", "CONTROLS", "GAMEPLAY"}, optionsTab_);
+  if (tab != optionsTab_) {
+    optionsTab_ = tab;
+    ui.resetFocus();
+    listening_.clear();
+  }
+  const float rx = px + 40, rw = pw - 80, row = t.rowHeight + 6;
+  float y = py + 146;
+  bool changed = false;
+  auto pct = [](float v) { return std::format("{:.0f}%", v * 100.0f); };
+  switch (optionsTab_) {
+    case 0: {
+      int look = 0;
+      for (size_t i = 0; i < env.lookIds.size(); ++i)
+        if (env.lookIds[i] == s.look) look = int(i);
+      if (ui.choiceRow(rx, y, rw, "Look", look, env.lookNames)) {
+        s.look = env.lookIds[size_t(look)];
+        changed = true;
+      }
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Fullscreen", s.fullscreen);
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Vertical sync", s.vsync);
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Field of view", s.fovOffsetDeg, -15, 20, 1,
+                              std::format("{:+.0f} deg", s.fovOffsetDeg));
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Interface scale", s.uiScale, 0.75f, 1.5f, 0.05f, pct(s.uiScale));
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Camera shake", s.cameraShake);
+      break;
+    }
+    case 1:
+      changed |= ui.sliderRow(rx, y, rw, "Master volume", s.masterVolume, 0, 1, 0.05f, pct(s.masterVolume));
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Ambience", s.ambienceVolume, 0, 1, 0.05f, pct(s.ambienceVolume));
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Effects", s.effectsVolume, 0, 1, 0.05f, pct(s.effectsVolume));
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Engine", s.engineVolume, 0, 1, 0.05f, pct(s.engineVolume));
+      y += row;
+      changed |= ui.sliderRow(rx, y, rw, "Interface", s.uiVolume, 0, 1, 0.05f, pct(s.uiVolume));
+      break;
+    case 2: {
+      changed |= ui.sliderRow(rx, y, rw, "Mouse sensitivity", s.mouseSensitivity, 0.25f, 3.0f, 0.05f,
+                              std::format("{:.2f}x", s.mouseSensitivity));
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Invert mouse Y", s.invertY);
+      y += row + 8;
+      ui.label(rx + 16, y, "KEY BINDINGS", t.small, t.textDim);
+      y += 28;
+      const int count = int(std::size(kBindables));
+      const int visible = std::max(3, int((py + ph - 96 - y) / row));
+      const int firstFocus = 2;  // the two rows above
+      const int first = ui.scrollFor(ui.focus() - firstFocus, count, visible);
+      for (int i = 0; i < count; ++i) {
+        const Bindable& b = kBindables[i];
+        if (i < first || i >= first + visible) {
+          ui.skipFocusable();
+          continue;
+        }
+        const bool listening = listening_ == b.action;
+        if (ui.keyRow(rx, y, rw, b.label, joinKeys(env.input.bindingNames(b.action)), listening) && listening_.empty())
+          listening_ = b.action;
+        y += row;
+      }
+      if (count > visible) {  // scroll indicator
+        const float sx = ui.s(px + pw - 22), sy0 = ui.s(py + 230), sh = ui.s(ph - 340);
+        ui.draw().rect(sx, sy0, 2, sh, t.textDim.withAlpha(0.4f));
+        ui.draw().rect(sx - 1, sy0 + sh * float(first) / float(count), 4, sh * float(visible) / float(count), t.text);
+      }
+      if (ui.button(px + pw - 300, py + ph - 70, 260, 44, "RESET KEYS")) {
+        s.bindings.clear();
+        out.push_back({MenuAction::Type::ResetBindings, {}});
+      }
+      break;
+    }
+    case 3:
+      changed |= ui.toggleRow(rx, y, rw, "Contract tracker on the HUD", s.showContractTracker);
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Control hints", s.showHints);
+      y += row;
+      changed |= ui.toggleRow(rx, y, rw, "Developer info overlay (F1)", s.showDevOverlay);
+      break;
+    default: break;
+  }
+  if (changed) {
+    s.clamp();
+    out.push_back({MenuAction::Type::SettingsChanged, {}});
+  }
+  if (ui.button(px + 40, py + ph - 70, 200, 44, "BACK")) {
+    out.push_back({MenuAction::Type::SettingsClosed, {}});
+    back();
+  }
+  ui.hintBar(listening_.empty() ? "TAB next tab    UP/DOWN select    LEFT/RIGHT adjust    ENTER change    ESC back"
+                                : "Press the new key    ESC cancel");
+}
+
+void MenuSystem::slots(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out, bool saving) {
+  const UiTheme& t = ui.theme();
+  ui.backdrop(root_ == Screen::Main ? 0.55f : 0.85f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = std::min(980.0f, W - 80);
+  int shown = 0;
+  for (const auto& sl : env.slots) shown += saving ? sl.writable : 1;
+  const float rowH = 74, ph = 190 + rowH * float(shown);
+  const float px = (W - pw) * 0.5f, py = (H - ph) * 0.5f;
+  ui.panel(px, py, pw, ph);
+  ui.spacedTitle(px + 40, py + 28, saving ? "SAVE GAME" : "LOAD GAME", t.heading + 8, t.textBright);
+  float y = py + 96;
+  for (const auto& sl : env.slots) {
+    if (saving && !sl.writable) continue;
+    const std::string sub = sl.exists ? sl.summary : std::string(saving ? "Empty slot" : "No save");
+    if (ui.listRow(px + 30, y, pw - 60, rowH - 6, sl.label, sl.exists ? sl.when : "", sub, saving || sl.exists))
+      out.push_back({saving ? MenuAction::Type::Save : MenuAction::Type::Load, sl.path});
+    y += rowH;
+  }
+  if (ui.button(px + 40, py + ph - 70, 200, 44, "BACK")) back();
+  ui.hintBar(saving ? "ENTER save to slot (overwrites)    ESC back" : "ENTER load    ESC back");
+}
+
+void MenuSystem::confirm(Ui& ui, std::vector<MenuAction>& out, const char* question, MenuAction::Type yes) {
+  const UiTheme& t = ui.theme();
+  ui.backdrop(0.85f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = 720, ph = 220, px = (W - pw) * 0.5f, py = (H - ph) * 0.5f;
+  ui.panel(px, py, pw, ph);
+  ui.label(px + pw * 0.5f, py + 44, question, t.body + 2, t.textBright, FontFace::Mono, TextAlign::Center);
+  if (ui.button(px + pw * 0.5f - 230, py + ph - 84, 210, 48, "YES")) out.push_back({yes, {}});
+  if (ui.button(px + pw * 0.5f + 20, py + ph - 84, 210, 48, "NO")) back();
+}
+
+}  // namespace fh

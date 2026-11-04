@@ -1,0 +1,86 @@
+# FARHORIZON — handoff to a local session
+
+_Written 2026-11-04 at the end of the cloud session. Branch: `claude/happy-mayer-kejesk`._
+
+## Where the project is
+* **Stages 0–6 are done** (see `docs/STATUS.md`, `CHANGELOG.md`, ADRs in `docs/decisions/`):
+  flight, docking, walkable ship/station, mining/trade/save, travel drive + planet landing,
+  combat, contracts and upgrades. CI (Windows MSVC + Linux sanitizers) is green, and it uploads a
+  playable Windows zip (`FARHORIZON-windows-x64` artifact).
+* **Stage 7 (polish) has started, work in progress, committed but not finished:**
+  * TrueType UI font: Share Tech Mono + Share Tech (SIL OFL) in `content/fonts/`, baked with
+    `stb_truetype` into one atlas (`engine/ui/font_atlas.*`). The overlay now has UVs
+    (`engine/debug/overlay.*`, `shaders/overlay.*`) and a chamfered `panel()` primitive.
+  * UI theme `content/ui/theme.json` (colours, sizes, panel style). This is a placeholder until
+    the owner's reference art arrives; the image list and prompts were given in chat.
+  * Immediate-mode widget kit `game/ui/ui.*`. Screens are in `game/ui/menus.*`: main menu
+    (world orbiting behind it), pause menu (Esc), options (graphics/audio/controls with key
+    rebinding/gameplay), load/save with 3 slots + quicksave + autosave, confirmations.
+  * `settings.json` (`game/settings.*`) beside the game: look, vsync, fullscreen, FOV offset, UI
+    scale, camera shake, volumes, mouse sensitivity/invert, binding overrides, HUD toggles.
+  * Input: `app.menu` = Esc, `app.toggleMouse` = backtick; clicking the game window recaptures
+    the mouse. Benchmarks and `--frames` runs ignore settings and skip menus.
+
+## Next steps (agreed order with the owner)
+1. **Finish the UI pass:**
+   * Verify the Options tabs interactively. The Controls tab scrolls, so check rebinding and
+     Reset keys.
+   * Redesign the flight HUD with the new font: consistent panels, use `uiScale`.
+   * Restyle the station terminal (`game/market_ui.*`) with the Ui kit.
+   * Add unit tests for settings parse/serialize and for the Ui focus logic.
+   * Update docs: STATUS, CHANGELOG 0.7.0, ISSUES, a `ui_theme` schema doc, and an ADR 0010
+     for the UI.
+2. **Blender pipeline:**
+   * Normal, metallic-roughness, emissive and occlusion textures in the glTF loader and mesh
+     shader.
+   * `KHR_lights_punctual` lights from Blender.
+   * Whole-level `.glb` maps with naming conventions (`COL_` colliders, `SPAWN_` / `USE_` empties).
+   * A Blender Python script that builds a scale-reference scene: 1.8 m player capsule,
+     doorways, Sparrow bounds and sockets, landing pad, raider.
+   * An artist guide (axes: nose along Blender +Y; 1 unit = 1 m; `socket_*` / `hardpoint_*`
+     empties).
+3. **Lighting and shading on real GPUs:**
+   * Sun shadow maps (cascades) and shadows from interior spot lamps.
+   * IBL / environment reflections.
+   * Better tonemapping, keeping the retro looks.
+   * The owner has an RTX 3080; the old software-rasteriser budget no longer limits this.
+
+The owner's constraint: **all content original.** Atmosphere inspired by 70s/80s lonely
+"used future" sci-fi, but never copy assets, names or designs from existing works.
+
+## Build on Windows
+Prerequisites:
+* Visual Studio 2022 with **Desktop development with C++**.
+* CMake 3.24 or newer (VS ships one).
+* Git.
+* **Vulkan SDK** 1.3 or newer (LunarG); provides `glslangValidator`.
+* Python 3, optional (asset/audio tools).
+
+```bat
+git clone https://github.com/badsadcode/Farhorizon.git
+cd Farhorizon
+git checkout claude/happy-mayer-kejesk
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+build\Release\farhorizon.exe
+```
+SDL3 is fetched and built statically by CMake on the first configure (needs internet).
+The exe finds `content/` and its shaders through compiled-in paths when run from the build tree.
+Useful flags:
+* `--start-docked`, `--start-landed`, `--start-in ship|station|surface`: skip the menu and start
+  in that place.
+* `--continue`: load the quicksave.
+* `--validation`: Vulkan validation layers.
+* `--benchmark bench.combat_skirmish`: run a benchmark.
+* `--frames N --screenshot x.png`: render N frames and save a screenshot.
+
+The content validator is `build\Release\content_validator.exe content`.
+
+## Conventions worth knowing
+* `fh_core` is GPU-free and unit-tested. `fh_engine` holds SDL/Vulkan and the
+  `farhorizon` exe. Tests use a small custom harness in `tests/unit`.
+* All gameplay content is data (`content/`, validated). Docs for the schemas are in
+  `docs/data_schemas/`.
+* Commits end with the co-author/session trailer lines used in the history.
+* Keep `docs/STATUS.md`, `CHANGELOG.md` and `docs/ISSUES.md` honest at each step.

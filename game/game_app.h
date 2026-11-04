@@ -22,6 +22,11 @@
 #include "game/persistence/save_game.h"
 #include "game/session/game_session.h"
 #include "game/session/progression_setup.h"
+#include "game/settings.h"
+#include "game/ui/menus.h"
+#include "game/ui/ui.h"
+#include "game/ui/ui_theme.h"
+#include "engine/ui/font_atlas.h"
 #include "game/ship_controller.h"
 #include "game/world/space_world.h"
 
@@ -73,6 +78,17 @@ class GameApp {
   SpaceWorld& world() { return session_->world(); }
   void buildDevOverlay();
   void setMouseCapture(bool on);
+  // Front end (Stage 7).
+  void applySettings();
+  void applyBindingOverrides();
+  void persistSettings();
+  void refreshSaveSlots();
+  void openMenu(MenuSystem::Screen s);
+  void resumeGame();
+  void startNewGame();
+  void handleMenuActions();
+  void buildMenus();
+  UiInput uiInput();
 
   AppOptions options_;
   std::unique_ptr<Window> window_;
@@ -128,6 +144,18 @@ class GameApp {
   std::uint32_t rebases_ = 0;
   double runTime_ = 0;
   bool quit_ = false;
+  Settings settings_;
+  std::filesystem::path settingsPath_ = "settings.json";
+  bool scripted_ = false;         // benchmarks / --frames: defaults, no menus, no settings file
+  FontAtlas font_;
+  UiTheme theme_;
+  Ui ui_;
+  MenuSystem menus_;
+  std::vector<MenuAction> pendingMenuActions_;
+  std::vector<SaveSlotInfo> slots_;
+  bool freshStart_ = false;
+  bool suppressFireUntilRelease_ = false;  // the click that captured the mouse       // next loadContent ignores the current session (new game)
+  float lastUiMouseX_ = -1, lastUiMouseY_ = -1;
 };
 
 }  // namespace fh

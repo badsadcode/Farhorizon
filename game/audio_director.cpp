@@ -79,12 +79,29 @@ bool AudioDirector::load(const AssetManifest& manifest, const AssetID& configId,
         if (!sounds_.count(s)) r.error("location '" + key + "' uses unknown sound '" + s + "'");
       locations_[key] = L;
     }
-  mixer_.setBusGain(AudioBus::Ambience, float(j.value("ambienceGain", 0.8)), 0);
-  mixer_.setBusGain(AudioBus::Effects, float(j.value("effectsGain", 0.9)), 0);
-  mixer_.setBusGain(AudioBus::Engine, float(j.value("engineGain", 0.7)), 0);
-  mixer_.setBusGain(AudioBus::Ui, float(j.value("uiGain", 0.6)), 0);
+  baseGain_[0] = float(j.value("ambienceGain", 0.8));
+  baseGain_[1] = float(j.value("effectsGain", 0.9));
+  baseGain_[2] = float(j.value("engineGain", 0.7));
+  baseGain_[3] = float(j.value("uiGain", 0.6));
+  applyBusGains();
   log::info("audio", "{} sounds, {} locations, {} events", sounds_.size(), locations_.size(), events_.size());
   return r.ok();
+}
+
+void AudioDirector::applyBusGains() {
+  mixer_.setBusGain(AudioBus::Ambience, baseGain_[0] * volume_[0], 0.1f);
+  mixer_.setBusGain(AudioBus::Effects, baseGain_[1] * volume_[1], 0.1f);
+  mixer_.setBusGain(AudioBus::Engine, baseGain_[2] * volume_[2], 0.1f);
+  mixer_.setBusGain(AudioBus::Ui, baseGain_[3] * volume_[3], 0.1f);
+}
+
+void AudioDirector::setVolumes(float master, float ambience, float effects, float engine, float ui) {
+  mixer_.setMasterGain(master);
+  volume_[0] = ambience;
+  volume_[1] = effects;
+  volume_[2] = engine;
+  volume_[3] = ui;
+  applyBusGains();
 }
 
 void AudioDirector::enterLocation(const std::string& key) {

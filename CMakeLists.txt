@@ -35,6 +35,7 @@ add_library(fh_core STATIC
   engine/assets/image_io.cpp
   engine/debug/frame_stats.cpp
   engine/debug/overlay.cpp
+  engine/ui/font_atlas.cpp
   engine/render/starfield.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
@@ -56,6 +57,9 @@ add_library(fh_core STATIC
   game/progression/upgrades.cpp
   game/missions/contracts.cpp
   game/session/progression_setup.cpp
+  game/settings.cpp
+  game/ui/ui_theme.cpp
+  game/ui/ui.cpp
   game/space/travel_drive.cpp
   game/space/landing.cpp
   game/persistence/save_game.cpp
@@ -98,6 +102,7 @@ if(FH_BUILD_GAME)
     game/ship_controller.cpp
     game/hud.cpp
     game/market_ui.cpp
+    game/ui/menus.cpp
   )
   target_link_libraries(farhorizon PRIVATE fh_engine)
   add_dependencies(farhorizon fh_shaders)

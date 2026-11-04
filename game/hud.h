@@ -32,6 +32,8 @@ struct HudContext {
   float damageFlash = 0;     // 0..1 red edge flash (hull hit)
   float shieldFlash = 0;     // 0..1 cyan edge flash (shield hit)
   bool missileWarning = false;
+  bool showContractTracker = true;
+  bool showHints = true;
 };
 
 struct InteriorHudContext {

@@ -23,6 +23,16 @@ class InputState {
 
   bool down(const std::string& action) const;
   bool pressed(const std::string& action) const;  // went down this frame
+  bool pressedOrRepeat(const std::string& action) const;  // pressed, or OS key repeat (menus)
+
+  // Runtime rebinding (Options menu). Key names are SDL scancode names ("W", "Left Shift").
+  bool setBinding(const std::string& action, const std::vector<std::string>& keyNames);
+  std::vector<std::string> bindingNames(const std::string& action) const;
+  int firstKeyPressed() const;                 // scancode pressed this frame, or -1
+  static std::string keyName(int scancode);
+  // Player multipliers on top of input.json's mouse settings.
+  void setMouseOverrides(float sensitivityScale, bool invertY);
+  bool mouseLeftReleased() const { return mouseLeftReleased_; }
 
   const MouseSettings& mouse() const { return mouse_; }
   float mouseDx() const { return mouseDx_; }
@@ -45,7 +55,11 @@ class InputState {
   std::vector<bool> keysPressed_ = std::vector<bool>(512, false);
   float mouseDx_ = 0, mouseDy_ = 0, wheel_ = 0;
   unsigned mouseButtons_ = 0;
-  bool mouseLeftPressed_ = false;
+  bool mouseLeftPressed_ = false, mouseLeftReleased_ = false;
+  std::vector<bool> keysRepeated_ = std::vector<bool>(512, false);
+  MouseSettings baseMouse_;
+  float sensitivityScale_ = 1.0f;
+  bool invertOverride_ = false;
   float mouseX_ = 0, mouseY_ = 0;
   MouseSettings mouse_;
 };

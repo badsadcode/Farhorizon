@@ -44,8 +44,9 @@ bool InputState::loadBindings(const std::filesystem::path& jsonPath, std::vector
     ms.deadzone = m.value("deadzone", ms.deadzone);
     ms.recenterPerSecond = m.value("recenterPerSecond", ms.recenterPerSecond);
     if (ms.sensitivity <= 0 || ms.deadzone < 0 || ms.deadzone >= 1) ok = fail("input mouse settings out of range");
-    else mouse_ = ms;
+    else baseMouse_ = ms;
   }
+  setMouseOverrides(sensitivityScale_, invertOverride_);
   bindings_ = std::move(parsed);
   log::info("input", "loaded {} action bindings", bindings_.size());
   return ok;
@@ -67,10 +68,53 @@ bool InputState::pressed(const std::string& action) const {
   return false;
 }
 
+bool InputState::pressedOrRepeat(const std::string& action) const {
+  auto it = bindings_.find(action);
+  if (it == bindings_.end()) return false;
+  for (int sc : it->second)
+    if (keysPressed_[size_t(sc)] || keysRepeated_[size_t(sc)]) return true;
+  return false;
+}
+
+bool InputState::setBinding(const std::string& action, const std::vector<std::string>& keyNames) {
+  std::vector<int> codes;
+  for (const auto& n : keyNames) {
+    const SDL_Scancode sc = SDL_GetScancodeFromName(n.c_str());
+    if (sc == SDL_SCANCODE_UNKNOWN) return false;
+    codes.push_back(int(sc));
+  }
+  bindings_[action] = codes;
+  return true;
+}
+
+std::vector<std::string> InputState::bindingNames(const std::string& action) const {
+  std::vector<std::string> out;
+  if (auto it = bindings_.find(action); it != bindings_.end())
+    for (int sc : it->second) out.push_back(keyName(sc));
+  return out;
+}
+
+int InputState::firstKeyPressed() const {
+  for (size_t i = 0; i < keysPressed_.size(); ++i)
+    if (keysPressed_[i]) return int(i);
+  return -1;
+}
+
+std::string InputState::keyName(int scancode) { return SDL_GetScancodeName(SDL_Scancode(scancode)); }
+
+void InputState::setMouseOverrides(float sensitivityScale, bool invertY) {
+  sensitivityScale_ = sensitivityScale;
+  invertOverride_ = invertY;
+  mouse_ = baseMouse_;
+  mouse_.sensitivity *= sensitivityScale;
+  mouse_.invertY = baseMouse_.invertY != invertY;
+}
+
 void InputState::beginFrame() {
   std::fill(keysPressed_.begin(), keysPressed_.end(), false);
+  std::fill(keysRepeated_.begin(), keysRepeated_.end(), false);
   mouseDx_ = mouseDy_ = wheel_ = 0;
-  mouseLeftPressed_ = false;
+  mouseLeftPressed_ = mouseLeftReleased_ = false;
 }
 
 void InputState::handleEvent(const SDL_Event& e) {
@@ -78,6 +122,7 @@ void InputState::handleEvent(const SDL_Event& e) {
     case SDL_EVENT_KEY_DOWN:
       if (size_t(e.key.scancode) < keysDown_.size()) {
         if (!e.key.repeat) keysPressed_[size_t(e.key.scancode)] = true;
+        else keysRepeated_[size_t(e.key.scancode)] = true;
         keysDown_[size_t(e.key.scancode)] = true;
       }
       break;
@@ -97,7 +142,10 @@ void InputState::handleEvent(const SDL_Event& e) {
       mouseX_ = e.button.x;
       mouseY_ = e.button.y;
       break;
-    case SDL_EVENT_MOUSE_BUTTON_UP: mouseButtons_ &= ~SDL_BUTTON_MASK(e.button.button); break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+      mouseButtons_ &= ~SDL_BUTTON_MASK(e.button.button);
+      if (e.button.button == SDL_BUTTON_LEFT) mouseLeftReleased_ = true;
+      break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
       std::fill(keysDown_.begin(), keysDown_.end(), false);
       mouseButtons_ = 0;

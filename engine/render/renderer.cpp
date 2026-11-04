@@ -228,6 +228,7 @@ Renderer::~Renderer() {
   gpu::destroy(ctx_, bloomA_);
   gpu::destroy(ctx_, bloomB_);
   gpu::destroy(ctx_, whiteTexture_);
+  gpu::destroy(ctx_, uiAtlas_);
   gpu::destroy(ctx_, depth_);
   VkDevice d = ctx_.device();
   if (queryPool_) vkDestroyQueryPool(d, queryPool_, nullptr);
@@ -323,8 +324,8 @@ void Renderer::createPipelines() {
   }
 
   VkPushConstantRange overlayPush{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2};
-  li.setLayoutCount = 0;
-  li.pSetLayouts = nullptr;
+  li.setLayoutCount = 1;
+  li.pSetLayouts = &materialLayout_;  // the UI atlas (font glyphs + white texel)
   li.pPushConstantRanges = &overlayPush;
   VK_CHECK(vkCreatePipelineLayout(d, &li, nullptr, &overlayPipelineLayout_));
 
@@ -395,7 +396,8 @@ void Renderer::createPipelines() {
   overlay.layout = overlayPipelineLayout_;
   overlay.blend = Blend::Alpha;
   overlay.bindings = {{0, sizeof(OverlayVertex), VK_VERTEX_INPUT_RATE_VERTEX}};
-  overlay.attributes = {{0, 0, VK_FORMAT_R32G32_SFLOAT, 0}, {1, 0, VK_FORMAT_R8G8B8A8_UNORM, 8}};
+  overlay.attributes = {{0, 0, VK_FORMAT_R32G32_SFLOAT, 0}, {1, 0, VK_FORMAT_R32G32_SFLOAT, 8},
+                        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, 16}};
   overlayPipeline_ = buildPipeline(d, overlay, swap, VK_FORMAT_UNDEFINED);
 
   PipelineDesc tonemap;
@@ -482,6 +484,16 @@ MeshHandle Renderer::uploadMesh(const MeshData& mesh) {
   g.triangles = mesh.triangleCount();
   meshes_.push_back(std::move(g));
   return static_cast<MeshHandle>(meshes_.size() - 1);
+}
+
+void Renderer::setUiAtlas(const std::uint8_t* rgba, std::uint32_t w, std::uint32_t h) {
+  vkDeviceWaitIdle(ctx_.device());
+  if (overlaySet_) vkFreeDescriptorSets(ctx_.device(), descriptorPool_, 1, &overlaySet_);
+  overlaySet_ = VK_NULL_HANDLE;
+  gpu::destroy(ctx_, uiAtlas_);
+  if (!rgba) return;
+  uiAtlas_ = gpu::createTextureRGBA8(ctx_, rgba, w, h);
+  overlaySet_ = allocateMaterialSet(uiAtlas_.view, clampSampler_);
 }
 
 void Renderer::clearMeshes() {
@@ -830,6 +842,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline_);
     const float invHalf[2] = {2.0f / float(extent.width), 2.0f / float(extent.height)};
     vkCmdPushConstants(cmd, overlayPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(invHalf), invHalf);
+    if (!overlaySet_) overlaySet_ = allocateMaterialSet(whiteTexture_.view, clampSampler_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipelineLayout_, 0, 1, &overlaySet_, 0, nullptr);
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &fr.overlayVertices.buffer, &off);
     vkCmdDraw(cmd, static_cast<std::uint32_t>(overlay.size()), 1, 0, 0);

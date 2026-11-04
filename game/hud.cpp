@@ -191,7 +191,8 @@ void drawCombatHud(OverlayBuilder& o, const HudContext& c, const Projector& proj
   else if (flying && arm.overheated) centeredText(o, cx, c.height * 0.27f, "WEAPONS OVERHEATED", kWarn, 2.0f);
 
   // Contract tracker: top-left.
-  const auto& active = gs.contracts().active();
+  static const std::vector<Contract> kNone;
+  const auto& active = c.showContractTracker ? gs.contracts().active() : kNone;
   float ty = 60;
   if (!active.empty()) shadowText(o, 24, ty, "CONTRACTS", kDim);
   for (const auto& k : active) {
@@ -438,7 +439,7 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
         }
       }
     }
-    if (!hint.empty()) centeredText(o, cx, 40, hint, dk.state() == DockState::Docked ? kNav : kPrimary);
+    if (!hint.empty() && c.showHints) centeredText(o, cx, 40, hint, dk.state() == DockState::Docked ? kNav : kPrimary);
     if (simT - tr.messageTime() < 4.0 && !tr.message().empty() && simT - dk.messageTime() >= 6.0)
       centeredText(o, cx, c.height * 0.74f, tr.message(), kPrimary);
     if (simT - ld.messageTime() < 6.0 && !ld.message().empty())

@@ -124,6 +124,8 @@ class Renderer {
   MeshHandle uploadMesh(const MeshData& mesh);
   void clearMeshes();  // waits for the GPU; used by hot reload
   void setStarfield(const std::vector<StarInstance>& stars);
+  // UI atlas for the overlay (RGBA8; null = plain white). Survives clearMeshes().
+  void setUiAtlas(const std::uint8_t* rgba, std::uint32_t w, std::uint32_t h);
 
   // Renders and presents one frame. Items may come in any order; they are grouped per mesh and
   // drawn instanced. Returns false if the frame was skipped (swapchain
@@ -164,6 +166,8 @@ class Renderer {
   VkShaderModule loadShader(const char* name);
   void ensureTargets();  // depth + HDR colour sized to the swapchain
   VkDescriptorSet allocateMaterialSet(VkImageView view, VkSampler sampler = VK_NULL_HANDLE);
+  GpuImage uiAtlas_;
+  VkDescriptorSet overlaySet_ = VK_NULL_HANDLE;
   void writeScreenshot(const std::filesystem::path& path, const GpuBuffer& readback, VkExtent2D extent);
 
   VkContext& ctx_;
