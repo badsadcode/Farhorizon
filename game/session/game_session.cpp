@@ -179,7 +179,10 @@ void GameSession::setProgression(const SceneDef& scene, const WeaponDb* weapons,
   upgradeDb_ = upgrades;
   contractDb_ = contracts;
   deductible_ = scene.insuranceDeductible;
-  combat_.configure(weapons, scene, std::hash<std::string>{}(scene.id));
+  // Platform-independent seed (std::hash differs between standard libraries).
+  std::uint64_t seed = 1469598103934665603ull;
+  for (unsigned char ch : scene.id) seed = (seed ^ ch) * 1099511628211ull;
+  combat_.configure(weapons, scene, seed);
   applyShip();
   combat_.player().hull = combat_.player().maxHull;
   combat_.player().shield = combat_.player().maxShield;
