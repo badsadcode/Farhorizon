@@ -18,6 +18,7 @@
 #include "game/content/visual_profile.h"
 #include "engine/audio/audio_device.h"
 #include "game/audio_director.h"
+#include "game/foot/foot_view.h"
 #include "game/fx/light_selector.h"
 #include "game/fx/particles.h"
 #include "game/market_ui.h"
@@ -77,6 +78,7 @@ class GameApp {
   void handleAppInput();
   void buildOverlay(const CameraView& view, const Mat4& viewProj, const Transform& ship);
   void handleFootInput(float dt);
+  void playFootSounds(const std::vector<FootEvent>& events, const Vec3& listener, const Quat& facing);
   void openMarket();
   void closeMarket();
   void saveGame(const std::filesystem::path& path, bool quiet = false);
@@ -164,6 +166,8 @@ class GameApp {
   TravelState lastTravelState_ = TravelState::Idle;
   SpeedDust dust_;
   LightSelector lampSelector_;
+  FootMeshes footMeshes_;
+  FootView footView_;
   AssetID lampSelectorScene_;
   float tunnelAmount_ = 0.0f;
   std::vector<Vec3> travelNozzles_;  // relative to the ship

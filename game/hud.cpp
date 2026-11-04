@@ -655,6 +655,41 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
   if (target) targetPanel(p, c, *target, targetCol);
 }
 
+namespace {
+void footHud(Pen& p, OverlayBuilder& o, const InteriorHudContext& c) {
+  const GameSession& s = c.session;
+  const FootPlayer& me = s.footPlayers().front();
+  const float cx = c.width * 0.5f, cy = c.height * 0.5f;
+  if (c.hitMark > 0) {  // the shot landed
+    const OverlayColor mark{255, 225, 190, std::uint8_t(235.0f * c.hitMark)};
+    const float a = p.s(7), b = p.s(14), w = std::max(1.5f, p.s(2));
+    for (const float x : {-1.0f, 1.0f})
+      for (const float y : {-1.0f, 1.0f}) o.line(cx + x * a, cy + y * a, cx + x * b, cy + y * b, w, mark);
+  }
+  // Health and rivets, bottom right.
+  const float w = p.s(220), h = p.s(14), small = p.small();
+  const float x = c.width - p.s(kMargin) - w, y = c.height - p.s(kMargin) - h - p.lineH(small) - p.s(6);
+  const float fraction = std::clamp(me.health / 100.0f, 0.0f, 1.0f);
+  o.rect(x, y, w, h, kMeterBack);
+  o.rect(x, y, w * fraction, h, fraction < 0.3f ? kWarn : kPrimary);
+  p.text(x, y - p.lineH(small) - p.s(2), "HEALTH", kDim, small);
+  const std::string rivets = me.reloading() ? std::string("RELOADING") : std::format("RIVETS  {} / {}", me.magazine, me.reserve);
+  p.text(x + w, y + h + p.s(4), rivets, me.magazine == 0 && !me.reloading() ? kWarn : kPrimary, small, TextAlign::Right);
+  // Hurt: the edges of the screen flare red. Knocked out: the screen comes back from black.
+  if (c.hurtFlash > 0) {
+    for (int band = 0; band < 8; ++band) {  // layered bands, so it fades towards the middle
+      const float e = p.s(16.0f + float(band) * 15.0f);
+      const OverlayColor red{170, 20, 10, std::uint8_t(11.0f * c.hurtFlash)};
+      o.rect(0, 0, c.width, e, red);
+      o.rect(0, c.height - e, c.width, e, red);
+      o.rect(0, e, e, c.height - 2 * e, red);
+      o.rect(c.width - e, e, e, c.height - 2 * e, red);
+    }
+  }
+  if (c.blackout > 0) o.rect(0, 0, c.width, c.height, {0, 0, 0, std::uint8_t(255.0f * std::min(1.0f, c.blackout * 1.5f))});
+}
+}  // namespace
+
 void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
   setPalette(c.palette);
   static const UiTheme kFallbackTheme;
@@ -664,6 +699,7 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
   const InteriorDef* def = s.activeInterior();
   const float lineW = std::max(1.5f, p.s(2));
   o.circle(cx, cy, p.s(2.5f), lineW, kPrimary, 8);  // crosshair dot
+  if (s.footArmed()) footHud(p, o, c);
   if (const Interactable* it = s.focusedInteractable()) {
     o.circle(cx, cy, p.s(10), lineW, kNav, 16);
     p.pill(cx, cy + p.s(24), "[" + keyName(c.bindings, "interact") + "]  " + it->prompt, kNav, p.body());
@@ -681,7 +717,8 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
     auto key = [&](const char* action) { return keyName(c.bindings, action); };
     const std::string walk = key("foot.forward") + key("foot.left") + key("foot.back") + key("foot.right");
     p.text(p.s(kMargin), c.height - p.s(kMargin) - p.lineH(small),
-           std::format("{} walk   {} run   {} jump   {} use   Esc menu", walk, key("foot.run"), key("foot.jump"), key("interact")),
+           std::format("{} walk   {} run   {} jump   {} use   {}Esc menu", walk, key("foot.run"), key("foot.jump"), key("interact"),
+                       s.footArmed() ? std::format("Mouse fire   {} reload   {} lamp   ", key("foot.reload"), key("foot.lamp")) : std::string()),
            kDim, small);
   }
 }

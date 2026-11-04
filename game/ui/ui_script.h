@@ -36,6 +36,10 @@ struct UiScriptHost {
   std::function<std::string()> location;
   std::function<bool()> docked;
   std::function<void()> quit;
+  std::function<int()> enemiesAlive;
+  std::function<float()> footHealth;
+  std::function<int()> footMagazine;
+  std::function<void()> aimAtEnemy;
 };
 
 class UiScript {

@@ -1,5 +1,7 @@
 #include "game/physics/collision.h"
 
+#include <unordered_set>
+
 #include <algorithm>
 #include <cmath>
 
@@ -136,6 +138,39 @@ bool TriangleCollider::sphereVsTriangle(std::uint32_t triangle, const Vec3& cent
   }
   out.depth = radius - d;
   return true;
+}
+
+bool TriangleCollider::raycast(const Vec3& origin, const Vec3& direction, float maxDistance, float& outDistance) const {
+  float best = maxDistance;
+  bool found = false;
+  std::vector<std::uint32_t> near;
+  std::unordered_set<std::uint32_t> tested;
+  // Walk along the ray a cell at a time, stopping once the best hit is behind us.
+  for (float along = 0; along <= best + cellSize_; along += cellSize_) {
+    near.clear();
+    nearby(origin + direction * along, cellSize_, near);
+    for (const std::uint32_t index : near) {
+      if (!tested.insert(index).second) continue;
+      const Triangle& tri = triangles_[index];
+      const Vec3 e1 = tri.b - tri.a, e2 = tri.c - tri.a;
+      const Vec3 p = cross(direction, e2);
+      const float det = dot(e1, p);
+      if (std::fabs(det) < 1e-9f) continue;
+      const Vec3 to = origin - tri.a;
+      const float u = dot(to, p) / det;
+      if (u < 0 || u > 1) continue;
+      const Vec3 q = cross(to, e1);
+      const float v = dot(direction, q) / det;
+      if (v < 0 || u + v > 1) continue;
+      const float t = dot(e2, q) / det;
+      if (t >= 0 && t <= best) {
+        best = t;
+        found = true;
+      }
+    }
+  }
+  if (found) outDistance = best;
+  return found;
 }
 
 }  // namespace fh

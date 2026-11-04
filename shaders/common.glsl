@@ -1,5 +1,7 @@
 // Shared declarations. Rendering is camera-relative: the camera sits at the origin of
 // "render space", whose axes are the system axes. viewProj contains rotation + projection only.
+#define MAX_POINT_LIGHTS 16  // must match kPointShadowLights in renderer.h
+
 layout(set = 0, binding = 0) uniform FrameUniforms {
   mat4 viewProj;
   mat4 invViewProj;
@@ -18,8 +20,8 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 rimColorPower;  // rgb rim (edge) light colour, a exponent
   vec4 fogColorDensity;  // rgb fog colour (linear), a density per metre (0 = off)
   vec4 lightCount;       // x = number of point lights in use
-  vec4 pointPosRange[16]; // xyz camera-relative position, w range (m)
-  vec4 pointColor[16];    // rgb colour * intensity
+  vec4 pointPosRange[MAX_POINT_LIGHTS]; // xyz camera-relative position, w range (m)
+  vec4 pointColor[MAX_POINT_LIGHTS];    // rgb colour * intensity
   vec4 atmoZenith;       // rgb zenith colour, a = 1 for atmospheric sky (planet surface)
   vec4 atmoHorizon;      // rgb horizon colour, a haze (sun glow spread)
   vec4 atmoGround;       // rgb below-horizon colour, a star visibility (0..1)

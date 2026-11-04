@@ -10,9 +10,9 @@ status lives in `STATUS.md`._
      occlusion. Lights via `KHR_lights_punctual`.
    * Whole maps as `.glb` files, with entities placed through the add-on and solid meshes by default.
    * A scale reference (1.8 m player, doorway) and an artist guide: `docs/BLENDER_GUIDE.md`.
-3. **Points of interest and FPS gameplay.** Docking with a derelict and exploring it works (0.8.2). Next:
-   fight and loot. For example a derelict in space. Needs first-person weapons, a damage model on foot,
-   enemy AI with navigation, and loot tables.
+3. **Points of interest and FPS gameplay.** Docking with a derelict and exploring it works (0.8.2). A first
+   fight works too (0.9.0): a gun, one enemy, loot, and a simulation that already takes a list of players.
+   Still to do: more weapons and enemies, real pathfinding, and loot tables as content files.
 4. **Co-op, 1-4 players.**
    1. Multi-player simulation: separate players from the world; separate ship reference frames;
       tested headless with simulated players.
@@ -43,6 +43,9 @@ Picked up when a map or scene calls for them, not as one big step. Rough order o
 * **World:** pauses when nobody is connected.
 * **Planet size:** much smaller than today's 2,400 km Varga, around 300-600 km.
 * **All content stays original.**
+
+**When maps get bigger:** give each part of the screen its own list of lights (clustered shading) and reuse
+the shadows of lamps that do not move. The owner agreed this comes after weapons, enemies and loot.
 
 Steps 3 and 4 may swap: step 3 is the faster fun, but FPS combat written before step 4.1 would need
 reworking for multiple players. Write it against the multi-player simulation if the two overlap.

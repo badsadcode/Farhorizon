@@ -1178,7 +1178,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
       std::vector<std::uint32_t> visible;
       for (std::uint32_t k = 0; k < drawOrder_.size(); ++k) {
         const MeshDrawItem& it = items[drawOrder_[k]];
-        if (it.mesh >= meshes_.size()) continue;
+        if (it.mesh >= meshes_.size() || !it.castsLampShadow) continue;
         const GpuMesh& m = meshes_[it.mesh];
         const float scale = length(Vec3{it.model.at(0, 0), it.model.at(1, 0), it.model.at(2, 0)});
         const Vec3 center = it.model.transformPoint(m.boundsCenter);

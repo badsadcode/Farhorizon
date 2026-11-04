@@ -83,6 +83,36 @@
       "source": "models/interior/corridor_open.glb",
       "license": "CC0 1.0 - Kenney Space Kit 'corridor_open' (kenney.nl). Placeholder interior piece."
     },
+    "mesh.foot.rivet_driver": {
+      "type": "mesh",
+      "source": "models/foot/rivet_driver.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
+    "mesh.foot.crawler_body": {
+      "type": "mesh",
+      "source": "models/foot/crawler_body.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
+    "mesh.foot.crawler_dead": {
+      "type": "mesh",
+      "source": "models/foot/crawler_dead.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
+    "mesh.foot.crawler_leg": {
+      "type": "mesh",
+      "source": "models/foot/crawler_leg.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
+    "mesh.foot.loot_salvage": {
+      "type": "mesh",
+      "source": "models/foot/loot_salvage.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
+    "mesh.foot.loot_medical": {
+      "type": "mesh",
+      "source": "models/foot/loot_medical.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
     "mesh.int.desk_chair_arms": {
       "type": "mesh",
       "source": "models/interior/desk_chairArms.glb",

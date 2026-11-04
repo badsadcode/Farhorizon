@@ -126,15 +126,19 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
         d.reflectionProbes.push_back({n.position, n.position - n.scale, n.position + n.scale});
       }
     } else if (type == "enemy_spawn" || type == "loot") {
-      const bool enemy = type == "enemy_spawn";
-      map.markers.push_back({type, n.name, str(extras, "fh_kind"), n.position, yaw});
-      // No enemies or pickups exist yet, so these show as small glows while maps are being built.
-      LightDef marker;
-      marker.position = n.position + Vec3{0, enemy ? 1.0f : 0.3f, 0};
-      marker.color = enemy ? Vec3{3.0f, 0.3f, 0.2f} : Vec3{2.6f, 1.7f, 0.5f};
-      marker.size = enemy ? 0.3f : 0.18f;
-      marker.range = 0.0f;
-      d.lights.push_back(marker);
+      const std::string kind = str(extras, "fh_kind");
+      const std::string index = std::to_string(map.markers.size());
+      map.markers.push_back({type, n.name, kind, n.position, yaw});
+      d.markers.push_back(map.markers.back());
+      if (type == "loot") {
+        Interactable take;
+        take.id = "loot:" + index;
+        take.action = "loot:" + index;
+        take.prompt = kind == "medical" ? "Take the medical kit" : "Take the " + (kind.empty() ? std::string("salvage") : kind);
+        take.position = n.position + Vec3{0, 0.2f, 0};
+        take.radius = 2.2f;  // long enough to reach the top of a stack of crates
+        d.interactables.push_back(take);
+      }
     } else {
       map.warnings.push_back("unknown entity type '" + type + "' on '" + n.name + "'");
     }

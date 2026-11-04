@@ -42,6 +42,8 @@ class TriangleCollider {
   // Triangles that might touch the sphere, each once.
   void nearby(const Vec3& centre, float radius, std::vector<std::uint32_t>& out) const;
   bool sphereVsTriangle(std::uint32_t triangle, const Vec3& centre, float radius, Contact& out) const;
+  // Nearest surface along a unit-length ray, both sides of a triangle count. False if none within maxDistance.
+  bool raycast(const Vec3& origin, const Vec3& direction, float maxDistance, float& outDistance) const;
 
  private:
   struct Triangle {

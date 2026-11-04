@@ -190,6 +190,25 @@ void UiScript::step(const UiScriptHost& host) {
     in >> limit;
     const float value = cmd == "expect-spin-below" ? host.shipSpin() : host.shipSpeed();
     if (cmd == "expect-speed-above" ? value <= limit : value >= limit) fail(std::format("value is {:.3f}", value));
+  } else if (cmd == "press-mouse") {
+    pushButton(mouseX_, mouseY_, true);
+  } else if (cmd == "release-mouse") {
+    pushButton(mouseX_, mouseY_, false);
+  } else if (cmd == "aim-at-enemy") {
+    host.aimAtEnemy();
+  } else if (cmd == "expect-enemies") {
+    int want = 0;
+    in >> want;
+    if (host.enemiesAlive() != want) fail(std::format("{} enemies alive", host.enemiesAlive()));
+  } else if (cmd == "expect-health-below" || cmd == "expect-health-above") {
+    float limit = 0;
+    in >> limit;
+    const float value = host.footHealth();
+    if (cmd == "expect-health-below" ? value >= limit : value <= limit) fail(std::format("health is {}", value));
+  } else if (cmd == "expect-magazine-below") {
+    int limit = 0;
+    in >> limit;
+    if (host.footMagazine() >= limit) fail(std::format("magazine is {}", host.footMagazine()));
   } else if (cmd == "expect-location") {
     const std::string want = rest(in), got = host.location();
     if (want != got) fail("location is '" + got + "'");

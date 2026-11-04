@@ -46,6 +46,8 @@ constexpr Bindable kBindables[] = {
     {"foot.right", "Walk right", C::Foot},
     {"foot.run", "Run", C::Foot},
     {"foot.jump", "Jump", C::Foot},
+    {"foot.reload", "Reload", C::Foot},
+    {"foot.lamp", "Suit lamp", C::Foot},
     {"interact", "Interact / leave seat", C::Always},
     {"ui.market", "Terminal", C::Always},
     {"game.save", "Quicksave", C::Always},

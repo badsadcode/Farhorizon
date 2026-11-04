@@ -282,6 +282,78 @@ def alarm():
     return normalize(highpass(lowpass_fast(tone, 1800), 300) * env(len(tt), 0.01, 0.1), 0.4)
 
 
+def rivet_shot():
+    # A pneumatic slam: a hard low thump, a metallic ring on top, and a hiss of escaping air.
+    tt = t(0.32)
+    thump = np.sin(2 * np.pi * np.cumsum(240 * np.exp(-tt * 30) + 70) / SR) * np.exp(-tt * 24)
+    ring = (np.sin(2 * np.pi * 1730 * tt) + 0.6 * np.sin(2 * np.pi * 2610 * tt)) * np.exp(-tt * 38) * 0.32
+    crack = rng.standard_normal(len(tt)) * np.exp(-tt * 170) * 0.8
+    hiss = highpass(rng.standard_normal(len(tt)), 3200) * np.exp(-tt * 13) * 0.16
+    return normalize(thump + ring + crack + hiss, 0.9)
+
+
+def rivet_dry():
+    tt = t(0.09)
+    return normalize((np.sin(2 * np.pi * 2100 * tt) * 0.5 + rng.standard_normal(len(tt)) * 0.4) * np.exp(-tt * 110), 0.55)
+
+
+def rivet_reload():
+    # Magazine out, magazine in, a charge whining back up.
+    tt = t(1.55)
+    x = np.zeros(len(tt))
+    for at, pitch in ((0.1, 900), (0.72, 620), (0.82, 1250)):
+        k = np.maximum(tt - at, 0)
+        x += (np.sin(2 * np.pi * pitch * k) * 0.6 + rng.standard_normal(len(tt)) * 0.5) * np.exp(-k * 70) * (tt >= at)
+    whine = np.sin(2 * np.pi * np.cumsum(300 + 1100 * np.clip((tt - 0.95) / 0.55, 0, 1)) / SR)
+    x += whine * 0.14 * ((tt > 0.95) * np.minimum((tt - 0.95) * 8, 1) * np.minimum((1.55 - tt) * 18, 1))
+    return normalize(x, 0.7)
+
+
+def rivet_hit():
+    tt = t(0.18)
+    return normalize((np.sin(2 * np.pi * 3100 * tt) * 0.4 + np.sin(2 * np.pi * 4700 * tt) * 0.25 +
+                      rng.standard_normal(len(tt)) * 0.5 * np.exp(-tt * 90)) * np.exp(-tt * 42), 0.6)
+
+
+def crawler_hit():
+    tt = t(0.16)
+    wet = lowpass_fast(rng.standard_normal(len(tt)), 1100, 2) * np.exp(-tt * 30)
+    crack = np.sin(2 * np.pi * 620 * tt) * np.exp(-tt * 60) * 0.5
+    return normalize(wet + crack, 0.75)
+
+
+def crawler_wake():
+    # A dry rattle that rises: mandibles and something breathing through plates.
+    tt = t(0.62)
+    rate = 34 + 40 * tt
+    clicks = (np.sin(2 * np.pi * np.cumsum(rate) / SR) > 0.72) * 1.0
+    body = lowpass_fast(rng.standard_normal(len(tt)), 2600) * clicks
+    groan = np.sign(np.sin(2 * np.pi * np.cumsum(82 + 60 * tt) / SR)) * 0.22
+    return normalize((body + lowpass_fast(groan, 700)) * env(len(tt), 0.04, 0.2), 0.8)
+
+
+def crawler_die():
+    tt = t(0.95)
+    fall = np.sign(np.sin(2 * np.pi * np.cumsum(170 * np.exp(-tt * 2.4) + 34) / SR)) * 0.5
+    rattle = lowpass_fast(rng.standard_normal(len(tt)), 1900) * (np.sin(2 * np.pi * np.cumsum(46 * np.exp(-tt * 2.2) + 6) / SR) > 0.5)
+    return normalize((lowpass_fast(fall, 900) + rattle * 0.7) * np.exp(-tt * 3.4), 0.85)
+
+
+def player_hurt():
+    # A suit alarm blip over a dull body blow.
+    tt = t(0.34)
+    blow = np.sin(2 * np.pi * np.cumsum(150 * np.exp(-tt * 15) + 48) / SR) * np.exp(-tt * 13)
+    blip = np.sign(np.sin(2 * np.pi * 980 * tt)) * 0.12 * (tt > 0.08) * (tt < 0.2)
+    return normalize(blow + lowpass_fast(blip, 3000), 0.85)
+
+
+def pickup():
+    tt = t(0.3)
+    latch = rng.standard_normal(len(tt)) * np.exp(-tt * 120) * 0.4
+    tone = np.sin(2 * np.pi * 620 * tt) * (tt < 0.12) + np.sin(2 * np.pi * 930 * tt) * (tt >= 0.12)
+    return normalize(latch + tone * 0.35 * np.exp(-tt * 8), 0.6)
+
+
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -308,6 +380,15 @@ def main(out):
     write(out / "hull_hit.wav", hull_hit())
     write(out / "explosion.wav", explosion())
     write(out / "alarm.wav", alarm())
+    write(out / "rivet_shot.wav", rivet_shot())
+    write(out / "rivet_dry.wav", rivet_dry())
+    write(out / "rivet_reload.wav", rivet_reload())
+    write(out / "rivet_hit.wav", rivet_hit())
+    write(out / "crawler_hit.wav", crawler_hit())
+    write(out / "crawler_wake.wav", crawler_wake())
+    write(out / "crawler_die.wav", crawler_die())
+    write(out / "player_hurt.wav", player_hurt())
+    write(out / "pickup.wav", pickup())
 
 
 if __name__ == "__main__":

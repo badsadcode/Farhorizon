@@ -104,6 +104,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 ## Atmosphere
 | Item | State | Notes |
 |---|---|---|
+| Fighting on foot | ✅ | Rivet driver, crawler, loot, suit lamp, health; built for a list of players. Simple chasing, no pathfinding |
 | Point lights + fog + flicker | ✅ | 16 lights/frame, all shadowed, per-interior fog, failing lamps |
 | "Used Future" look | ✅ | default; amber/phosphor CRT HUD |
 | Audio | 🟡 | mixer, device, data-driven director with original synthesised placeholders. Nobody has listened yet. |

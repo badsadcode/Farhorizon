@@ -145,6 +145,7 @@ static_assert(sizeof(GlowSprite) == 32);
 struct MeshDrawItem {
   MeshHandle mesh = 0;
   Mat4 model;                      // camera-relative
+  bool castsLampShadow = true;
 };
 
 struct RenderStats {

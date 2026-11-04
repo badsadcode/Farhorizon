@@ -539,6 +539,17 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     t.meshFix = m.meshFix;
     if (def.collisionRadius <= 0) t.radius = m.data.boundsRadius() * def.meshScale;
   });
+  auto footMesh = [&](const char* id, std::uint32_t& handle) {
+    auto m = loadMesh(id, {}, "fighting on foot", 1.0f, {0, 0, 0}, false, false);
+    if (!m) return false;
+    handle = renderer_->uploadMesh(m->data);
+    return true;
+  };
+  if (!footMesh("mesh.foot.rivet_driver", footMeshes_.gun) || !footMesh("mesh.foot.crawler_body", footMeshes_.crawlerBody) ||
+      !footMesh("mesh.foot.crawler_dead", footMeshes_.crawlerDead) ||
+      !footMesh("mesh.foot.crawler_leg", footMeshes_.crawlerLeg) || !footMesh("mesh.foot.loot_salvage", footMeshes_.lootSalvage) ||
+      !footMesh("mesh.foot.loot_medical", footMeshes_.lootMedical))
+    return false;
   interiorPieces_.clear();
   for (auto& [iid, def] : interiors) {
     std::map<std::string, std::uint32_t> handles;
@@ -904,6 +915,28 @@ void GameApp::handleAppInput() {
   }
 }
 
+void GameApp::playFootSounds(const std::vector<FootEvent>& events, const Vec3& listener, const Quat& facing) {
+  for (const FootEvent& e : events) {
+    const Vec3 rel = e.position - listener;
+    const float dist = length(rel);
+    const float pan = dist > 0.5f ? std::clamp(dot(rel / dist, facing.right()) * 0.8f, -0.8f, 0.8f) : 0.0f;
+    const float near = std::clamp(1.0f - dist / 28.0f, 0.05f, 1.0f);
+    switch (e.type) {
+      case FootEvent::Type::Shot: audio_.event("rivet_shot", 1.0f, 0.96f + 0.08f * float(frameCount_ % 5) / 4.0f); break;
+      case FootEvent::Type::Dry: audio_.event("rivet_dry"); break;
+      case FootEvent::Type::ReloadStart: audio_.event("rivet_reload"); break;
+      case FootEvent::Type::HitWall: audio_.event("rivet_hit", near * 0.8f, 1.0f, pan); break;
+      case FootEvent::Type::HitEnemy: audio_.event("crawler_hit", 1.0f, 1.0f, pan); break;
+      case FootEvent::Type::EnemyWoke: audio_.event("crawler_wake", near, 1.0f, pan); break;
+      case FootEvent::Type::EnemyLunged: audio_.event("crawler_wake", near, 1.3f, pan); break;
+      case FootEvent::Type::EnemyDied: audio_.event("crawler_die", near, 1.0f, pan); break;
+      case FootEvent::Type::PlayerHurt: audio_.event("player_hurt"); break;
+      case FootEvent::Type::Pickup: audio_.event("pickup"); break;
+      default: break;
+    }
+  }
+}
+
 void GameApp::handleFootInput(float /*dt*/) {
   CharacterInput& ci = session_->characterInput();
   auto axis = [&](const char* neg, const char* pos) {
@@ -912,6 +945,11 @@ void GameApp::handleFootInput(float /*dt*/) {
   ci.move = {axis("foot.left", "foot.right"), axis("foot.back", "foot.forward")};
   ci.run = input_.down("foot.run");
   if (input_.pressed("foot.jump")) ci.jump = true;
+  if (input_.pressed("foot.reload")) session_->requestFootReload();
+  if (input_.pressed("foot.lamp") && session_->footArmed()) {
+    footView_.toggleSuitLamp();
+    audio_.event("ui", 0.5f, 0.8f);
+  }
   if (mouseCaptured_) {
     const float sens = 0.0025f;
     ci.yawDelta += input_.mouseDx() * sens;
@@ -1004,6 +1042,9 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   } else {
     InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud,
                           settings_.uiScale, &theme_, &input_, settings_.showContractTracker, settings_.showHints};
+    ic.hurtFlash = footView_.hurtFlash();
+    ic.hitMark = footView_.hitMark();
+    ic.blackout = footView_.blackout();
     drawInteriorHud(overlay_, ic);
   }
   if (showDevOverlay_) buildDevOverlay();
@@ -1048,7 +1089,23 @@ int GameApp::run() {
                         return std::string(l == Location::Cockpit ? "cockpit" : l == Location::ShipInterior ? "ship" : "station");
                       },
                       [this] { return session_->docking().state() == DockState::Docked; },
-                      [this] { quit_ = true; }});
+                      [this] { quit_ = true; },
+                      [this] { return session_->foot().aliveCount(); },
+                      [this] { return session_->footPlayers().front().health; },
+                      [this] { return session_->footPlayers().front().magazine; },
+                      [this] {  // test driver only: look straight at the nearest living enemy
+                        CharacterState& c = session_->character();
+                        const Vec3 eye = c.eye(session_->characterParams());
+                        float best = 1e9f;
+                        for (const FootEnemy& e : session_->foot().enemies()) {
+                          if (e.state == CrawlerState::Dead) continue;
+                          const Vec3 to = e.body.feet + Vec3{0, 0.42f, 0} - eye;
+                          if (length(to) >= best) continue;
+                          best = length(to);
+                          c.yaw = std::atan2(to.x, -to.z);
+                          c.pitch = std::asin(to.y / best);
+                        }
+                      }});
     }
     if (!window_->pollEvents(input_)) break;
     if (window_->isMinimized()) continue;  // keep pending resize until restored (no 0x0 swapchain)
@@ -1087,6 +1144,7 @@ int GameApp::run() {
       if (!input_.mouseLeft()) suppressFireUntilRelease_ = false;
       const bool lmb = mouseCaptured_ && input_.mouseLeft() && !suppressFireUntilRelease_;
       const bool rmb = mouseCaptured_ && input_.mouseRight();
+      session_->setFootTrigger(!cockpit && !simPaused && !market_.isOpen() && !devCam && lmb);
       session_->setMiningTrigger(controls && ((miningMode_ && lmb) || input_.down("ship.mine")));
       session_->setFireTriggers(controls && ((!miningMode_ && lmb) || input_.down("ship.firePrimary")),
                                 controls && (rmb || input_.down("ship.fireSecondary")));
@@ -1548,6 +1606,12 @@ int GameApp::run() {
         items.clear();
         glows.clear();
         for (const auto& pi : interiorPieces_[sceneId]) items.push_back({pi.mesh, Mat4::translation(-view.position) * pi.model});
+        if (!surface) {
+          const auto footEvents = session_->takeFootEvents();
+          playFootSounds(footEvents, view.position, view.rotation);
+          footView_.update(simPaused ? 0.0f : float(dt), footEvents, *session_);
+          footView_.draw(*session_, footMeshes_, view.position, view.rotation, items, glows);
+        }
         if (idef->parkedShip) {
           const auto& ps = *idef->parkedShip;
           const Transform shipPose = surface ? ship
@@ -1590,6 +1654,7 @@ int GameApp::run() {
           const float k = l.intensityAt(t) * a.strength;
           if (k > 0) params.pointLights.push_back({l.position - view.position, l.range, l.color * (k * l.intensity)});
         }
+        if (!surface) footView_.addLights(*session_, view.rotation, params.pointLights);
       }
     }
 
@@ -1633,6 +1698,7 @@ int GameApp::run() {
     // Ship effects belong to open space; on foot and on a surface the local scene replaces it.
     if (onFootOrSurface) {
       particleSprites_.clear();
+      if (!surface) footView_.buildSprites(view.position, particleSprites_);
       params.ribbons.clear();
       params.tunnel.amount = 0.0f;
     } else {

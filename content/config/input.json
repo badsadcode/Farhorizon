@@ -31,6 +31,8 @@
     "foot.right":           ["D"],
     "foot.run":             ["Left Shift"],
     "foot.jump":            ["Space"],
+    "foot.reload":          ["R"],
+    "foot.lamp":            ["L"],
     "target.next":          ["T"],
     "target.nearestAsteroid": ["G"],
     "target.clear":         ["Backspace"],

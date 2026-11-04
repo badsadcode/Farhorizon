@@ -41,6 +41,15 @@ struct Interactable {
   float radius = 1.6f;
 };
 
+// Something placed in a map for gameplay: enemy_spawn or loot.
+struct InteriorMarker {
+  std::string type;
+  std::string name;
+  std::string kind;   // free text, for example the enemy or loot table
+  Vec3 position{};
+  float yawDeg = 0;
+};
+
 struct InteriorLighting {
   Vec3 keyDirection{0.3f, 1.0f, 0.2f};  // toward the key light
   Vec3 keyColor{1.0f, 0.95f, 0.9f};
@@ -86,6 +95,7 @@ struct InteriorDef {
   std::vector<LightDef> lights;
   std::map<std::string, InteriorSpawn> spawns;
   std::vector<Interactable> interactables;
+  std::vector<InteriorMarker> markers;
   std::optional<InteriorSpawn> parkedShip;  // station hangars draw the player's ship here
   Vec3 parkedShipColliderHalfExtents{};     // walk-blocking box around the parked ship (0 = none)
   std::optional<TerrainParams> terrain;     // surface scenes: procedural heightfield

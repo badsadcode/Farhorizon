@@ -63,6 +63,7 @@ ActionResult GameSession::enterInterior(const AssetID& id, const std::string& sp
     character_.feet.y = std::max(character_.feet.y, terrain_.heightAt(character_.feet.x, character_.feet.z));
   character_.yaw = radians(sp->second.yawDeg);
   location_ = loc;
+  beginFoot(it->second);
   notice_ = it->second.name;
   noticeTime_ = world_->simulationTime();
   log::info("session", "entered {} ({})", it->second.name, locationName(loc));
@@ -110,6 +111,7 @@ ActionResult GameSession::perform(const std::string& action) {
     notify(action.substr(4));
     return {true, notice_};
   }
+  if (action.rfind("loot:", 0) == 0) return takeLoot(std::atoi(action.c_str() + 5));
   if (action == "leaveMap") {
     if (docking_.state() == DockState::Docked && docking_.station()) {
       const auto& dock = world_->props().at(*docking_.station()).def.docking;
@@ -151,6 +153,82 @@ ActionResult GameSession::perform(const std::string& action) {
   return fail("Unknown action '" + action + "'");
 }
 
+bool GameSession::markerCleared(int marker) const {
+  return clearedMarkers_.count(activeInteriorId_ + "#" + std::to_string(marker)) > 0;
+}
+
+void GameSession::beginFoot(const InteriorDef& def) {
+  std::vector<FootSpawn> spawns;
+  bool hostile = false;
+  for (int i = 0; i < int(def.markers.size()); ++i) {
+    const InteriorMarker& m = def.markers[size_t(i)];
+    if (m.type != "enemy_spawn") continue;
+    hostile = true;
+    if (!markerCleared(i)) spawns.push_back({i, m.position, m.yawDeg});
+  }
+  footArmed_ = hostile;
+  foot_.begin(spawns);
+  footEvents_.clear();
+  if (!hostile) {
+    // Back somewhere safe: patched up, and the locker refills the gun.
+    for (FootPlayer& p : footPlayers_) {
+      p = FootPlayer{};
+      p.magazine = foot_.gun().magazine;
+      p.reserve = foot_.gun().startReserve;
+    }
+  }
+}
+
+void GameSession::stepFoot(float dt) {
+  if (!footArmed_) return;
+  const InteriorDef* def = activeInterior();
+  if (!def) return;
+  FootPlayer& me = footPlayers_.front();
+  me.feet = character_.feet;
+  me.eye = character_.eye(characterParams_);
+  me.look = character_.lookDirection();
+  foot_.update(dt, footPlayers_, colliders_, def->meshCollider.get());
+  for (const FootEvent& e : foot_.takeEvents()) {
+    footEvents_.push_back(e);
+    if (e.type == FootEvent::Type::EnemyDied)
+      clearedMarkers_.insert(activeInteriorId_ + "#" + std::to_string(foot_.enemies()[size_t(e.enemy)].markerIndex));
+    if (e.type == FootEvent::Type::PlayerDown) {
+      // For now you wake at the way in, hurt, and they lose interest. Nothing is taken from you.
+      const auto spawn = def->spawns.count("start") ? def->spawns.find("start") : def->spawns.find("fromShip");
+      if (spawn != def->spawns.end()) {
+        character_ = CharacterState{};
+        character_.feet = spawn->second.position;
+        character_.yaw = radians(spawn->second.yawDeg);
+      }
+      me.health = 60;
+      me.trigger = false;
+      foot_.returnHome();
+      notify("You black out. Your suit drags you back to the way in.");
+    }
+  }
+}
+
+ActionResult GameSession::takeLoot(int marker) {
+  const InteriorDef* def = activeInterior();
+  if (!def || marker < 0 || marker >= int(def->markers.size())) return fail("Nothing to take");
+  if (markerCleared(marker)) return fail("Already taken");
+  const InteriorMarker& m = def->markers[size_t(marker)];
+  FootPlayer& me = footPlayers_.front();
+  std::string message;
+  if (m.kind == "medical") {
+    me.health = std::min(100.0f, me.health + 40.0f);
+    message = "Medical kit: patched up";
+  } else {
+    credits_ += 150;
+    me.reserve += 12;
+    message = "Salvage: 150 cr and 12 rivets";
+  }
+  clearedMarkers_.insert(activeInteriorId_ + "#" + std::to_string(marker));
+  footEvents_.push_back({FootEvent::Type::Pickup, m.position});
+  notify(message);
+  return {true, message};
+}
+
 ActionResult GameSession::enterMap(const AssetID& id) {
   return enterInterior(id, "start", Location::StationInterior);
 }
@@ -163,6 +241,7 @@ const Interactable* GameSession::focusedInteractable() const {
   const Interactable* best = nullptr;
   float bestScore = -1;
   for (const auto& it : def->interactables) {
+    if (it.action.rfind("loot:", 0) == 0 && markerCleared(std::atoi(it.action.c_str() + 5))) continue;
     const Vec3 to = it.position - eye;
     const float d = length(to);
     if (d > it.radius + 0.6f) continue;
@@ -434,6 +513,7 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
       stepCharacter(character_, characterInput_, characterParams_, colliders_, dt, terrain_.valid() ? &terrain_ : nullptr,
                     interior ? interior->meshCollider.get() : nullptr);
     }
+    stepFoot(dt);
     characterInput_.yawDelta = characterInput_.pitchDelta = 0;  // consumed
     characterInput_.jump = false;
     // Safety net: never let a bad collider set drop the player into the void.

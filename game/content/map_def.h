@@ -13,13 +13,7 @@
 
 namespace fh {
 
-struct MapMarker {
-  std::string type;   // enemy_spawn | loot: placed now, used by gameplay in a later stage
-  std::string name;
-  std::string kind;   // free text, for example the enemy or loot table
-  Vec3 position{};
-  float yawDeg = 0;
-};
+using MapMarker = InteriorMarker;
 
 struct LoadedMap {
   InteriorDef def;    // spawns, interactables, lights, lighting, collision

@@ -1,0 +1,56 @@
+# A fight in the test derelict (--map tests/data/derelict_fixture.glb): walk into the cargo bay, shoot what
+# wakes up, reload, and take what is lying around. Run from an empty folder.
+wait 20
+expect-screen none
+expect-enemies 2
+shot foot01_start.png
+# Fire at a wall: the gun works, and rounds go down.
+press-mouse
+wait 40
+release-mouse
+expect-magazine-below 12
+key R
+wait 110
+shot foot02_corridor.png
+# Down the corridor and through the door.
+hold 620 W
+wait 5
+aim-at-enemy
+wait 2
+shot foot03_bay.png
+press-mouse
+aim-at-enemy
+wait 20
+shot foot04_firing.png
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+shot foot05_fight.png
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+release-mouse
+wait 20
+expect-enemies 0
+shot foot06_after.png
+quit

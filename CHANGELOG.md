@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0 — Something is still moving back there (2026-11-04)
+* **You can fight on foot.** In a map with enemies placed in it you carry a rivet driver: a fitter's tool, 12
+  rivets to a magazine. Left mouse fires, R reloads, and an empty gun reloads itself.
+* **The first enemy: the crawler.** It sleeps until it sees or hears you, then chases and lunges. Step back
+  during its lunge and it misses. Four hits kill one, and the dead stay dead, in saves too.
+* **Loot:** walk up and press F. Salvage gives 150 cr and 12 rivets; a medical kit gives back 40 health.
+* **If you go down,** you wake at the way in with 60 health and the crawlers settle again. Nothing is taken from you.
+  Your ship patches you up and refills the gun.
+* **A weak lamp on your suit,** L to switch it off, because you cannot fight what you cannot see.
+* New sounds and models, all made from scratch by scripts in `tools/`.
+* **Fixed: 0.8.3 sent 16 lights to the shader, but the shader only looped over 8.** With more than 8 lights in a
+  map, the ones furthest from where you started stayed dark. All 16 work now, and a test guards it.
+* Saves move to version 4; older saves still load.
+
 ## 0.8.3 — Lights stay on as you walk (2026-11-04)
 * **Fixed: parts of a map lit up suddenly as you walked towards them.** Only the 8 lights nearest the
   player were used, so in a map with more than 8, lights further away switched off and back on.

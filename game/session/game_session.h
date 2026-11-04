@@ -19,6 +19,9 @@
 #include "game/space/travel_drive.h"
 #include "game/player/character_controller.h"
 #include "game/space/docking.h"
+#include <set>
+
+#include "game/foot/foot_combat.h"
 #include "game/world/space_world.h"
 
 namespace fh {
@@ -73,6 +76,21 @@ class GameSession {
   CharacterInput& characterInput() { return characterInput_; }
 
   // Interaction: the interactable the player is currently looking at (if any).
+  // Fighting on foot, in maps with enemies placed in them. A list of players, ready for co-op; the first
+  // is this machine's.
+  bool footArmed() const { return footArmed_; }
+  const FootCombat& foot() const { return foot_; }
+  FootCombat& foot() { return foot_; }
+  const std::vector<FootPlayer>& footPlayers() const { return footPlayers_; }
+  std::vector<FootPlayer>& footPlayers() { return footPlayers_; }
+  void setFootTrigger(bool on) { footPlayers_.front().trigger = on; }
+  void requestFootReload() { footPlayers_.front().reloadRequest = true; }
+  std::vector<FootEvent> takeFootEvents() { return std::exchange(footEvents_, {}); }
+  // Enemies killed and loot taken stay that way, in saves too. Keys are "<scene>#<marker>".
+  bool markerCleared(int marker) const;
+  const std::set<std::string>& clearedMarkers() const { return clearedMarkers_; }
+  void setClearedMarkers(std::set<std::string> keys) { clearedMarkers_ = std::move(keys); }
+
   const Interactable* focusedInteractable() const;
   ActionResult interact();            // uses the focused interactable
   ActionResult perform(const std::string& action);
@@ -150,6 +168,14 @@ class GameSession {
   std::int64_t insuranceDeductible() const { return deductible_; }
 
  private:
+  void beginFoot(const InteriorDef& def);
+  void stepFoot(float dt);
+  ActionResult takeLoot(int marker);
+  FootCombat foot_;
+  std::vector<FootPlayer> footPlayers_{FootPlayer{}};
+  std::vector<FootEvent> footEvents_;
+  std::set<std::string> clearedMarkers_;
+  bool footArmed_ = false;
   ActionResult enterInterior(const AssetID& id, const std::string& spawn, Location loc);
   ActionResult fail(const std::string& msg);
   void applyShip();              // base ship + upgrades -> flown ship, hold, mining, combat

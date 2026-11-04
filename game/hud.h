@@ -55,6 +55,7 @@ struct InteriorHudContext {
   const InputState* bindings = nullptr;
   bool showContractTracker = true;
   bool showHints = true;
+  float hurtFlash = 0, hitMark = 0, blackout = 0;  // 0..1, fading
 };
 void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c);
 // Cockpit HUD while the ship is in a planet's surface scene (approach, landed, liftoff).

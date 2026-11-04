@@ -38,6 +38,10 @@ std::string serializeSave(const SaveGame& s) {
                  {"hull", s.hull},
                  {"shield", s.shield},
                  {"upgrades", s.upgrades},
+                 {"clearedMarkers", s.clearedMarkers},
+                 {"footHealth", s.footHealth},
+                 {"footMagazine", s.footMagazine},
+                 {"footReserve", s.footReserve},
                  {"defeats", s.defeats}};
   json contracts = json::array();
   for (const auto& c : s.contracts)
@@ -78,6 +82,13 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     j["contracts"] = {{"active", json::array()}, {"taken", json::array()}, {"completed", 0}};
     j["schemaVersion"] = 3;
   }
+  if (j.value("schemaVersion", -1) == 3 && j.contains("player") && j["player"].is_object()) {
+    j["player"]["clearedMarkers"] = json::array();  // v3 had no fights on foot
+    j["player"]["footHealth"] = 100.0;
+    j["player"]["footMagazine"] = 12;
+    j["player"]["footReserve"] = 36;
+    j["schemaVersion"] = 4;
+  }
   if (j.value("schemaVersion", -1) != SaveGame::kSchemaVersion)
     return fail("unsupported save version " + std::to_string(version) + " (this build reads version " +
                 std::to_string(SaveGame::kSchemaVersion) + ")");
@@ -105,6 +116,10 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     s.hull = p.at("hull").get<float>();
     s.shield = p.at("shield").get<float>();
     s.upgrades = p.at("upgrades").get<std::vector<std::string>>();
+    s.clearedMarkers = p.at("clearedMarkers").get<std::vector<std::string>>();
+    s.footHealth = p.at("footHealth").get<float>();
+    s.footMagazine = p.at("footMagazine").get<int>();
+    s.footReserve = p.at("footReserve").get<int>();
     s.defeats = p.at("defeats").get<int>();
     const json& cj = j.at("contracts");
     for (const auto& c : cj.at("active")) {
@@ -222,6 +237,10 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
   s.hull = dur.hull;
   s.shield = dur.shield;
   s.upgrades = session.ownedUpgrades();
+  s.clearedMarkers.assign(session.clearedMarkers().begin(), session.clearedMarkers().end());
+  s.footHealth = session.footPlayers().front().health;
+  s.footMagazine = session.footPlayers().front().magazine;
+  s.footReserve = session.footPlayers().front().reserve;
   s.defeats = session.defeats();
   for (const Contract& c : session.contracts().active())
     s.contracts.push_back({c.key, c.templateId, contractKindName(c.kind), c.title, c.description, c.issuer,
@@ -238,6 +257,7 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
 }
 
 bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
+  session.setClearedMarkers({s.clearedMarkers.begin(), s.clearedMarkers.end()});  // before anything is entered
   auto fail = [&](const std::string& m) {
     if (error) *error = m;
     return false;
@@ -336,6 +356,10 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
       if (s.location == "station" && !session.perform("exitShip").ok) return fail("cannot restore surface location");
     }
   }
+  FootPlayer& me = session.footPlayers().front();
+  me.health = s.footHealth;
+  me.magazine = s.footMagazine;
+  me.reserve = s.footReserve;
   return true;
 }
 

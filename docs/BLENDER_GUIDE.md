@@ -54,7 +54,8 @@ Each one shows as an icon with its name. They can be moved, rotated, duplicated 
 | **Terminal** | A station services terminal |
 | **Pilot Seat**, **Airlock** | For ship interiors |
 | **Reflection Probe** | Makes shiny surfaces in a room reflect that room. See [Shiny surfaces](#shiny-surfaces) |
-| **Enemy Spawn**, **Loot** | Placed and saved now, but nothing happens yet. They show as red and amber glows until those systems arrive |
+| **Enemy Spawn** | A crawler sleeps here, facing the way the entity faces. Any map with one gives the player a gun |
+| **Loot** | A pickup. Set `fh_kind` to `medical` for a medical kit. Anything else is salvage |
 
 **Prompt** is what the player sees, and **Reach** is how close they must be.
 

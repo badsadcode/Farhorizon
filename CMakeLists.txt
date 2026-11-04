@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.8.3 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.9.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +40,7 @@ add_library(fh_core STATIC
   engine/render/particle_atlas.cpp
   game/fx/particles.cpp
   game/fx/light_selector.cpp
+  game/foot/foot_combat.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
   game/content/visual_profile.cpp
@@ -108,6 +109,7 @@ if(FH_BUILD_GAME)
   add_executable(farhorizon
     game/main.cpp
     game/game_app.cpp
+  game/foot/foot_view.cpp
     game/camera_rig.cpp
     game/ship_controller.cpp
     game/hud.cpp
@@ -153,6 +155,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_stage6.cpp
     tests/unit/test_ui.cpp
     tests/unit/test_fx.cpp
+    tests/unit/test_foot.cpp
     tests/unit/test_map.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)

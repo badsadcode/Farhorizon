@@ -256,7 +256,7 @@ void main() {
   vec3 local = vec3(0.0);
   int count = int(frame.lightCount.x);
   int shadowed = int(frame.shadowInfo.w);
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
     if (i >= count) break;
     vec3 Lp = frame.pointPosRange[i].xyz - vPos;
     float dist = length(Lp);

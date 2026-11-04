@@ -58,4 +58,8 @@
 | 54 | open | maps | The Ash Wren's exterior is the interior model seen from outside, and shows its map name, "Derelict Sample", on entry. It has no hull markings where you land. |
 | 55 | open | render | Emissive surfaces are approximated by point lights, so light has no true panel shape, and a light offset from a flat panel can look slightly off up close. Nothing is emitted in reflections beyond the surface itself. |
 | 56 | fixed (0.8.3) | render | Lights were chosen nearest-first per frame, so a room with more than 8 popped as you walked. Now 16 slots, chosen by contribution, with hysteresis and fades (`LightSelector`). |
+| 58 | open | render | In the test derelict the corridor floor is much darker with lamp shadows on than off, though a plain test hall with 12 lamps lights its floor properly with them on. Not understood yet. The owner's map hides it with its big emissive panels. |
+| 59 | open | foot | Crawlers go straight at you and slide along walls. There is no pathfinding, so a long detour loses them. Maps need a navigation mesh once they get more complicated. |
+| 60 | open | foot | Weapons, enemy stats and loot amounts are constants in code, not content files. There is one of each so far. |
+| 61 | open | foot | Crawlers walk through each other, and the gun can cast a sun shadow. Lamps ignore it. |
 | 57 | open | render | Every lamp's shadow cube is redrawn each frame, 96 faces at most. Cheap on today's small maps, about 1.5 ms a frame on an RTX 3080. A big map will need static lamps' cubes cached. |
