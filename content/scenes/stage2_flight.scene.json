@@ -547,5 +547,70 @@
     ],
     "nebulaStrength": 1.0
   },
-  "startingCredits": 600
+  "startingCredits": 600,
+  "planets": [
+    {
+      "id": "planet.varga",
+      "name": "Varga",
+      "systemPosition": [
+        149594871100.0,
+        13500150.0,
+        -3509003200.0
+      ],
+      "radius": 2400000.0,
+      "colorA": [
+        0.4,
+        0.27,
+        0.17
+      ],
+      "colorB": [
+        0.1,
+        0.08,
+        0.07
+      ],
+      "seed": 31.0,
+      "craters": 0.7,
+      "atmosphereColor": [
+        0.55,
+        0.36,
+        0.22
+      ],
+      "atmosphereThickness": 0.035,
+      "orbitAltitude": 150000.0,
+      "landingSites": [
+        {
+          "id": "site.gale_ridge",
+          "name": "Gale Ridge Outpost",
+          "latDeg": -9.0,
+          "lonDeg": 180.0,
+          "interior": "interior.gale_ridge",
+          "market": "market.gale_ridge"
+        }
+      ]
+    },
+    {
+      "id": "planet.ossa",
+      "name": "Ossa",
+      "systemPosition": [
+        149600871100.0,
+        15500150.0,
+        -3506003200.0
+      ],
+      "radius": 600000.0,
+      "colorA": [
+        0.42,
+        0.41,
+        0.4
+      ],
+      "colorB": [
+        0.2,
+        0.2,
+        0.21
+      ],
+      "seed": 7.0,
+      "craters": 0.9,
+      "atmosphereThickness": 0.0,
+      "orbitAltitude": 60000.0
+    }
+  ]
 }

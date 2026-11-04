@@ -1,0 +1,8 @@
+{
+  "id": "bench.surface_outpost",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "startIn": "surface",
+  "lookTurnDegPerSec": 15
+}

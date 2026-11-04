@@ -40,6 +40,7 @@ add_library(fh_core STATIC
   game/ships/flight_model.cpp
   game/world/asteroid_gen.cpp
   game/world/space_world.cpp
+  game/world/terrain.cpp
   game/physics/collision.cpp
   game/player/character_controller.cpp
   game/space/docking.cpp
@@ -48,6 +49,8 @@ add_library(fh_core STATIC
   game/session/world_builder.cpp
   game/economy/economy.cpp
   game/space/mining.cpp
+  game/space/travel_drive.cpp
+  game/space/landing.cpp
   game/persistence/save_game.cpp
   engine/audio/mixer.cpp
   game/audio_director.cpp
@@ -78,7 +81,8 @@ if(FH_BUILD_GAME)
     shaders/overlay.vert shaders/overlay.frag
     shaders/tonemap.vert shaders/tonemap.frag
     shaders/bloom_down.frag shaders/bloom_blur.frag
-    shaders/glow.vert shaders/glow.frag)
+    shaders/glow.vert shaders/glow.frag
+    shaders/planet.frag)
 
   add_executable(farhorizon
     game/main.cpp
@@ -122,6 +126,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_economy.cpp
     tests/unit/test_stage4.cpp
     tests/unit/test_audio.cpp
+    tests/unit/test_stage5.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

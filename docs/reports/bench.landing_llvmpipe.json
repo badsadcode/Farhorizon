@@ -1,0 +1,14 @@
+{
+  "avgCpuMs": 175.7910669007092,
+  "avgFps": 5.68857119778915,
+  "avgGpuMs": 173.95114146099291,
+  "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "drawCalls": 60,
+  "frames": 141,
+  "maxCpuMs": 250.0,
+  "maxGpuMs": 274.951595,
+  "minCpuMs": 99.598794,
+  "p99CpuMs": 239.67375199999998,
+  "scenario": "bench.landing",
+  "triangles": 38669
+}

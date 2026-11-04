@@ -100,6 +100,19 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
 
   d.materialOverrides = r.materialOverrides(j);
   d.lights = r.lights(j);
+  if (j.contains("travelDrive") && j["travelDrive"].is_object()) {
+    const auto& t = j["travelDrive"];
+    TravelDriveParams& tp = d.travel;
+    tp.maxSpeed = float(r.num(t, "maxSpeed", false, tp.maxSpeed));
+    tp.acceleration = float(r.num(t, "acceleration", false, tp.acceleration));
+    tp.spoolSeconds = float(r.num(t, "spoolSeconds", false, tp.spoolSeconds));
+    tp.alignToleranceDeg = float(r.num(t, "alignToleranceDeg", false, tp.alignToleranceDeg));
+    tp.alignRateDegPerSec = float(r.num(t, "alignRateDegPerSec", false, tp.alignRateDegPerSec));
+    tp.massLockRange = float(r.num(t, "massLockRange", false, tp.massLockRange));
+    tp.exitSpeed = float(r.num(t, "exitSpeed", false, tp.exitSpeed));
+    tp.minDistance = float(r.num(t, "minDistance", false, tp.minDistance));
+    if (tp.maxSpeed <= 0 || tp.acceleration <= 0 || tp.exitSpeed <= 0) r.error("travelDrive speeds must be > 0");
+  }
   if (j.contains("mining") && j["mining"].is_object()) {
     const auto& m = j["mining"];
     MiningParams& mp = d.mining;

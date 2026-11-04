@@ -3,6 +3,12 @@
 A compact, atmospheric 3D space sandbox running on a **purpose-built engine** (C++20, SDL3, Vulkan 1.3).
 It does not use an existing game engine. See `docs/STATUS.md` for what works today.
 
+![Landed at Gale Ridge Outpost on Varga](docs/screenshots/stage5_gale_ridge_landed.jpg)
+
+| Varga from orbit | Re-entry | On foot at Gale Ridge |
+|---|---|---|
+| ![](docs/screenshots/stage5_varga_orbit.jpg) | ![](docs/screenshots/stage5_reentry.jpg) | ![](docs/screenshots/stage5_gale_ridge_on_foot.jpg) |
+
 ![Kestrel Hangar 1 under sodium work lights](docs/screenshots/stage4_hangar_usedfuture.jpg)
 
 | Mining | Station exchange terminal | Sparrow cabin |
@@ -54,7 +60,8 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | R | scan the targeted asteroid (resource, yield, hardness) |
 | M | station market terminal while docked (also F at the hangar terminal) |
 | F7 / F8 | quicksave / load (`saves/`); autosave on every docking |
-| L | request docking / cancel / undock (contextual) |
+| N / J | next nav destination / travel drive engage-abort |
+| L | contextual: request docking, begin descent (near a site's orbit), launch, undock, cancel |
 | K | docking approach autopilot on/off (while cleared) |
 | F | interact: leave the pilot seat (docked), airlock, board, terminals |
 | V | chase ↔ cockpit camera |
@@ -69,6 +76,11 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 
 All bindings and mouse settings live in `content/config/input.json`.
 
+**Try the trade run to Varga:** buy Ration Packs at Kestrel (M), undock (L), press N until
+"Gale Ridge Outpost (Varga)" is selected, then J to engage the travel drive. Once you're in orbit,
+L begins the descent. Walk to the supply shed (F at the terminal), sell the rations for a
+premium, and buy cheap nickel. Board, sit, L to launch, then N/J back to Kestrel.
+
 **Try a mining run:** undock (L), fly to the Cinder Drift asteroid field (8 km, use boost), press
 G to target a rock and R to scan it, then hold the left mouse button with the nose on target. Ore
 chunks drift into your scoop. Fly back, dock, press M and sell; prices drop as you flood the
@@ -78,7 +90,7 @@ market. F7 saves anywhere, F8 loads, and `--continue` resumes the quicksave.
 then land on the roof pad yourself or press **K**. Once docked, **F** leaves the seat. Walk aft to
 the junction and right to the airlock, then **F** steps into the hangar. Walk back to the ship,
 press **F** to board, **F** at the seat, and **L** to undock.
-Debug shortcuts: `--start-docked`, `--start-in ship|station`, F6 force-dock.
+Debug shortcuts: `--start-docked`, `--start-landed`, `--start-in ship|station|surface`, F6 force-dock.
 
 ## Layout
 

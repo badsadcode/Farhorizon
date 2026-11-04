@@ -24,8 +24,8 @@ A station links its market through `docking.market` in the scene.
 * Scenes: `startingCredits`.
 
 ## Save files (`saves/*.json`)
-These are not content but are documented for support: `schemaVersion` 1, `sceneId`, `worldTime`,
-`player` { location, docked, dockedStation, dockedBay, shipPosition (double, system frame),
+These are not content but are documented for support: `schemaVersion` 2 (v1 migrated on load), `sceneId`, `worldTime`,
+`player` { location, docked, dockedStation, dockedBay, landedPlanet, landedSite, shipPosition (double, system frame),
 shipOrientation, shipVelocity, boostEnergy, credits, cargo }, `markets` { id: { lastTick,
 stocks, carry } }, and `asteroids` [ { field, index, yield } ] (changed rocks only). The previous
 save is kept as `<file>.bak`.

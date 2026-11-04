@@ -37,7 +37,41 @@ std::optional<InteriorDef> parseInteriorDef(const std::string& json, const std::
   d.showSky = j.value("showSky", false);
   d.materialOverrides = r.materialOverrides(j);
   d.lights = r.lights(j);
-  if (d.kind != "ship" && d.kind != "station") r.error("kind must be 'ship' or 'station'");
+  if (d.kind != "ship" && d.kind != "station" && d.kind != "surface")
+    r.error("kind must be 'ship', 'station' or 'surface'");
+  if (j.contains("terrain")) {
+    const auto& tj = j["terrain"];
+    TerrainParams t;
+    t.seed = std::uint32_t(r.num(tj, "seed"));
+    t.size = float(r.num(tj, "size", false, t.size));
+    t.cellSize = float(r.num(tj, "cellSize", false, t.cellSize));
+    t.roughness = float(r.num(tj, "roughness", false, t.roughness));
+    t.rimHeight = float(r.num(tj, "rimHeight", false, t.rimHeight));
+    t.rimWidth = float(r.num(tj, "rimWidth", false, t.rimWidth));
+    t.color = r.vec3(tj, "color", false, t.color);
+    if (tj.contains("flatZones"))
+      for (const auto& fj : tj["flatZones"]) {
+        TerrainFlatZone z;
+        const Vec3 c = r.vec3(fj, "center");  // x, (ignored), z
+        z.center = {c.x, c.z};
+        z.radius = float(r.num(fj, "radius"));
+        z.blend = float(r.num(fj, "blend", false, z.blend));
+        z.height = float(r.num(fj, "height", false, 0.0));
+        t.flatZones.push_back(z);
+      }
+    if (t.cellSize <= 0.5f || t.size / t.cellSize > 512) r.error("terrain: cellSize too small for the size");
+    d.terrain = t;
+  }
+  if (j.contains("sky")) {
+    const auto& kj = j["sky"];
+    SurfaceSkyDef k;
+    k.zenith = r.vec3(kj, "zenith", false, k.zenith);
+    k.horizon = r.vec3(kj, "horizon", false, k.horizon);
+    k.ground = r.vec3(kj, "ground", false, k.ground);
+    k.haze = float(r.num(kj, "haze", false, k.haze));
+    k.starVisibility = float(r.num(kj, "starVisibility", false, k.starVisibility));
+    d.surfaceSky = k;
+  }
 
   auto aabb = [&](const nlohmann::json& a) {
     Aabb b{r.vec3(a, "min"), r.vec3(a, "max")};
@@ -104,7 +138,7 @@ std::optional<InteriorDef> parseInteriorDef(const std::string& json, const std::
     d.parkedShipColliderHalfExtents = r.vec3(j["parkedShip"], "colliderHalfExtents", false);
   }
   // Required spawns per kind.
-  const char* needed = d.kind == "ship" ? "seat" : "fromShip";
+  const char* needed = d.kind == "ship" ? "seat" : "fromShip";  // station and surface: fromShip
   if (!d.spawns.count(needed)) r.error(std::string("missing spawn '") + needed + "'");
   if (d.kind == "ship" && !d.spawns.count("airlock")) r.error("missing spawn 'airlock'");
   if (!r.ok()) return std::nullopt;

@@ -22,7 +22,8 @@ Optional fields:
 * `"autoDock": true` requests docking and engages the approach autopilot. The run ends 2 s after
   the ship is clamped.
 
+`"startLanded": true` starts landed at the first site; `"autoLand": true` requests a landing immediately; `"startIn": "surface"` starts on foot at the site.
 `"mine": true` targets the nearest asteroid, faces it and holds the laser.
 
-Shipped benchmarks: `bench.mining`, `bench.empty_space_cockpit`, `bench.asteroid_field_chase`,
+Shipped benchmarks: `bench.planet_orbit`, `bench.landing`, `bench.surface_landed`, `bench.surface_outpost`, `bench.mining`, `bench.empty_space_cockpit`, `bench.asteroid_field_chase`,
 `bench.station_approach`, `bench.docking_autopilot`, `bench.ship_interior`, `bench.station_hangar`.

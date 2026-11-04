@@ -119,6 +119,16 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
     }
   }
 
+  // ---- Planets ----
+  for (const auto& pl : c.world.planets()) {
+    const Vec3 centre = c.world.frame().toLocal(pl.def.center);
+    if (auto sp = proj.point(centre); sp && proj.onScreen(*sp)) {
+      const double alt = length(c.world.frame().toSystem(fs.position).metres - pl.def.center.metres) - pl.def.radius;
+      centeredText(o, sp->x, sp->y - 8, pl.def.name, kDim);
+      centeredText(o, sp->x, sp->y + 10, "alt " + formatDistance(alt), kDim);
+    }
+  }
+
   // ---- Target ----
   if (auto t = c.world.targetInfo()) {
     const OverlayColor col = t->marker == "asteroid" ? kField : kNav;
@@ -269,7 +279,37 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
       case DockState::Docked: hint = "DOCKED   M market   F leave seat   L undock   F7 save"; break;
       case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
     }
+    // Travel drive and landing take precedence over docking hints.
+    const TravelDrive& tr = gs.travel();
+    const Landing& ld = gs.landing();
+    if (tr.active()) {
+      std::string line = std::string("TRAVEL DRIVE  ") + travelStateName(tr.state());
+      if (tr.state() == TravelState::Spooling) line += std::format("  {:.0f}%", tr.spoolProgress() * 100.0f);
+      if (tr.state() == TravelState::Transit || tr.state() == TravelState::Decelerating)
+        line += std::format("  {:.1f} km/s  {}  ETA {:.0f} s", tr.speed() / 1000.0f, formatDistance(tr.remaining()),
+                            tr.etaSeconds());
+      hint = line + "   J abort";
+    } else if (ld.busy()) {
+      hint = std::string(landStateName(ld.state())) + "   hold on";
+    } else if (dk.state() == DockState::Undocked) {
+      const DVec3 me = c.world.frame().toSystem(fs.position).metres;
+      for (const auto& pl : c.world.planets())
+        for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
+          if (length(pl.siteOrbit(si) - me) <= Landing::kRequestRange) hint = "L  begin descent to " + pl.def.sites[si].name;
+      if (hint.empty()) {
+        if (const auto& t = c.world.target(); t && t->kind != TargetRef::Kind::Asteroid) {
+          if (auto ti = c.world.targetInfo(); ti && ti->distance > c.session->world().player().def.travel.minDistance)
+            hint = "J  travel drive to " + ti->name + "   (N next destination)";
+        } else if (hint.empty()) {
+          hint = "N  select a destination";
+        }
+      }
+    }
     if (!hint.empty()) centeredText(o, cx, 40, hint, dk.state() == DockState::Docked ? kNav : kPrimary);
+    if (simT - tr.messageTime() < 4.0 && !tr.message().empty() && simT - dk.messageTime() >= 6.0)
+      centeredText(o, cx, c.height * 0.74f, tr.message(), kPrimary);
+    if (simT - ld.messageTime() < 6.0 && !ld.message().empty())
+      centeredText(o, cx, c.height * 0.70f, "COMMS  " + ld.message(), kNav);
     // Radio chatter subtitles (accessibility, doc 11).
     if (simT - dk.messageTime() < 6.0 && !dk.message().empty())
       centeredText(o, cx, c.height * 0.78f, "COMMS  " + dk.message(), kNav);
@@ -339,11 +379,39 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
     o.circle(cx, cy, 10, 2, kNav, 16);
     centeredText(o, cx, cy + 26, "[F]  " + it->prompt, kNav, 2.5f);
   }
-  if (def) centeredText(o, cx, 16, std::string(locationName(s.location())) + "   " + def->name, kDim);
+  if (def) {
+    const std::string where = def->kind == "surface" ? "SURFACE" : locationName(s.location());
+    centeredText(o, cx, 16, where + "   " + def->name, kDim);
+  }
   if (!c.mouseCaptured) centeredText(o, cx, 40, "MOUSE FREE (Esc to look around)", kDim);
   if (s.world().simulationTime() - s.noticeTime() < 4.0 && !s.notice().empty())
     centeredText(o, cx, c.height * 0.78f, s.notice(), kPrimary);
   shadowText(o, 16, c.height - 30, "WASD walk   Shift run   Space jump   F use   Esc mouse", kDim, 1.5f);
+}
+
+void drawSurfaceHud(OverlayBuilder& o, const InteriorHudContext& c) {
+  kPrimary = toColor(c.palette.primary);
+  kDim = toColor(c.palette.primary, 0.5f);
+  kNav = toColor(c.palette.nav);
+  kField = toColor(c.palette.field);
+  kWarn = toColor(c.palette.warn);
+  const float cx = c.width * 0.5f;
+  const GameSession& s = c.session;
+  const Landing& ld = s.landing();
+  const double t = s.world().simulationTime();
+  std::string status = landStateName(ld.state());
+  if (ld.site()) status += "   " + s.world().planets()[ld.site()->planet].def.sites[ld.site()->site].name;
+  centeredText(o, cx, 16, status, kDim);
+  if (ld.state() == LandState::Landed)
+    centeredText(o, cx, 40, "LANDED   F leave seat   M market   L launch   F7 save", kNav);
+  if (t - ld.messageTime() < 6.0 && !ld.message().empty())
+    centeredText(o, cx, c.height * 0.78f, "COMMS  " + ld.message(), kNav);
+  else if (t - s.noticeTime() < 4.0 && !s.notice().empty())
+    centeredText(o, cx, c.height * 0.78f, s.notice(), kPrimary);
+  std::string cr = std::to_string(s.credits());
+  for (int i = int(cr.size()) - 3; i > 0; i -= 3) cr.insert(size_t(i), ",");
+  const std::string line = std::format("CR {}    HOLD {:.0f}/{:.0f} t", cr, s.cargo().usedTons(), s.cargo().capacityTons());
+  shadowText(o, c.width - OverlayBuilder::textWidth(line) - 16, 16, line, kPrimary);
 }
 
 }  // namespace fh

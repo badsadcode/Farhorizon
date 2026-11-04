@@ -8,6 +8,51 @@
 
 namespace fh {
 
+Vec3 Planet::siteDirection(const LandingSiteDef& s) {
+  const float lat = radians(s.latDeg), lon = radians(s.lonDeg);
+  return normalize(Vec3{std::cos(lat) * std::sin(lon), std::sin(lat), -std::cos(lat) * std::cos(lon)});
+}
+
+DVec3 Planet::siteSurface(std::uint32_t site) const {
+  const Vec3 d = siteDirection(def.sites.at(site));
+  return def.center.metres + DVec3(d) * def.radius;
+}
+
+DVec3 Planet::siteOrbit(std::uint32_t site) const {
+  const Vec3 d = siteDirection(def.sites.at(site));
+  return def.center.metres + DVec3(d) * (def.radius + def.orbitAltitude);
+}
+
+std::vector<TargetRef> SpaceWorld::navDestinations() const {
+  std::vector<TargetRef> out;
+  for (std::uint32_t i = 0; i < props_.size(); ++i)
+    if (props_[i].def.targetable) out.push_back({TargetRef::Kind::Prop, i, 0});
+  for (std::uint32_t i = 0; i < fields_.size(); ++i) out.push_back({TargetRef::Kind::Field, i, 0});
+  for (std::uint32_t p = 0; p < planets_.size(); ++p)
+    for (std::uint32_t s = 0; s < planets_[p].def.sites.size(); ++s) out.push_back({TargetRef::Kind::Site, p, s});
+  return out;
+}
+
+DVec3 SpaceWorld::navArrivalPoint(const TargetRef& t) const {
+  const DVec3 me = frame_.toSystem(player_.state.position).metres;
+  auto standOff = [&](const DVec3& centre, double distance) {
+    DVec3 dir = me - centre;
+    const double l = length(dir);
+    dir = l > 1.0 ? dir / l : DVec3{0, 1, 0};
+    return centre + dir * distance;
+  };
+  switch (t.kind) {
+    case TargetRef::Kind::Prop: return standOff(props_.at(t.index).system.metres, 2000.0);
+    case TargetRef::Kind::Field: {
+      const auto& f = fields_.at(t.index).def;
+      return standOff(f.center.metres, double(f.radius) + 1500.0);
+    }
+    case TargetRef::Kind::Site: return planets_.at(t.index).siteOrbit(t.sub);
+    case TargetRef::Kind::Asteroid: return standOff(asteroids_.at(t.index).system.metres, 500.0);
+  }
+  return me;
+}
+
 void SpaceWorld::setOrigin(const SystemPosition& origin, double rebaseDistance) {
   frame_ = LocalFrame(origin, rebaseDistance);
 }
@@ -112,6 +157,18 @@ TargetInfo SpaceWorld::describe(const TargetRef& ref) const {
     t.marker = p.def.marker;
     t.local = p.local;
     t.radius = p.collisionRadius;
+  } else if (ref.kind == TargetRef::Kind::Site) {
+    const Planet& pl = planets_.at(ref.index);
+    t.name = pl.def.sites.at(ref.sub).name + " (" + pl.def.name + ")";
+    t.marker = "site";
+    t.local = frame_.toLocal(SystemPosition{pl.siteOrbit(ref.sub)});
+    t.radius = 500.0f;
+  } else if (ref.kind == TargetRef::Kind::Field) {
+    const auto& f = fields_.at(ref.index).def;
+    t.name = f.name;
+    t.marker = "field";
+    t.local = frame_.toLocal(f.center);
+    t.radius = f.radius;
   } else {
     const Asteroid& a = asteroids_.at(ref.index);
     const auto& field = fields_.at(a.field);

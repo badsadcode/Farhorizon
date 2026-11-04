@@ -16,7 +16,7 @@ namespace fh {
 class GameSession;
 
 struct SaveGame {
-  static constexpr int kSchemaVersion = 1;
+  static constexpr int kSchemaVersion = 2;  // v2: landing sites (v1 files are migrated)
   int schemaVersion = kSchemaVersion;
   std::string sceneId;
   double worldTime = 0;
@@ -25,6 +25,8 @@ struct SaveGame {
   bool docked = false;
   std::string dockedStation;         // prop id
   std::uint32_t dockedBay = 0;
+  std::string landedPlanet;          // planet id (v2)
+  std::string landedSite;            // site id (v2)
   DVec3 shipPosition;                // system frame, metres
   Quat shipOrientation;
   Vec3 shipVelocity;

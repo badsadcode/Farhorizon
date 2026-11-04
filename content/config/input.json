@@ -21,6 +21,8 @@
     "ship.togglePrecision": ["B"],
     "ship.recenterStick":   ["C"],
     "dock.request":         ["L"],
+    "nav.next":             ["N"],
+    "travel.engage":        ["J"],
     "dock.autopilot":       ["K"],
     "interact":             ["F"],
     "foot.forward":         ["W"],

@@ -10,7 +10,9 @@
 
 #include "game/content/interior_def.h"
 #include "game/economy/economy.h"
+#include "game/space/landing.h"
 #include "game/space/mining.h"
+#include "game/space/travel_drive.h"
 #include "game/player/character_controller.h"
 #include "game/space/docking.h"
 #include "game/world/space_world.h"
@@ -34,6 +36,21 @@ class GameSession {
   Docking& docking() { return docking_; }
   const Docking& docking() const { return docking_; }
   Location location() const { return location_; }
+  TravelDrive& travel() { return travel_; }
+  const TravelDrive& travel() const { return travel_; }
+  Landing& landing() { return landing_; }
+  const Landing& landing() const { return landing_; }
+  // Docked at a station or landed at a site: the only states where leaving the seat is allowed.
+  bool parked() const { return docking_.state() == DockState::Docked || landing_.state() == LandState::Landed; }
+  bool freeFlight() const {
+    return docking_.state() == DockState::Undocked && !landing_.busy() && !travel_.active();
+  }
+  bool engageTravel();               // to the current target (must be a nav destination)
+  bool requestLanding();
+  bool launch();
+  // Interior to render while on the surface in the cockpit (landing approach, landed, liftoff).
+  const InteriorDef* surfaceScene() const;
+  const AssetID* surfaceSceneId() const;
 
   // Interiors available to this session (ship cabin + station hangars), keyed by AssetID.
   void setShipInterior(const AssetID& id) { shipInterior_ = id; }
@@ -41,6 +58,7 @@ class GameSession {
   const InteriorDef* activeInterior() const;
   const AssetID& activeInteriorId() const { return activeInteriorId_; }
   const std::vector<Aabb>& activeColliders() const { return colliders_; }
+  const HeightField& activeTerrain() const { return terrain_; }
 
   // On-foot character (valid when not in the cockpit).
   CharacterState& character() { return character_; }
@@ -91,11 +109,14 @@ class GameSession {
 
   std::unique_ptr<SpaceWorld> world_;
   Docking docking_;
+  TravelDrive travel_;
+  Landing landing_;
   Location location_ = Location::Cockpit;
   AssetID shipInterior_;
   std::map<AssetID, InteriorDef> interiors_;
   AssetID activeInteriorId_;
   std::vector<Aabb> colliders_;
+  HeightField terrain_;
   CharacterState character_;
   CharacterParams characterParams_;
   CharacterInput characterInput_;

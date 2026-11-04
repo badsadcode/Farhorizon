@@ -26,6 +26,8 @@ std::string serializeSave(const SaveGame& s) {
                  {"docked", s.docked},
                  {"dockedStation", s.dockedStation},
                  {"dockedBay", s.dockedBay},
+                 {"landedPlanet", s.landedPlanet},
+                 {"landedSite", s.landedSite},
                  {"shipPosition", vec(s.shipPosition)},
                  {"shipOrientation", json::array({s.shipOrientation.x, s.shipOrientation.y, s.shipOrientation.z,
                                                   s.shipOrientation.w})},
@@ -51,7 +53,13 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
   json j = json::parse(text, nullptr, false);
   if (j.is_discarded() || !j.is_object()) return fail("save file is not valid JSON (corrupted?)");
   const int version = j.value("schemaVersion", -1);
-  if (version != SaveGame::kSchemaVersion)
+  // Migrations: each step upgrades the JSON in place to the next version.
+  if (version == 1) {
+    j["player"]["landedPlanet"] = "";  // v1 had no landings
+    j["player"]["landedSite"] = "";
+    j["schemaVersion"] = 2;
+  }
+  if (j.value("schemaVersion", -1) != SaveGame::kSchemaVersion)
     return fail("unsupported save version " + std::to_string(version) + " (this build reads version " +
                 std::to_string(SaveGame::kSchemaVersion) + ")");
   try {
@@ -63,6 +71,8 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     s.docked = p.at("docked").get<bool>();
     s.dockedStation = p.at("dockedStation").get<std::string>();
     s.dockedBay = p.at("dockedBay").get<std::uint32_t>();
+    s.landedPlanet = p.at("landedPlanet").get<std::string>();
+    s.landedSite = p.at("landedSite").get<std::string>();
     const auto& sp = p.at("shipPosition");
     s.shipPosition = {sp.at(0).get<double>(), sp.at(1).get<double>(), sp.at(2).get<double>()};
     const auto& so = p.at("shipOrientation");
@@ -85,7 +95,10 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
                              a.at("yield").get<int>()});
     if (s.location != "cockpit" && s.location != "ship" && s.location != "station")
       return fail("save file has an unknown location '" + s.location + "'");
-    if (s.location != "cockpit" && !s.docked) return fail("save file is inconsistent: on foot but not docked");
+    const bool landed = !s.landedSite.empty();
+    if (s.location != "cockpit" && !s.docked && !landed)
+      return fail("save file is inconsistent: on foot but neither docked nor landed");
+    if (s.docked && landed) return fail("save file is inconsistent: docked and landed at once");
     for (const auto& [id, n] : s.cargo)
       if (n < 0) return fail("save file has negative cargo for '" + id + "'");
     return s;
@@ -137,8 +150,19 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
     s.dockedStation = w.props().at(*d.station()).def.id;
     s.dockedBay = d.bay();
   }
+  const Landing& ld = session.landing();
+  // Mid-sequence landings save as landed (approach) or as back in orbit (liftoff/ascent);
+  // the descent itself saves as the orbit start. Nobody reloads halfway through a corridor.
+  std::optional<LandingSiteRef> landedAt;
+  if (ld.site() && (ld.state() == LandState::Landed || ld.state() == LandState::SurfaceApproach)) landedAt = ld.site();
   const FlightState& f = w.player().state;
   s.shipPosition = w.frame().toSystem(f.position).metres;
+  if (landedAt) {
+    const Planet& pl = w.planets().at(landedAt->planet);
+    s.landedPlanet = pl.def.id;
+    s.landedSite = pl.def.sites.at(landedAt->site).id;
+    s.shipPosition = pl.siteOrbit(landedAt->site);  // origin-independent (double)
+  }
   if (s.docked) {
     // Origin-independent: station system position (double) + bay offset (small, rotated in float).
     const Prop& p = w.props().at(*d.station());
@@ -146,7 +170,7 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
     s.shipPosition = p.system.metres + DVec3(p.rotation.rotate(bay.position));
   }
   s.shipOrientation = f.orientation;
-  s.shipVelocity = s.docked ? Vec3{} : f.velocity;
+  s.shipVelocity = (s.docked || landedAt) ? Vec3{} : f.velocity;
   s.boostEnergy = f.boostEnergy;
   s.credits = session.credits();
   s.cargo = session.cargo().contents();
@@ -208,6 +232,19 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
     if (s.location != "cockpit") {
       if (!session.leaveSeat().ok) return fail("cannot restore on-foot location");
       if (s.location == "station" && !session.perform("exitShip").ok) return fail("cannot restore station location");
+    }
+  }
+  if (!s.landedSite.empty()) {
+    std::optional<LandingSiteRef> ref;
+    for (std::uint32_t pi = 0; pi < w.planets().size(); ++pi)
+      if (w.planets()[pi].def.id == s.landedPlanet)
+        for (std::uint32_t si = 0; si < w.planets()[pi].def.sites.size(); ++si)
+          if (w.planets()[pi].def.sites[si].id == s.landedSite) ref = LandingSiteRef{pi, si};
+    if (!ref) return fail("save is landed at unknown site '" + s.landedPlanet + "/" + s.landedSite + "'");
+    session.landing().landAt(w, *ref);
+    if (s.location != "cockpit") {
+      if (!session.leaveSeat().ok) return fail("cannot restore on-foot location");
+      if (s.location == "station" && !session.perform("exitShip").ok) return fail("cannot restore surface location");
     }
   }
   return true;

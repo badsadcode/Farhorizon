@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 4 (mining, cargo, market, save/load) + atmosphere pass._
+_Last updated: 2026-11-04 · Stage 5 (travel drive, planet, landing site)._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -10,7 +10,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
-| Test harness | ✅ | 56 tests (incl. headless Stage 3 loop and Stage 4 trip) + content validation (CTest) |
+| Test harness | ✅ | 59 tests (incl. headless Stage 3, 4 and 5 exit criteria) + content validation (CTest) |
 | CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
@@ -72,6 +72,17 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Profitable trip + reload preserves everything | ✅ | headless CTest on real content |
 | No duplication exploit | ✅ | buy→sell round trips lose money; save→load→save is byte-identical |
 
+## Stage 5 — planet landing site
+| Item | State | Notes |
+|---|---|---|
+| Orbital planet visualisation | ✅ | Varga + Ossa impostors: procedural surface, craters, terminator, atmosphere |
+| Destination selection | ✅ | N cycles stations, fields and landing sites; J travel drive with exact arrival |
+| Reliable descent transition | ✅ | corridor + heat + cloud-deck fade (honest scene swap), scripted approach to the pad |
+| Landing pad scene + walkable outpost | ✅ | procedural terrain with cliff walls, dusk sky, outpost with market |
+| Launch back into space | ✅ | to the site's orbit marker (guaranteed return destination) |
+| Repeated cycles incl. after reload, no jitter | ✅ | headless CTest (3 trade cycles, reload while landed) + in-app run (1,564 rebases, 0 errors) |
+| Manual surface landing | ⬜ | approach is scripted (ISSUES #24) |
+
 ## Atmosphere
 | Item | State | Notes |
 |---|---|---|
@@ -92,4 +103,4 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
 
 ## Later stages
-Not started: planet landing (5), combat/contracts (6), polish (7).
+Not started: combat/contracts (6), polish (7).

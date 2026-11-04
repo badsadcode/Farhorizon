@@ -12,7 +12,7 @@
   stick drift back to centre.
 * The file is re-read on F5, so rebinding takes effect without restarting.
 
-Actions: `ship.mine`, `ship.scan`, `ui.market`, `ui.up/down/buy/sell/sellAll/modifier/close`, `game.save`, `game.load`, `dock.request`, `dock.autopilot`, `interact`, `foot.forward/back/left/right/run/jump`, `debug.forceDock`, `ship.throttleUp/Down/Zero`, `ship.strafeLeft/Right/Up/Down`, `ship.rollLeft/Right`,
+Actions: `nav.next`, `travel.engage`, `ship.mine`, `ship.scan`, `ui.market`, `ui.up/down/buy/sell/sellAll/modifier/close`, `game.save`, `game.load`, `dock.request`, `dock.autopilot`, `interact`, `foot.forward/back/left/right/run/jump`, `debug.forceDock`, `ship.throttleUp/Down/Zero`, `ship.strafeLeft/Right/Up/Down`, `ship.rollLeft/Right`,
 `ship.pitchUp/Down`, `ship.yawLeft/Right`, `ship.boost`, `ship.toggleAssist`,
 `ship.togglePrecision`, `ship.recenterStick`, `target.next`, `target.nearestAsteroid`,
 `target.clear`, `camera.cycle`, `camera.dev`, `camera.forward/back/left/right/up/down/boost`,

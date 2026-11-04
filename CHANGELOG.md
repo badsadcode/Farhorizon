@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0 — Stage 5: travel drive, planet and landing site (2026-11-04)
+* In-system **travel drive** (N select, J engage): align, spool, transit, decelerate; exact
+  double-precision arrival; mass lock; FOV stretch and engine howl in transit.
+* **Varga** (planet) and **Ossa** (moon) rendered as ray-traced impostors: procedural surface,
+  craters, terminator, atmospheric limb and halo, scissored to their screen bounds.
+* **Landing:** descent corridor with re-entry heat and shake, a cloud-deck fade hiding the scene
+  swap, a scripted final approach onto the pad in the surface scene, then Landed. Launch reverses
+  it and returns to the site's orbit marker.
+* **Gale Ridge Outpost:** procedural terrain with cliff boundaries, dusk atmospheric sky, dust
+  fog, low gravity, sodium masts, an outpost corridor with the Supply Shed market, and wind audio.
+* **Trade route:** the outpost pays well for supplies and sells ore cheaply; Kestrel the reverse.
+* "Parked" generalisation: the seat, airlock and market work at stations and landing sites alike.
+* Saves **v2** (landing state) with **v1 → v2 migration**.
+* **Stage 5 exit test in CTest:** 3 landing/launch trade cycles, including continuing after a
+  reload while landed; return destinations and precision checked. Tests: 59.
+* Debug: `--start-landed`, `--start-in surface`; benchmarks for orbit, landing and surface.
+
 ## 0.4.0 — Stage 4: mining, cargo, market, save/load + atmosphere pass (2026-11-04)
 * Economy: data-driven commodities (3 ores, 4 goods) and the Kestrel Station Exchange with
   bounded scarcity pricing, a spread floor, per-unit slippage and deterministic tick restocking.

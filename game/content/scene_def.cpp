@@ -185,6 +185,35 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
         s.asteroidFields.push_back(f);
       }
   }
+  if (j.contains("planets") && j["planets"].is_array()) {
+    for (const auto& pj : j["planets"]) {
+      PlanetDef p;
+      p.id = r.str(pj, "id");
+      p.name = r.str(pj, "name");
+      p.center.metres = r.dvec3(pj, "systemPosition");
+      p.radius = r.num(pj, "radius");
+      p.colorA = r.vec3(pj, "colorA", false, p.colorA);
+      p.colorB = r.vec3(pj, "colorB", false, p.colorB);
+      p.seed = float(r.num(pj, "seed", false, 1.0));
+      p.craters = float(r.num(pj, "craters", false, p.craters));
+      p.atmosphereColor = r.vec3(pj, "atmosphereColor", false, p.atmosphereColor);
+      p.atmosphereThickness = float(r.num(pj, "atmosphereThickness", false, 0.0));
+      p.orbitAltitude = r.num(pj, "orbitAltitude", false, p.orbitAltitude);
+      if (p.radius <= 1000.0) r.error("planet '" + p.id + "': radius must be > 1 km");
+      if (pj.contains("landingSites") && pj["landingSites"].is_array())
+        for (const auto& sj : pj["landingSites"]) {
+          LandingSiteDef site;
+          site.id = r.str(sj, "id");
+          site.name = r.str(sj, "name");
+          site.latDeg = float(r.num(sj, "latDeg"));
+          site.lonDeg = float(r.num(sj, "lonDeg"));
+          site.interior = r.str(sj, "interior");
+          site.market = r.str(sj, "market", false);
+          p.sites.push_back(site);
+        }
+      s.planets.push_back(p);
+    }
+  }
   if (!r.ok()) return std::nullopt;
   return s;
 }
@@ -209,6 +238,11 @@ std::optional<SceneDef> loadSceneDef(const AssetManifest& manifest, const AssetI
     if (p.docking) need(p.docking->interior, "interior", "prop '" + p.id + "' docking");
     if (p.docking && !p.docking->market.empty()) need(p.docking->market, "market", "prop '" + p.id + "' docking");
   }
+  for (const auto& pl : scene->planets)
+    for (const auto& site : pl.sites) {
+      need(site.interior, "interior", "site '" + site.id + "'");
+      if (!site.market.empty()) need(site.market, "market", "site '" + site.id + "'");
+    }
   if (!ok) return std::nullopt;
   return scene;
 }
@@ -241,8 +275,11 @@ std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, cons
   b.startIn = r.str(j, "startIn", false);
   b.autoDock = j.value("autoDock", false);
   b.mine = j.value("mine", false);
+  b.startLanded = j.value("startLanded", false);
+  b.autoLand = j.value("autoLand", false);
+  if (!b.startIn.empty() && b.startIn != "ship" && b.startIn != "station" && b.startIn != "surface") b.startIn = "?";
   b.lookTurnDegPerSec = float(r.num(j, "lookTurnDegPerSec", false, 0.0));
-  if (!b.startIn.empty() && b.startIn != "ship" && b.startIn != "station") r.error("startIn must be ship or station");
+  if (b.startIn == "?") r.error("startIn must be ship, station or surface");
   if (b.durationSeconds <= 0) r.error("durationSeconds must be > 0");
   if (!r.ok()) return std::nullopt;
   return b;

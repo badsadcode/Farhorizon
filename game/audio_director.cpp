@@ -141,7 +141,7 @@ void AudioDirector::update(const AudioState& st, float dt) {
 
   // Engine rumble: only while flying from the cockpit.
   auto engine = sounds_.find("engine_loop");
-  const bool flying = st.inCockpit && st.location == "space";
+  const bool flying = st.engineActive;
   if (engine != sounds_.end()) {
     if (flying && engine_ == kNoVoice) {
       PlayParams p;

@@ -101,6 +101,7 @@ std::unique_ptr<SpaceWorld> buildSpaceWorld(const SceneDef& scene, const ShipDef
       world->addAsteroid(a);
     }
   }
+  for (const PlanetDef& pd : scene.planets) world->addPlanet(Planet{pd});
   return world;
 }
 

@@ -20,6 +20,7 @@ struct AudioState {
   float speedFraction = 0;
   bool beamActive = false;
   bool inCockpit = true;
+  bool engineActive = false;  // engine rumble audible (flying, travelling, landing)
 };
 
 class AudioDirector {

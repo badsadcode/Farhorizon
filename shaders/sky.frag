@@ -33,6 +33,21 @@ void main() {
   band = pow(band, 6.0);
   float dust = fbm(dir * 3.0);
   float wisps = fbm(dir * 7.0 + vec3(3.1, 1.7, 0.4));
+  if (frame.atmoZenith.a > 0.5) {
+    // Planet surface: zenith/horizon gradient, dusty ground haze, a big hazy sun.
+    float up = dir.y;
+    vec3 sky = mix(frame.atmoHorizon.rgb, frame.atmoZenith.rgb, pow(clamp(up, 0.0, 1.0), 0.45));
+    sky = mix(frame.atmoGround.rgb, sky, smoothstep(-0.06, 0.02, up));
+    vec3 sd = frame.sunDirCos.xyz;
+    float sc = max(dot(dir, sd), 0.0);
+    float haze = frame.atmoHorizon.a;
+    sky += frame.sunColorExp.rgb * (0.05 * pow(sc, 4.0 / haze) + 0.25 * pow(sc, 64.0 / haze)) * frame.skyBase.a;
+    sky += frame.sunColorExp.rgb * smoothstep(0.9995, 0.9998, sc) * 8.0 * frame.skyBase.a;
+    float dust = fbm(dir * 4.0 + vec3(frame.ambientSkyTime.w * 0.01, 0.0, 0.0));
+    sky *= 0.85 + 0.3 * dust;
+    outColor = vec4(sky, 1.0);
+    return;
+  }
   vec3 col = frame.skyBase.rgb;
   col += band * frame.skyBand.rgb * frame.skyBand.a * (0.55 + 0.9 * dust);
   float neb = smoothstep(0.45, 0.9, wisps) * (0.4 + band);

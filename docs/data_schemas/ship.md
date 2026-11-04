@@ -23,3 +23,5 @@
 | `engineGlow` | `{ sockets[], color, boostColor, idleSize, thrustSize, idleIntensity, thrustIntensity }` | | additive exhaust sprites; colours are linear HDR (>1 blooms) |
 | `lights[]` | `{ position, color, size, blinkHz, phase, duty }` | | ship-space running lights |
 | `mounts` | string[] | | hardpoint names (weapons arrive in Stage 6) |
+| `travelDrive` | `{ maxSpeed, acceleration, spoolSeconds, alignToleranceDeg, alignRateDegPerSec, massLockRange, exitSpeed, minDistance }` | | in-system travel drive |
+| `mining` | `{ range, unitsPerSecond, coneDeg, scoopRadius, maxChunks, chunkLifetime, chunkSpeed, scanSeconds }` | | mining laser and scoop |

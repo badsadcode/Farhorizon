@@ -48,7 +48,7 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
 farhorizon [--content DIR] [--shaders DIR] [--scene ID] [--size WxH] [--camera chase|cockpit|orbit|free]
            [--look retro80s|clean] [--autofly] [--validation | --no-validation] [--no-vsync] [--no-overlay]
            [--frames N] [--screenshot FILE] [--benchmark ID] [--bench-out PREFIX]
-           [--start-docked] [--start-in ship|station] [--load FILE] [--continue]
+           [--start-docked] [--start-landed] [--start-in ship|station|surface] [--load FILE] [--continue]
 ```
 
 Validation is on by default in Debug builds. With `--validation`, any validation message makes the
@@ -66,6 +66,10 @@ farhorizon --no-vsync --size 1920x1080 --benchmark bench.docking_autopilot
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.ship_interior
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_hangar
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.mining
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.planet_orbit
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.landing
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.surface_landed
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.surface_outpost
 ```
 
 ## Audio

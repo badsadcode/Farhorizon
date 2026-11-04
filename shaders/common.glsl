@@ -20,6 +20,9 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 lightCount;       // x = number of point lights in use
   vec4 pointPosRange[8]; // xyz camera-relative position, w range (m)
   vec4 pointColor[8];    // rgb colour * intensity
+  vec4 atmoZenith;       // rgb zenith colour, a = 1 for atmospheric sky (planet surface)
+  vec4 atmoHorizon;      // rgb horizon colour, a haze (sun glow spread)
+  vec4 atmoGround;       // rgb below-horizon colour, a star visibility (0..1)
 } frame;
 
 vec3 applyFog(vec3 color, float dist) {

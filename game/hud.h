@@ -37,6 +37,8 @@ struct InteriorHudContext {
   HudPalette palette;
 };
 void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c);
+// Cockpit HUD while the ship is in a planet's surface scene (approach, landed, liftoff).
+void drawSurfaceHud(OverlayBuilder& o, const InteriorHudContext& c);
 
 void drawHud(OverlayBuilder& o, const HudContext& c);
 std::string formatDistance(double metres);

@@ -1,0 +1,26 @@
+{
+  "id": "bench.planet_orbit",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "player": {
+    "systemPosition": [
+      149594871100.0,
+      13062133.497887354,
+      -3506237672.6463337
+    ],
+    "rotationDeg": [
+      12,
+      25,
+      0
+    ]
+  },
+  "autofly": {
+    "throttle": 0.2,
+    "rotation": [
+      0.0,
+      0.03,
+      0.0
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "id": "market.gale_ridge",
+  "name": "Gale Ridge Supply Shed",
+  "spread": 0.12,
+  "tickSeconds": 600,
+  "restockFraction": 0.05,
+  "entries": [
+    {
+      "commodity": "ore.iron",
+      "stock": 180,
+      "targetStock": 150,
+      "maxStock": 400,
+      "productionPerHour": 14,
+      "elasticity": 0.6,
+      "minMultiplier": 0.5,
+      "maxMultiplier": 1.4
+    },
+    {
+      "commodity": "ore.nickel",
+      "stock": 140,
+      "targetStock": 110,
+      "maxStock": 300,
+      "productionPerHour": 10,
+      "elasticity": 0.7,
+      "minMultiplier": 0.5,
+      "maxMultiplier": 1.5
+    },
+    {
+      "commodity": "ice.water",
+      "stock": 30,
+      "targetStock": 60,
+      "maxStock": 200,
+      "productionPerHour": -6,
+      "elasticity": 0.8,
+      "minMultiplier": 0.6,
+      "maxMultiplier": 1.9
+    },
+    {
+      "commodity": "goods.rations",
+      "stock": 10,
+      "targetStock": 40,
+      "maxStock": 120,
+      "productionPerHour": -5,
+      "elasticity": 0.9,
+      "minMultiplier": 0.7,
+      "maxMultiplier": 2.2
+    },
+    {
+      "commodity": "goods.parts",
+      "stock": 6,
+      "targetStock": 25,
+      "maxStock": 80,
+      "productionPerHour": -2,
+      "elasticity": 0.9,
+      "minMultiplier": 0.7,
+      "maxMultiplier": 2.2
+    },
+    {
+      "commodity": "goods.medical",
+      "stock": 3,
+      "targetStock": 15,
+      "maxStock": 50,
+      "productionPerHour": -1,
+      "elasticity": 1.0,
+      "minMultiplier": 0.8,
+      "maxMultiplier": 2.4
+    },
+    {
+      "commodity": "goods.fuelcells",
+      "stock": 20,
+      "targetStock": 30,
+      "maxStock": 90,
+      "productionPerHour": -1,
+      "elasticity": 0.7
+    }
+  ]
+}

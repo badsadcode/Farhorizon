@@ -14,13 +14,17 @@
 | 10 | open | input | No in-game rebinding UI; rebinding means editing `input.json` and pressing F5. |
 | 11 | open | camera | In flight, the cockpit camera still sees the exterior hull top as a flat "dash". The walkable cabin exists, but flight uses the exterior view. |
 | 12 | open | render | The retro look costs ~25 ms more than `clean` on the software rasteriser (expected to be negligible on GPUs). Bloom is iterative Gaussian, not a mip pyramid. |
-| 13 | open | gameplay | No in-system travel drive yet (design 4.2); the station is 3 km away and the asteroid field 8 km away to keep cruise travel short. |
+| 13 | fixed (0.5) | gameplay | In-system travel drive implemented (ADR 0008). |
 | 14 | open | interiors | Interior lighting is flat (one key light + fill + rim, no point lights or shadows). The Kenney placeholder pieces leave small ceiling gaps that show the clear colour or sky. |
 | 15 | open | docking | The approach autopilot assumes an approach from above or the side. From directly below the hub it can press against the hull. |
 | 16 | open | interiors | Interior transitions are instant cuts (no seat/airlock animation or loading fade). |
 | 17 | open | interiors | The on-foot camera is not interpolated between fixed steps (possible slight judder at high refresh rates). |
 | 18 | open | audio | The placeholder sounds have only been verified by signal analysis (SDL disk driver), not by listening. The mix needs a human pass. |
 | 19 | open | render | Point lights have no shadows and shine through walls; lamp placement accounts for it. |
-| 20 | open | economy | One station market only, so trade routes need a second market (the outpost, Stage 5). |
+| 20 | fixed (0.5) | economy | Gale Ridge Supply Shed creates the first trade route. |
 | 21 | open | mining | Asteroids do not shrink visually as they deplete (yield only). |
 | 22 | open | ui | The market panel is the only menu. Settings, a main menu and save slots come in Stage 7. |
+| 23 | open | render | The planet impostor is the most expensive pass on the CPU rasteriser (~178 ms with Varga filling the view). Bake the surface to a cubemap if real GPUs ever show it. |
+| 24 | open | landing | The descent and approach are scripted (no manual landing on the surface yet), and the speed readout shows the cinematic plunge rate. |
+| 25 | open | planets | Planets do not rotate or orbit; site lighting is fixed (dusk at Gale Ridge). |
+| 26 | open | travel | Transit ignores collisions; a jump through an asteroid field passes straight through. |

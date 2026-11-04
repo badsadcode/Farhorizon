@@ -47,6 +47,7 @@ struct AppOptions {
   std::optional<std::filesystem::path> screenshotOnExit;
   std::optional<std::string> look;               // visual profile id override
   bool startDocked = false;                      // debug: force-dock at the nearest station
+  bool startLanded = false;                      // debug: start landed at the first landing site
   std::string startIn;                           // debug: "ship" or "station" (implies startDocked)
   std::filesystem::path loadPath;                // load this save after startup
 };

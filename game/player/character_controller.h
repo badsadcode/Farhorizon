@@ -6,6 +6,7 @@
 
 #include "engine/math/math.h"
 #include "game/physics/collision.h"
+#include "game/world/terrain.h"
 
 namespace fh {
 
@@ -41,7 +42,8 @@ struct CharacterState {
   Vec3 lookDirection() const { return viewRotation().forward(); }
 };
 
+// `terrain` (optional): walkable heightfield; slopes steeper than ~55 degrees block movement.
 void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterParams& p,
-                   const std::vector<Aabb>& colliders, float dt);
+                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain = nullptr);
 
 }  // namespace fh

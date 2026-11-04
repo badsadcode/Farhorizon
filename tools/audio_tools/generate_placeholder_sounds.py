@@ -208,6 +208,17 @@ def warning():
     return normalize(lowpass_fast(tone, 2500), 0.5)
 
 
+def wind():
+    tt = t(14.25)
+    n = rng.standard_normal(len(tt))
+    gust = 0.55 + 0.45 * np.sin(2 * np.pi * (1 / 7) * tt + 0.5) * np.sin(2 * np.pi * (1 / 14) * tt + 1.2)
+    body = lowpass_fast(n, 500, passes=2) * 2.5
+    whistle = highpass(lowpass_fast(n, 1400), 700) * 0.6
+    grit = (rng.random(len(tt)) < 0.002) * rng.uniform(-1, 1, len(tt))
+    grit = highpass(grit, 2000) * 2.0
+    return normalize(loopable((body + whistle * gust) * gust + grit * gust), 0.6)
+
+
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -225,6 +236,7 @@ def main(out):
     write(out / "scoop.wav", scoop())
     write(out / "radio_blip.wav", radio_blip())
     write(out / "warning.wav", warning())
+    write(out / "wind.wav", wind())
 
 
 if __name__ == "__main__":

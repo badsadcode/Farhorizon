@@ -116,6 +116,30 @@ struct AsteroidFieldDef {
   Vec3 color{0.30f, 0.27f, 0.24f};
 };
 
+struct LandingSiteDef {
+  std::string id;
+  std::string name;
+  float latDeg = 0, lonDeg = 0;   // planet-local direction of the site
+  AssetID interior;               // surface scene (pad, terrain, outpost)
+  AssetID market;                 // optional
+};
+
+// A planet or moon: rendered as a far-field impostor, never as a physics body (design 4.3 / 5.3).
+struct PlanetDef {
+  std::string id;
+  std::string name;
+  SystemPosition center;
+  double radius = 1.0e6;          // metres
+  Vec3 colorA{0.35f, 0.3f, 0.25f};  // surface palette (linear)
+  Vec3 colorB{0.15f, 0.14f, 0.13f};
+  float seed = 1.0f;
+  float craters = 0.5f;           // 0..1
+  Vec3 atmosphereColor{0.5f, 0.45f, 0.4f};
+  float atmosphereThickness = 0.0f;  // fraction of radius (0 = airless)
+  double orbitAltitude = 150000.0;   // metres above the surface for travel/landing approach
+  std::vector<LandingSiteDef> sites;
+};
+
 struct CameraDef {
   std::string initialMode = "chase";  // chase, cockpit, orbit, free
   float fovDeg = 65.0f;               // orbit/free developer cameras
@@ -139,6 +163,7 @@ struct SceneDef {
   PlayerStartDef player;
   std::vector<PropDef> props;
   std::vector<AsteroidFieldDef> asteroidFields;
+  std::vector<PlanetDef> planets;
 };
 
 std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string& context,
@@ -159,6 +184,8 @@ struct BenchmarkDef {
   float lookTurnDegPerSec = 0.0f;  // on-foot: slow camera pan
   bool autoDock = false;   // request docking and engage the approach autopilot as soon as cleared
   bool mine = false;       // target the nearest asteroid, face it and hold the mining laser
+  bool startLanded = false;  // start landed at the first landing site
+  bool autoLand = false;     // request a landing at the nearest site immediately
 };
 
 std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, const AssetID& id,

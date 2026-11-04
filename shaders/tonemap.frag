@@ -12,6 +12,8 @@ layout(push_constant) uniform Post {
   vec4 highlightTintCon;  // rgb highlight tint, a contrast
   vec4 lens;              // x vignette, y scanline strength, z scanline period (px), w chromatic aberration
   vec4 misc;              // x grain, y bloom strength, z time, w unused
+  vec4 fadeColorAmount;   // rgb fade colour, a amount (scene swaps: cloud deck)
+  vec4 heat;              // x re-entry heat 0..1
 } post;
 
 float hash12(vec2 p) {
@@ -48,6 +50,15 @@ void main() {
   l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = clamp(mix(vec3(l), c, post.shadowTintSat.a), 0.0, 1.0);
 
+  // Re-entry heat: plasma glow creeping in from the edges, flickering.
+  float heat = post.heat.x;
+  if (heat > 0.0) {
+    float flick = 0.85 + 0.15 * sin(post.misc.z * 37.0) * sin(post.misc.z * 13.0 + vUv.y * 9.0);
+    float edge = smoothstep(0.05, 0.6, r2 * 2.0 + 0.15 * sin(vUv.x * 23.0 + post.misc.z * 5.0));
+    c = mix(c, vec3(1.0, 0.45, 0.12) * flick, heat * edge * 0.85);
+    c += vec3(0.25, 0.08, 0.02) * heat * heat;
+  }
+
   // Vignette.
   c *= 1.0 - post.lens.x * smoothstep(0.1, 0.75, r2 * 2.0);
 
@@ -62,5 +73,6 @@ void main() {
     float n = hash12(gl_FragCoord.xy + fract(post.misc.z * 7.31) * 1000.0) - 0.5;
     c += n * post.misc.x;
   }
+  c = mix(c, post.fadeColorAmount.rgb, clamp(post.fadeColorAmount.a, 0.0, 1.0));
   outColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }

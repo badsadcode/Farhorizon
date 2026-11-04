@@ -10,6 +10,7 @@
 #include "game/session/world_builder.h"
 #include "game/economy/economy.h"
 #include "game/persistence/save_game.h"
+#include "game/world/terrain.h"
 
 #include "engine/assets/gltf_loader.h"
 #include "engine/core/log.h"
@@ -46,7 +47,16 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
       for (const auto& e : audioErrors) log::warn("audio", "{}", e);
     if (!benchmark_ && options_.exitAfterFrames == 0) audioDevice_.open(audio_.mixer());  // tests/benchmarks stay silent
   }
-  if (options_.startDocked || !options_.startIn.empty()) {
+  if (benchmark_ && benchmark_->startLanded) options_.startLanded = true;
+  if (options_.startIn == "surface") options_.startLanded = true;
+  if (options_.startLanded && !world().planets().empty() && !world().planets()[0].def.sites.empty()) {
+    session_->landing().landAt(world(), LandingSiteRef{0, 0});
+    camera_.snap();
+    if (options_.startIn == "surface" || options_.startIn == "ship") {
+      session_->leaveSeat();
+      if (options_.startIn == "surface") session_->perform("exitShip");
+    }
+  } else if (options_.startDocked || !options_.startIn.empty()) {
     session_->docking().forceDock(world());
     lastDockState_ = DockState::Docked;
     if (!options_.startIn.empty()) {
@@ -138,6 +148,8 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   if (!shipDef->interior.empty()) interiorIds.push_back(shipDef->interior);
   for (const auto& p : scene->props)
     if (p.docking) interiorIds.push_back(p.docking->interior);
+  for (const auto& pl : scene->planets)
+    for (const auto& site : pl.sites) interiorIds.push_back(site.interior);
   std::map<std::pair<AssetID, std::string>, LoadedMesh> pieceMeshes;  // (interior, template) -> mesh
   for (const auto& iid : interiorIds) {
     if (interiors.count(iid)) continue;
@@ -172,6 +184,13 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
       if (!md) return false;
       marketDefs.emplace(p.docking->market, std::move(*md));
     }
+  for (const auto& pl : scene->planets)
+    for (const auto& site : pl.sites)
+      if (!site.market.empty() && !marketDefs.count(site.market)) {
+        auto md = loadMarketDef(*manifest, site.market, *commodityDb, &errors);
+        if (!md) return false;
+        marketDefs.emplace(site.market, std::move(*md));
+      }
   for (auto& w : errors) log::warn("content", "{}", w);  // only non-fatal warnings remain here
 
   // ---- Commit. Hot reload and save loading share one path: snapshot -> rebuild -> apply. ----
@@ -216,6 +235,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
                          Mat4::scale({piece.scale, piece.scale, piece.scale});
       list.push_back({handles.at(piece.templ), model});
     }
+    if (def.terrain) list.push_back({renderer_->uploadMesh(HeightField(*def.terrain).buildMesh()), Mat4::identity()});
     newSession->addInterior(iid, std::move(def));
   }
   if (restore) {
@@ -254,7 +274,8 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     if (benchmark_) mode = benchmark_->camera;
     if (options_.cameraOverride) mode = *options_.cameraOverride;
     camera_.setMode(cameraModeFromString(mode), world().playerRenderTransform(1.0f));
-    if (benchmark_ && !benchmark_->autoDock && !benchmark_->mine && benchmark_->startIn.empty())
+    if (benchmark_ && !benchmark_->autoDock && !benchmark_->mine && benchmark_->startIn.empty() && !benchmark_->startLanded &&
+        !benchmark_->autoLand)
       controller_.setAutofly(true, benchmark_->throttle, benchmark_->rotation);
     else if (options_.autofly) controller_.setAutofly(true, 0.4f, {0.0f, 0.08f, 0.0f});
   }
@@ -346,10 +367,22 @@ void GameApp::updateAudio(float dt, float engineDemand, float speedFraction) {
     w.credits = session_->credits();
   }
   AudioState st;
-  st.location = loc == Location::Cockpit ? std::string("space") : session_->activeInteriorId();
-  st.inCockpit = loc == Location::Cockpit && d.state() != DockState::Docked;
+  const AssetID* surfaceId = session_->surfaceSceneId();
+  st.location = loc == Location::Cockpit ? (surfaceId ? *surfaceId : std::string("space")) : session_->activeInteriorId();
+  const Landing& ld = session_->landing();
+  const TravelDrive& tr = session_->travel();
+  st.inCockpit = loc == Location::Cockpit && d.state() != DockState::Docked && ld.state() != LandState::Landed;
+  st.engineActive = st.inCockpit;
   st.engineDemand = engineDemand;
   st.speedFraction = speedFraction;
+  if (tr.active()) {  // the drive howls with speed
+    st.engineDemand = 1.0f;
+    st.speedFraction = 1.0f + std::clamp(tr.speed() / world().player().def.travel.maxSpeed, 0.0f, 1.0f) * 1.5f;
+  }
+  if (ld.busy() && ld.state() != LandState::Landed) {  // re-entry roar, landing burn
+    st.engineDemand = std::max(0.6f, ld.heat());
+    st.speedFraction = 0.4f + ld.heat();
+  }
   st.beamActive = session_->mining().beamActive();
   audio_.update(st, dt);
 }
@@ -397,14 +430,44 @@ void GameApp::handleAppInput() {
     if (input_.pressed("target.nearestAsteroid")) world().targetNearestAsteroid();
     if (input_.pressed("target.clear")) world().clearTarget();
     if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
-    if (input_.pressed("dock.request")) {
+    if (input_.pressed("nav.next")) {
+      const auto dests = world().navDestinations();
+      if (!dests.empty()) {
+        size_t next = 0;
+        if (const auto& t = world().target())
+          for (size_t i = 0; i < dests.size(); ++i)
+            if (dests[i] == *t) next = (i + 1) % dests.size();
+        world().setTarget(dests[next]);
+        if (auto info = world().targetInfo()) session_->notify("NAV: " + info->name);
+      }
+    }
+    if (input_.pressed("travel.engage")) {
+      if (session_->travel().active()) session_->travel().cancel(world());
+      else session_->engageTravel();
+    }
+    if (input_.pressed("dock.request")) {  // L: contextual dock / land / launch / undock
       Docking& d = session_->docking();
-      switch (d.state()) {
-        case DockState::Undocked: d.request(world()); break;
-        case DockState::RequestingClearance:
-        case DockState::ApproachAuthorized: d.cancel(); break;
-        case DockState::Docked: d.undock(world()); break;
-        default: break;
+      Landing& ld = session_->landing();
+      if (ld.state() == LandState::Landed) {
+        session_->launch();
+      } else if (!ld.busy()) {
+        switch (d.state()) {
+          case DockState::Undocked: {
+            // Prefer a landing when a site's orbit marker is near; otherwise dock.
+            bool siteNear = false;
+            const DVec3 me = world().frame().toSystem(world().player().state.position).metres;
+            for (const auto& pl : world().planets())
+              for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
+                siteNear = siteNear || length(pl.siteOrbit(si) - me) <= Landing::kRequestRange;
+            if (siteNear) session_->requestLanding();
+            else d.request(world());
+            break;
+          }
+          case DockState::RequestingClearance:
+          case DockState::ApproachAuthorized: d.cancel(); break;
+          case DockState::Docked: d.undock(world()); break;
+          default: break;
+        }
       }
     }
     if (input_.pressed("dock.autopilot")) session_->docking().toggleAutopilot();
@@ -504,7 +567,10 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
     market_.draw(overlay_, *session_, look.hud, float(ext.width), float(ext.height), runTime_);
     return;
   }
-  if (session_->location() == Location::Cockpit) {
+  if (session_->location() == Location::Cockpit && session_->surfaceScene()) {
+    InteriorHudContext sc{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
+    drawSurfaceHud(overlay_, sc);
+  } else if (session_->location() == Location::Cockpit) {
     drawHud(overlay_, hc);
   } else {
     InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
@@ -583,6 +649,8 @@ int GameApp::run() {
         controller_.setThrottle(0.0f);  // no surprise launch
         if (!benchmark_) saveGame("saves/autosave.json", true);
       }
+      if (benchmark_ && benchmark_->autoLand && !session_->landing().busy() && session_->landing().message().empty())
+        session_->requestLanding();
       if (benchmark_ && benchmark_->autoDock) {
         Docking& d = session_->docking();
         if (ds == DockState::Undocked && d.message().empty()) d.request(world());
@@ -593,8 +661,28 @@ int GameApp::run() {
     }
 
     // ---- Camera and render data (camera-relative) ----
-    const Transform ship = world().playerRenderTransform(float(clock_.alpha()));
+    Transform ship = world().playerRenderTransform(float(clock_.alpha()));
+    const InteriorDef* surface = cockpit ? session_->surfaceScene() : nullptr;
+    if (surface && surface->parkedShip) {  // landing approach / landed / liftoff happen in the site scene
+      const auto& ps = *surface->parkedShip;
+      const Quat padRot = Quat::fromAxisAngle({0, 1, 0}, radians(ps.yawDeg));
+      const Transform off = session_->landing().surfaceOffset();
+      ship = {ps.position + padRot.rotate(off.position), normalize(padRot * off.rotation)};
+    }
     CameraView view = camera_.update(ship, world().player(), input_, float(dt), devCam || !mouseCaptured_);
+    {  // re-entry / touchdown shake and transit field-of-view stretch
+      const float heat = session_->landing().heat();
+      const bool approach = session_->landing().state() == LandState::SurfaceApproach;
+      const float shake = heat * 0.012f + (approach ? 0.004f : 0.0f);
+      if (shake > 0) {
+        const float t = float(runTime_);
+        view.rotation = normalize(view.rotation * Quat::fromAxisAngle({1, 0, 0}, shake * std::sin(t * 41.0f)) *
+                                  Quat::fromAxisAngle({0, 1, 0}, shake * std::sin(t * 29.0f + 1.3f)));
+      }
+      const TravelState ts = session_->travel().state();
+      if (ts == TravelState::Transit || ts == TravelState::Decelerating)
+        view.fovDeg += 14.0f * std::clamp(session_->travel().speed() / world().player().def.travel.maxSpeed, 0.0f, 1.0f);
+    }
     const VkExtent2D ext = renderer_->extent();
     RenderFrameParams params;
     params.viewRotation = view.viewRotation();
@@ -635,6 +723,21 @@ int GameApp::run() {
       pp.scanlinePeriod = v.scanlinePeriod * (ext.height >= 1440 ? 2.0f : 1.0f);  // keep lines visible but fine
       pp.chromaticAberration = v.chromaticAberration;
       pp.grain = v.grain;
+      pp.fadeColor = {0.78f, 0.62f, 0.48f};  // dust and cloud
+      pp.fadeAmount = session_->landing().fade();
+      pp.heat = session_->landing().heat();
+    }
+    for (const auto& pl : world().planets()) {
+      PlanetDraw pd;
+      pd.center = world().frame().toLocal(pl.def.center) - view.position;
+      pd.radius = float(pl.def.radius);
+      pd.colorA = pl.def.colorA;
+      pd.colorB = pl.def.colorB;
+      pd.seed = pl.def.seed;
+      pd.craters = pl.def.craters;
+      pd.atmosphereColor = pl.def.atmosphereColor;
+      pd.atmosphereThickness = pl.def.atmosphereThickness;
+      params.planets.push_back(pd);
     }
     const Mat4 viewProj = Mat4::perspectiveReversedZInfinite(params.fovYRadians,
                                                              float(ext.width) / float(std::max(1u, ext.height)),
@@ -741,15 +844,20 @@ int GameApp::run() {
       return dot(a.position, a.position) < dot(b.position, b.position);
     });
 
-    // ---- On foot: render the active interior instead of space ----
-    if (!cockpit) {
-      if (const InteriorDef* idef = session_->activeInterior()) {
-        const CharacterState& ch = session_->character();
-        view.position = ch.eye(session_->characterParams());
-        view.rotation = ch.viewRotation();
-        view.fovDeg = 75.0f;
+    // ---- On foot (or in the cockpit on a planet's surface): render the local scene instead ----
+    if (!cockpit || surface) {
+      const InteriorDef* idef = surface ? surface : session_->activeInterior();
+      const AssetID sceneId = surface ? *session_->surfaceSceneId() : session_->activeInteriorId();
+      if (idef) {
+        if (!surface) {
+          const CharacterState& ch = session_->character();
+          view.position = ch.eye(session_->characterParams());
+          view.rotation = ch.viewRotation();
+          view.fovDeg = 75.0f;
+        }
         params.viewRotation = view.viewRotation();
         params.fovYRadians = radians(view.fovDeg);
+        params.planets.clear();
         const InteriorLighting& L = idef->lighting;
         params.sunDirection = L.keyDirection;
         params.sunColor = L.keyColor;
@@ -764,15 +872,35 @@ int GameApp::run() {
         params.drawSky = idef->showSky;
         params.drawStars = idef->showSky;
         if (!idef->showSky) params.skyBase = {0.004f, 0.004f, 0.006f};
+        if (idef->surfaceSky) {
+          params.atmosphereSky = true;
+          params.atmoZenith = idef->surfaceSky->zenith;
+          params.atmoHorizon = idef->surfaceSky->horizon;
+          params.atmoGround = idef->surfaceSky->ground;
+          params.atmoHaze = idef->surfaceSky->haze;
+          params.starVisibility = idef->surfaceSky->starVisibility;
+          params.sunGlare = 1.0f;
+          params.sunAngularRadiusRadians = radians(0.8f);
+        }
         items.clear();
         glows.clear();
-        for (const auto& pi : interiorPieces_[session_->activeInteriorId()])
-          items.push_back({pi.mesh, Mat4::translation(-view.position) * pi.model});
+        for (const auto& pi : interiorPieces_[sceneId]) items.push_back({pi.mesh, Mat4::translation(-view.position) * pi.model});
         if (idef->parkedShip) {
           const auto& ps = *idef->parkedShip;
-          items.push_back({player.visual, Mat4::translation(ps.position - view.position) *
-                                              Mat4::rotation(Quat::fromAxisAngle({0, 1, 0}, radians(ps.yawDeg))) *
-                                              player.meshFix});
+          const Transform shipPose = surface ? ship
+                                             : Transform{ps.position, Quat::fromAxisAngle({0, 1, 0}, radians(ps.yawDeg))};
+          items.push_back({player.visual,
+                           Mat4::translation(shipPose.position - view.position) * Mat4::rotation(shipPose.rotation) *
+                               player.meshFix});
+          if (surface) {  // engines burn while the ship moves
+            const LandState ls = session_->landing().state();
+            const float burn = ls == LandState::Landed ? 0.0f : 1.0f;
+            for (const auto& sname : player.def.engineGlow.sockets)
+              if (auto it = player.sockets.find(sname); it != player.sockets.end() && burn > 0)
+                glows.push_back({Vec4(shipPose.position + shipPose.rotation.rotate(it->second.position) - view.position,
+                                      player.def.engineGlow.thrustSize),
+                                 Vec4(player.def.engineGlow.color * player.def.engineGlow.thrustIntensity, 0)});
+          }
         }
         params.fogColor = L.fogColor;
         params.fogDensity = L.fogDensity;

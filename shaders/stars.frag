@@ -8,5 +8,6 @@ void main() {
   float r2 = dot(vCorner, vCorner);
   float a = exp(-r2 * 4.0);
   if (a < 0.004) discard;
-  outColor = vec4(vColor * a, 1.0);  // additive into the HDR target
+  float vis = frame.atmoZenith.a > 0.5 ? frame.atmoGround.a : 1.0;  // dimmed by an atmosphere
+  outColor = vec4(vColor * a * vis, 1.0);  // additive into the HDR target
 }

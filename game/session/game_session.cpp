@@ -1,5 +1,6 @@
 #include "game/session/game_session.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "engine/core/log.h"
@@ -42,8 +43,11 @@ ActionResult GameSession::enterInterior(const AssetID& id, const std::string& sp
     if (h.x > 0 && h.y > 0 && h.z > 0) colliders_.push_back({ps.position - h, ps.position + h});
   }
   characterParams_.gravity = it->second.gravity;
+  terrain_ = it->second.terrain ? HeightField(*it->second.terrain) : HeightField{};
   character_ = CharacterState{};
   character_.feet = sp->second.position;
+  if (terrain_.valid())
+    character_.feet.y = std::max(character_.feet.y, terrain_.heightAt(character_.feet.x, character_.feet.z));
   character_.yaw = radians(sp->second.yawDeg);
   location_ = loc;
   notice_ = it->second.name;
@@ -52,10 +56,38 @@ ActionResult GameSession::enterInterior(const AssetID& id, const std::string& sp
   return {true, it->second.name};
 }
 
+const AssetID* GameSession::surfaceSceneId() const {
+  if (!landing_.onSurface() || !landing_.site()) return nullptr;
+  return &world_->planets().at(landing_.site()->planet).def.sites.at(landing_.site()->site).interior;
+}
+
+const InteriorDef* GameSession::surfaceScene() const {
+  const AssetID* id = surfaceSceneId();
+  if (!id) return nullptr;
+  auto it = interiors_.find(*id);
+  return it == interiors_.end() ? nullptr : &it->second;
+}
+
+bool GameSession::engageTravel() {
+  if (!freeFlight()) return fail("Travel drive unavailable right now").ok;
+  const auto& t = world_->target();
+  if (!t || t->kind == TargetRef::Kind::Asteroid) return fail("Select a destination first (N)").ok;
+  return travel_.engage(*world_, *t, world_->player().def.travel);
+}
+
+bool GameSession::requestLanding() {
+  if (location_ != Location::Cockpit || !freeFlight()) return fail("Cannot begin a landing right now").ok;
+  return landing_.request(*world_);
+}
+
+bool GameSession::launch() {
+  if (location_ != Location::Cockpit) return fail("Take the pilot seat to launch").ok;
+  return landing_.launch(*world_);
+}
+
 ActionResult GameSession::leaveSeat() {
   if (location_ != Location::Cockpit) return fail("You are not in the pilot seat");
-  if (docking_.state() != DockState::Docked)
-    return fail("Leaving the seat is only safe while docked or landed");
+  if (!parked()) return fail("Leaving the seat is only safe while docked or landed");
   if (shipInterior_.empty()) return fail("This ship has no walkable interior");
   return enterInterior(shipInterior_, "seat", Location::ShipInterior);
 }
@@ -72,6 +104,9 @@ ActionResult GameSession::perform(const std::string& action) {
   }
   if (action == "exitShip") {
     if (location_ != Location::ShipInterior) return fail("You are not aboard");
+    if (landing_.state() == LandState::Landed) {
+      if (const AssetID* id = surfaceSceneId()) return enterInterior(*id, "fromShip", Location::StationInterior);
+    }
     if (docking_.state() != DockState::Docked) return fail("Airlock sealed: the ship is not docked");
     const auto station = docking_.station();
     const auto& dock = world_->props().at(*station).def.docking;
@@ -127,10 +162,15 @@ void GameSession::setEconomy(CommodityDb db, std::int64_t credits) {
 }
 
 Market* GameSession::dockedMarket() {
-  if (docking_.state() != DockState::Docked || !docking_.station()) return nullptr;
-  const auto& dock = world_->props().at(*docking_.station()).def.docking;
-  if (!dock || dock->market.empty()) return nullptr;
-  auto it = markets_.find(dock->market);
+  AssetID marketId;
+  if (landing_.state() == LandState::Landed && landing_.site()) {
+    marketId = world_->planets().at(landing_.site()->planet).def.sites.at(landing_.site()->site).market;
+  } else if (docking_.state() == DockState::Docked && docking_.station()) {
+    const auto& dock = world_->props().at(*docking_.station()).def.docking;
+    if (dock) marketId = dock->market;
+  }
+  if (marketId.empty()) return nullptr;
+  auto it = markets_.find(marketId);
   if (it == markets_.end()) return nullptr;
   it->second.advanceTo(world_->simulationTime());
   return &it->second;
@@ -150,12 +190,16 @@ TradeResult GameSession::trade(const std::string& commodity, int units) {
 
 std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   docking_.preStep(*world_, dt);
+  travel_.preStep(*world_, world_->player().def.travel, dt);
+  if (travel_.state() == TravelState::Transit || travel_.state() == TravelState::Decelerating)
+    world_->player().collisionsEnabled = false;  // the drive's corridor ignores small debris
+  landing_.preStep(*world_, dt);
   world_->fixedUpdate(dt);
   docking_.postStep(*world_, dt);
-  const bool canMine = location_ == Location::Cockpit && docking_.state() == DockState::Undocked;
+  const bool canMine = location_ == Location::Cockpit && freeFlight();
   miningEvents_ = mining_.fixedUpdate(*world_, miningTrigger_ && canMine, cargo_, dt);
   if (location_ != Location::Cockpit) {
-    stepCharacter(character_, characterInput_, characterParams_, colliders_, dt);
+    stepCharacter(character_, characterInput_, characterParams_, colliders_, dt, terrain_.valid() ? &terrain_ : nullptr);
     characterInput_.yawDelta = characterInput_.pitchDelta = 0;  // consumed
     characterInput_.jump = false;
     // Safety net: never let a bad collider set drop the player into the void.

@@ -1,0 +1,7 @@
+{
+  "id": "bench.surface_landed",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "startLanded": true
+}

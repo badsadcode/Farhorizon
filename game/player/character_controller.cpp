@@ -35,7 +35,7 @@ bool resolve(CharacterState& s, const CharacterParams& p, const std::vector<Aabb
 }  // namespace
 
 void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterParams& p,
-                   const std::vector<Aabb>& colliders, float dt) {
+                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain) {
   if (dt <= 0) return;
   s.yaw += in.yawDelta;
   s.pitch = clamp(s.pitch + in.pitchDelta, radians(-85.0f), radians(85.0f));
@@ -64,8 +64,27 @@ void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterP
   const float h = dt / float(steps);
   bool grounded = false;
   for (int i = 0; i < steps; ++i) {
+    const Vec3 before = s.feet;
     s.feet += s.velocity * h;
     grounded = resolve(s, p, colliders) || grounded;
+    if (terrain && terrain->valid()) {
+      const float ground = terrain->heightAt(s.feet.x, s.feet.z);
+      if (s.feet.y < ground + 0.02f) {
+        const Vec3 n = terrain->normalAt(s.feet.x, s.feet.z);
+        if (n.y >= 0.57f || ground - before.y < 0.002f) {  // walkable slope: stand on it
+          s.feet.y = std::max(s.feet.y, ground);
+          if (s.velocity.y < 0) s.velocity.y = 0;
+          grounded = true;
+        } else {  // cliff: undo the horizontal move and kill velocity into the slope
+          s.feet.x = before.x;
+          s.feet.z = before.z;
+          s.feet.y = std::max(before.y, terrain->heightAt(before.x, before.z));
+          const Vec3 into = normalize(Vec3{n.x, 0, n.z});
+          const float vn = dot(s.velocity, into);
+          if (vn < 0) s.velocity -= into * vn;
+        }
+      }
+    }
   }
   s.grounded = grounded;
   if (s.grounded && s.velocity.y < 0) s.velocity.y = 0;

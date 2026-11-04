@@ -73,9 +73,19 @@ struct AsteroidFieldRuntime {
   std::vector<VisualHandle> variants;
 };
 
+struct Planet {
+  PlanetDef def;
+  // Site direction (planet frame == system axes; planets do not rotate in the MVP).
+  static Vec3 siteDirection(const LandingSiteDef& s);
+  // Points in double precision (system frame): surface point and orbit marker above a site.
+  DVec3 siteSurface(std::uint32_t site) const;
+  DVec3 siteOrbit(std::uint32_t site) const;
+};
+
 struct TargetRef {
-  enum class Kind { Prop, Asteroid } kind = Kind::Prop;
-  std::uint32_t index = 0;
+  enum class Kind { Prop, Asteroid, Site, Field } kind = Kind::Prop;
+  std::uint32_t index = 0;      // prop / asteroid / field index; for Site: planet index
+  std::uint32_t sub = 0;        // Site: site index within the planet
   bool operator==(const TargetRef&) const = default;
 };
 
@@ -98,6 +108,13 @@ class SpaceWorld {
   const PlayerShip& player() const { return player_; }
   void addProp(Prop p);
   std::uint32_t addAsteroidField(AsteroidFieldRuntime field);  // returns field index
+  void addPlanet(Planet p) { planets_.push_back(std::move(p)); }
+  const std::vector<Planet>& planets() const { return planets_; }
+  // Nav destinations for the travel drive: stations, asteroid fields and landing sites.
+  std::vector<TargetRef> navDestinations() const;
+  void setTarget(const TargetRef& t) { target_ = t; }
+  // System-frame point the travel drive should arrive at for a destination (double precision).
+  DVec3 navArrivalPoint(const TargetRef& t) const;
   void addAsteroid(Asteroid a);
 
   // Simulation.
@@ -137,6 +154,7 @@ class SpaceWorld {
   std::vector<Prop> props_;
   std::vector<AsteroidFieldRuntime> fields_;
   std::vector<Asteroid> asteroids_;
+  std::vector<Planet> planets_;
   std::optional<TargetRef> target_;
   double time_ = 0.0;
 };

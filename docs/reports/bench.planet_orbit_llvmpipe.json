@@ -1,0 +1,14 @@
+{
+  "avgCpuMs": 178.8167611090909,
+  "avgFps": 5.592316927102427,
+  "avgGpuMs": 177.6697817272727,
+  "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "drawCalls": 20,
+  "frames": 55,
+  "maxCpuMs": 214.551035,
+  "maxGpuMs": 275.209321,
+  "minCpuMs": 152.613049,
+  "p99CpuMs": 214.551035,
+  "scenario": "bench.planet_orbit",
+  "triangles": 18265
+}

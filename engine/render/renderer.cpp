@@ -32,8 +32,19 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 lightCount;
   Vec4 pointPosRange[8];
   Vec4 pointColor[8];
+  Vec4 atmoZenith;
+  Vec4 atmoHorizon;
+  Vec4 atmoGround;
 };
-static_assert(sizeof(FrameUniforms) == 624);
+static_assert(sizeof(FrameUniforms) == 672);
+
+struct PlanetPush {  // must match planet.frag
+  Vec4 centerRadius;
+  Vec4 colorA;
+  Vec4 colorB;
+  Vec4 atmo;
+};
+static_assert(sizeof(PlanetPush) == 64);
 
 struct MeshPush {  // must match mesh.frag push constants
   Vec4 baseColor;
@@ -47,10 +58,12 @@ struct PostPush {  // must match tonemap.frag
   Vec4 highlightTintCon;
   Vec4 lens;
   Vec4 misc;
+  Vec4 fadeColorAmount;
+  Vec4 heat;
 };
-static_assert(sizeof(PostPush) == 64);
+static_assert(sizeof(PostPush) == 96);
 
-enum class Blend { None, Additive, Alpha };
+enum class Blend { None, Additive, Alpha, Premultiplied };
 
 struct PipelineDesc {
   VkShaderModule vert = VK_NULL_HANDLE, frag = VK_NULL_HANDLE;
@@ -107,6 +120,14 @@ VkPipeline buildPipeline(VkDevice device, const PipelineDesc& d, VkFormat colorF
     att.colorBlendOp = VK_BLEND_OP_ADD;
     att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    att.alphaBlendOp = VK_BLEND_OP_ADD;
+  } else if (d.blend == Blend::Premultiplied) {
+    att.blendEnable = VK_TRUE;
+    att.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    att.colorBlendOp = VK_BLEND_OP_ADD;
+    att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     att.alphaBlendOp = VK_BLEND_OP_ADD;
   } else if (d.blend == Blend::Alpha) {
     att.blendEnable = VK_TRUE;
@@ -213,10 +234,10 @@ Renderer::~Renderer() {
   vkDestroySampler(d, sampler_, nullptr);
   vkDestroySampler(d, clampSampler_, nullptr);
   for (VkPipeline p : {skyPipeline_, starPipeline_, meshPipeline_, overlayPipeline_, tonemapPipeline_,
-                       bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_})
+                       bloomDownPipeline_, bloomBlurPipeline_, glowPipeline_, planetPipeline_})
     vkDestroyPipeline(d, p, nullptr);
   for (VkPipelineLayout l : {scenePipelineLayout_, meshPipelineLayout_, overlayPipelineLayout_, tonemapPipelineLayout_,
-                             bloomPipelineLayout_})
+                             bloomPipelineLayout_, planetPipelineLayout_})
     vkDestroyPipelineLayout(d, l, nullptr);
   vkDestroyDescriptorPool(d, descriptorPool_, nullptr);
   vkDestroyDescriptorSetLayout(d, frameLayout_, nullptr);
@@ -285,6 +306,13 @@ void Renderer::createPipelines() {
     tl.pushConstantRangeCount = 1;
     tl.pPushConstantRanges = &postPush;
     VK_CHECK(vkCreatePipelineLayout(d, &tl, nullptr, &tonemapPipelineLayout_));
+    VkPushConstantRange planetPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PlanetPush)};
+    VkPipelineLayoutCreateInfo pll{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pll.setLayoutCount = 1;
+    pll.pSetLayouts = &frameLayout_;
+    pll.pushConstantRangeCount = 1;
+    pll.pPushConstantRanges = &planetPush;
+    VK_CHECK(vkCreatePipelineLayout(d, &pll, nullptr, &planetPipelineLayout_));
     VkPushConstantRange bloomPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Vec4)};
     VkPipelineLayoutCreateInfo bl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     bl.setLayoutCount = 1;
@@ -317,6 +345,13 @@ void Renderer::createPipelines() {
   sky.frag = load("sky.frag");
   sky.layout = scenePipelineLayout_;
   skyPipeline_ = buildPipeline(d, sky, color, kDepthFormat);
+
+  PipelineDesc planet;
+  planet.vert = sky.vert;
+  planet.frag = load("planet.frag");
+  planet.layout = planetPipelineLayout_;
+  planet.blend = Blend::Premultiplied;
+  planetPipeline_ = buildPipeline(d, planet, color, kDepthFormat);
 
   PipelineDesc stars;
   stars.vert = load("stars.vert");
@@ -508,6 +543,9 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.fillColor = Vec4(p.fillColor, 0);
   u.rimColorPower = Vec4(p.rimColor, p.rimPower);
   u.fogColorDensity = Vec4(p.fogColor, p.fogDensity);
+  u.atmoZenith = Vec4(p.atmoZenith, p.atmosphereSky ? 1.0f : 0.0f);
+  u.atmoHorizon = Vec4(p.atmoHorizon, std::max(0.1f, p.atmoHaze));
+  u.atmoGround = Vec4(p.atmoGround, p.starVisibility);
   const size_t nLights = std::min<size_t>(8, p.pointLights.size());
   u.lightCount = Vec4(float(nLights), 0, 0, 0);
   for (size_t i = 0; i < nLights; ++i) {
@@ -621,6 +659,45 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
     ++st.drawCalls;
     st.triangles += 2ull * starCount_;
     st.stars = starCount_;
+  }
+
+  // Planets / moons: impostors behind all local geometry, scissored to their screen bounds.
+  if (!p.planets.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, planetPipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
+    for (const PlanetDraw& pd : p.planets) {
+      const float outer = pd.radius * (1.0f + pd.atmosphereThickness);
+      // Screen bounds from the 8 corners of the bounding cube (full screen if any is behind).
+      float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+      bool full = length(pd.center) < outer * 1.05f;
+      for (int k = 0; k < 8 && !full; ++k) {
+        const Vec3 corner = pd.center + Vec3{(k & 1) ? outer : -outer, (k & 2) ? outer : -outer, (k & 4) ? outer : -outer};
+        const Vec4 clip = u.viewProj * Vec4(corner, 1.0f);
+        if (clip.w <= 1.0f) {
+          full = true;
+          break;
+        }
+        const float sx = (clip.x / clip.w * 0.5f + 0.5f) * float(extent.width);
+        const float sy = (clip.y / clip.w * 0.5f + 0.5f) * float(extent.height);
+        minX = std::min(minX, sx), maxX = std::max(maxX, sx), minY = std::min(minY, sy), maxY = std::max(maxY, sy);
+      }
+      VkRect2D rect = sc;
+      if (!full) {
+        const int x0 = std::clamp(int(std::floor(minX)), 0, int(extent.width));
+        const int y0 = std::clamp(int(std::floor(minY)), 0, int(extent.height));
+        const int x1 = std::clamp(int(std::ceil(maxX)), 0, int(extent.width));
+        const int y1 = std::clamp(int(std::ceil(maxY)), 0, int(extent.height));
+        if (x1 <= x0 || y1 <= y0) continue;  // off screen
+        rect = {{x0, y0}, {std::uint32_t(x1 - x0), std::uint32_t(y1 - y0)}};
+      }
+      vkCmdSetScissor(cmd, 0, 1, &rect);
+      const PlanetPush push{Vec4(pd.center, pd.radius), Vec4(pd.colorA, pd.seed), Vec4(pd.colorB, pd.craters),
+                            Vec4(pd.atmosphereColor, pd.atmosphereThickness)};
+      vkCmdPushConstants(cmd, planetPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      ++st.drawCalls;
+    }
+    vkCmdSetScissor(cmd, 0, 1, &sc);
   }
 
   // Meshes (instanced per mesh group)
@@ -742,7 +819,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipelineLayout_, 0, 3, tonemapSets, 0, nullptr);
   const PostPush post{Vec4(pp.shadowTint, pp.saturation), Vec4(pp.highlightTint, pp.contrast),
                       Vec4(pp.vignette, pp.scanlines, pp.scanlinePeriod, pp.chromaticAberration),
-                      Vec4(pp.grain, pp.bloomStrength, p.timeSeconds, 0.0f)};
+                      Vec4(pp.grain, pp.bloomStrength, p.timeSeconds, 0.0f), Vec4(pp.fadeColor, pp.fadeAmount),
+                      Vec4(pp.heat, 0, 0, 0)};
   vkCmdPushConstants(cmd, tonemapPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(post), &post);
   vkCmdDraw(cmd, 3, 1, 0, 0);
   ++st.drawCalls;

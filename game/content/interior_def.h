@@ -11,6 +11,7 @@
 #include "game/content/light_def.h"
 #include "game/content/material_override.h"
 #include "game/physics/collision.h"
+#include "game/world/terrain.h"
 
 namespace fh {
 
@@ -53,10 +54,19 @@ struct InteriorLighting {
   float fogDensity = 0.0f;   // per metre
 };
 
+// Atmospheric sky for planetary surfaces (sky shader "atmosphere" mode).
+struct SurfaceSkyDef {
+  Vec3 zenith{0.05f, 0.04f, 0.035f};
+  Vec3 horizon{0.25f, 0.16f, 0.09f};
+  Vec3 ground{0.04f, 0.03f, 0.02f};
+  float haze = 1.0f;          // sun glow spread
+  float starVisibility = 0.0f;
+};
+
 struct InteriorDef {
   std::string id;
   std::string name;
-  std::string kind = "ship";    // ship | station
+  std::string kind = "ship";    // ship | station | surface (landing site)
   float gravity = 9.81f;
   bool showSky = false;         // e.g. a hangar with an open bay door
   InteriorLighting lighting;
@@ -69,6 +79,8 @@ struct InteriorDef {
   std::vector<Interactable> interactables;
   std::optional<InteriorSpawn> parkedShip;  // station hangars draw the player's ship here
   Vec3 parkedShipColliderHalfExtents{};     // walk-blocking box around the parked ship (0 = none)
+  std::optional<TerrainParams> terrain;     // surface scenes: procedural heightfield
+  std::optional<SurfaceSkyDef> surfaceSky;  // surface scenes: atmospheric sky
 
   // All colliders in interior space (templates placed, rotated and scaled + authored ones).
   std::vector<Aabb> buildColliders() const;

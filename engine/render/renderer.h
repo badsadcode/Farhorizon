@@ -36,12 +36,27 @@ struct PostProcessParams {
   float scanlinePeriod = 3.0f;     // pixels
   float chromaticAberration = 0.0f;
   float grain = 0.0f;
+  Vec3 fadeColor{1, 1, 1};
+  float fadeAmount = 0.0f;         // scene-swap fades (cloud deck)
+  float heat = 0.0f;               // re-entry heat overlay
 };
 
 struct PointLight {
   Vec3 position{};   // camera-relative
   float range = 10;  // metres (light reaches zero at range)
   Vec3 color{1, 1, 1};
+};
+
+// Far-field body (planet / moon) drawn as a ray-traced impostor behind local geometry.
+struct PlanetDraw {
+  Vec3 center{};           // camera-relative (m)
+  float radius = 1;        // m
+  Vec3 colorA{0.4f, 0.35f, 0.3f};
+  float seed = 1;
+  Vec3 colorB{0.15f, 0.14f, 0.13f};
+  float craters = 0.5f;
+  Vec3 atmosphereColor{0.5f, 0.45f, 0.4f};
+  float atmosphereThickness = 0;
 };
 
 struct RenderFrameParams {
@@ -71,6 +86,12 @@ struct RenderFrameParams {
   std::vector<PointLight> pointLights;  // up to 8 are used (nearest first is the caller's job)
   Vec3 fogColor{0, 0, 0};
   float fogDensity = 0.0f;         // per metre; 0 = no fog
+  std::vector<PlanetDraw> planets;
+  // Atmospheric (planet surface) sky instead of deep space.
+  bool atmosphereSky = false;
+  Vec3 atmoZenith{}, atmoHorizon{}, atmoGround{};
+  float atmoHaze = 1.0f;
+  float starVisibility = 1.0f;
   PostProcessParams post;
 };
 
@@ -164,6 +185,8 @@ class Renderer {
   VkPipeline bloomDownPipeline_ = VK_NULL_HANDLE;
   VkPipeline bloomBlurPipeline_ = VK_NULL_HANDLE;
   VkPipeline glowPipeline_ = VK_NULL_HANDLE;
+  VkPipeline planetPipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout planetPipelineLayout_ = VK_NULL_HANDLE;
   VkSampler clampSampler_ = VK_NULL_HANDLE;
   GpuImage bloomA_, bloomB_;  // quarter-resolution ping-pong
   VkDescriptorSet bloomSetA_ = VK_NULL_HANDLE, bloomSetB_ = VK_NULL_HANDLE;

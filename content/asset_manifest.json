@@ -169,6 +169,30 @@
       "type": "audio",
       "source": "audio/audio.json",
       "license": "Original: synthesised by tools/audio_tools/generate_placeholder_sounds.py (placeholders)."
+    },
+    "interior.gale_ridge": {
+      "type": "interior",
+      "source": "interiors/gale_ridge.interior.json"
+    },
+    "market.gale_ridge": {
+      "type": "market",
+      "source": "economy/markets/gale_ridge.json"
+    },
+    "bench.planet_orbit": {
+      "type": "benchmark",
+      "source": "benchmarks/planet_orbit.json"
+    },
+    "bench.surface_landed": {
+      "type": "benchmark",
+      "source": "benchmarks/surface_landed.json"
+    },
+    "bench.surface_outpost": {
+      "type": "benchmark",
+      "source": "benchmarks/surface_outpost.json"
+    },
+    "bench.landing": {
+      "type": "benchmark",
+      "source": "benchmarks/landing.json"
     }
   }
 }

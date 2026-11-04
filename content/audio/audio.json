@@ -79,6 +79,11 @@
       "file": "audio/warning.wav",
       "bus": "ui",
       "gain": 0.5
+    },
+    "wind": {
+      "file": "audio/wind.wav",
+      "bus": "ambience",
+      "gain": 0.7
     }
   },
   "events": {
@@ -148,6 +153,27 @@
         "minInterval": 15,
         "maxInterval": 40,
         "gain": 1.0
+      }
+    },
+    "interior.gale_ridge": {
+      "beds": [
+        {
+          "sound": "wind",
+          "gain": 1.0
+        },
+        {
+          "sound": "hangar_drone",
+          "gain": 0.35
+        }
+      ],
+      "random": {
+        "sounds": [
+          "creak_0",
+          "creak_2"
+        ],
+        "minInterval": 18,
+        "maxInterval": 45,
+        "gain": 0.6
       }
     }
   }

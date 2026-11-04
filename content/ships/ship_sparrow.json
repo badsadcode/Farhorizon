@@ -204,5 +204,15 @@
     "chunkLifetime": 90,
     "chunkSpeed": 7,
     "scanSeconds": 1.5
+  },
+  "travelDrive": {
+    "maxSpeed": 250000,
+    "acceleration": 20000,
+    "spoolSeconds": 4,
+    "alignToleranceDeg": 3,
+    "alignRateDegPerSec": 35,
+    "massLockRange": 3000,
+    "exitSpeed": 150,
+    "minDistance": 20000
   }
 }

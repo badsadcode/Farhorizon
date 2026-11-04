@@ -3,7 +3,7 @@
 | Field | Notes |
 |---|---|
 | `id`, `name` | required |
-| `kind` | `ship` (needs spawns `seat` and `airlock`) or `station` (needs spawn `fromShip`) |
+| `kind` | `ship` (needs spawns `seat` and `airlock`), `station` or `surface` (both need spawn `fromShip`) |
 | `gravity` | m/s² for the on-foot controller |
 | `showSky` | draw the starfield/sky behind the geometry (windows, open bay) |
 | `lighting` | `keyDirection`, `keyColor`, `ambientSky`, `ambientGround`, `fillDirection`, `fillColor`, `rimColor`, `rimPower`, `exposure`, `fogColor`, `fogDensity` (per metre) |
@@ -15,3 +15,5 @@
 | `spawns` | `{ name: { position (feet), yawDeg } }`; yaw 0 looks down −Z |
 | `interactables[]` | `{ id, action, prompt, position, radius }`; actions: `takeSeat`, `exitShip`, `boardShip`, `terminal` |
 | `parkedShip` | station only: `{ position, yawDeg, colliderHalfExtents }`; draws the player's ship |
+| `terrain` | surface only: `{ seed, size, cellSize, roughness, rimHeight, rimWidth, color, flatZones: [ { center, radius, blend, height } ] }`; procedural heightfield with cliff edges |
+| `sky` | surface only: `{ zenith, horizon, ground, haze, starVisibility }`; atmospheric sky |

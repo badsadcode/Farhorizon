@@ -22,7 +22,8 @@ void printUsage() {
       "  --autofly              scripted gentle flight (smoke tests)\n"
       "  --look <profileId>     visual look, e.g. retro80s or clean\n"
       "  --start-docked         debug: start clamped to the nearest station pad\n"
-      "  --start-in <where>     debug: start on foot in the 'ship' or the 'station'\n"
+      "  --start-landed         debug: start landed at the first planetary landing site\n"
+      "  --start-in <where>     debug: start on foot: 'ship', 'station' or 'surface'\n"
       "  --load <file>          load a save game (e.g. saves/autosave.json)\n"
       "  --continue             load saves/quicksave.json\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
@@ -67,6 +68,7 @@ int main(int argc, char** argv) {
     else if (a == "--autofly") o.autofly = true;
     else if (a == "--look") o.look = next();
     else if (a == "--start-docked") o.startDocked = true;
+    else if (a == "--start-landed") o.startLanded = true;
     else if (a == "--start-in") o.startIn = next();
     else if (a == "--load") o.loadPath = next();
     else if (a == "--continue") o.loadPath = "saves/quicksave.json";

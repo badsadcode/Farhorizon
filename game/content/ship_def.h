@@ -11,6 +11,7 @@
 #include "game/content/material_override.h"
 #include "game/ships/flight_model.h"
 #include "game/space/mining_params.h"
+#include "game/space/travel_params.h"
 
 namespace fh {
 
@@ -49,6 +50,7 @@ struct ShipDef {
   std::vector<LightDef> lights;              // ship space
   EngineGlowDef engineGlow;
   MiningParams mining;
+  TravelDriveParams travel;
   std::vector<std::string> mounts;
 };
 
