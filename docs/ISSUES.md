@@ -39,4 +39,4 @@
 | 35 | open | ui | Menus and the terminal are keyboard and mouse only; there is no gamepad support. Mouse buttons cannot be rebound. |
 | 36 | open | hud | Marker labels can overlap when objects line up on screen (station and target, for example). |
 | 37 | open | hud | At 720p and 100% scale the small text is about 11 px, which is hard to read; Interface scale helps. Not judged by a human yet. |
-| 38 | info | tools | Scripted UI runs exit with code 2 under `--validation` on a PC with a broken global Vulkan layer, because the loader's message counts as a validation message. Seen with ReShade on the dev PC; set `VK_LOADER_LAYERS_DISABLE` to rule it out. |
+| 38 | fixed (0.7) | tools | Loader messages about third-party Vulkan layers on the player's PC (seen with ReShade, which declines apps it is not set up for) no longer count as validation messages. They are logged at info level. |

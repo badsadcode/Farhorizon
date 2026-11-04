@@ -29,9 +29,16 @@ namespace {
 std::atomic<int> g_validationMessages{0};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                             VkDebugUtilsMessageTypeFlagsEXT,
+                                             VkDebugUtilsMessageTypeFlagsEXT type,
                                              const VkDebugUtilsMessengerCallbackDataEXT* data, void*) {
   if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+    // Only the validation layer judges the game. General messages come from the loader, for example
+    // about third-party layers installed on the player's PC (overlays, injectors): log them, but
+    // they say nothing about our API use.
+    if (!(type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)) {
+      log::info("vulkan", "{}", data->pMessage);
+      return VK_FALSE;
+    }
     ++g_validationMessages;
     if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) log::error("vulkan", "{}", data->pMessage);
     else log::warn("vulkan", "{}", data->pMessage);
