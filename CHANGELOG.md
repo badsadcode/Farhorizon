@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — Blender is the editor (2026-11-04)
+* **FARHORIZON add-on for Blender** (`tools/blender/`, guide in `docs/BLENDER_GUIDE.md`): build maps and
+  ships in Blender and press **Play in Game**. Entities with icons in the viewport, a player-sized guide,
+  collision choices per object, and a check that catches what would not export.
+* **Maps are one standard `.glb`:** geometry, materials, lights and entities together.
+* **Textures:** normal, metallic-roughness, emissive and occlusion maps reach the game, with mipmaps and
+  anisotropic filtering.
+* **Lights from Blender:** point lamps with shadows, flicker, and a Sun with real shadows.
+* **Mesh collision:** walls, floors, ramps and stairs work as modelled, with no separate collision.
+* **Entities:** Player Start, Exit, Data Log, Terminal, Pilot Seat, Airlock. Enemy Spawn and Loot are
+  placed and saved, and show as glows until those systems exist.
+* **Ship preview:** `--ship-mesh` flies an exported ship with its own engine and camera points.
+* **Sample derelict:** `content_src/maps/derelict_sample.blend`, generated through the add-on with
+  original textures. Its cargo bay has a hull breach, sunlight, stairs and a catwalk.
+* New flags: `--map`, `--ship-mesh`. `content_validator --map` checks a map. Tests: 134.
+
 ## 0.7.3 — Stage 7, part 4: exhaust, speed and the tunnel (2026-11-04)
 From the owner's first look at 0.7.2.
 * **Exhaust trails are now continuous ribbons of turbulent gas,** with wider billowing edges, so

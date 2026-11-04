@@ -200,12 +200,17 @@ Renderer::Renderer(VkContext& ctx, std::filesystem::path shaderDir) : ctx_(ctx),
   si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
   si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   si.maxLod = VK_LOD_CLAMP_NONE;
+  si.anisotropyEnable = ctx_.anisotropySupported() ? VK_TRUE : VK_FALSE;
+  si.maxAnisotropy = 8.0f;
   VK_CHECK(vkCreateSampler(ctx_.device(), &si, nullptr, &sampler_));
+  si.anisotropyEnable = VK_FALSE;
   si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   VK_CHECK(vkCreateSampler(ctx_.device(), &si, nullptr, &clampSampler_));
 
   const std::uint8_t white[4] = {255, 255, 255, 255};
   whiteTexture_ = gpu::createTextureRGBA8(ctx_, white, 1, 1);
+  const std::uint8_t flat[4] = {128, 128, 255, 255};
+  flatNormal_ = gpu::createMaterialTexture(ctx_, flat, 1, 1, true);
   createLightingResources();
   {
     const ImageRGBA8 atlas = generateParticleAtlas();
@@ -262,6 +267,7 @@ Renderer::~Renderer() {
   gpu::destroy(ctx_, bloomA_);
   gpu::destroy(ctx_, bloomB_);
   gpu::destroy(ctx_, whiteTexture_);
+  gpu::destroy(ctx_, flatNormal_);
   gpu::destroy(ctx_, particleAtlas_);
   gpu::destroy(ctx_, uiAtlas_);
   gpu::destroy(ctx_, depth_);
@@ -280,6 +286,7 @@ Renderer::~Renderer() {
   vkDestroyDescriptorPool(d, descriptorPool_, nullptr);
   vkDestroyDescriptorSetLayout(d, frameLayout_, nullptr);
   vkDestroyDescriptorSetLayout(d, materialLayout_, nullptr);
+  vkDestroyDescriptorSetLayout(d, meshMaterialLayout_, nullptr);
   vkDestroyDescriptorSetLayout(d, lightingLayout_, nullptr);
 }
 
@@ -296,6 +303,13 @@ void Renderer::createDescriptors() {
   li.pBindings = &tb;
   VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &materialLayout_));
 
+  VkDescriptorSetLayoutBinding mb[5]{};
+  for (std::uint32_t i = 0; i < 5; ++i)
+    mb[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+  li.bindingCount = 5;
+  li.pBindings = mb;
+  VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &meshMaterialLayout_));
+
   VkDescriptorSetLayoutBinding lb[4]{};
   for (std::uint32_t i = 0; i < 4; ++i)
     lb[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
@@ -304,10 +318,10 @@ void Renderer::createDescriptors() {
   VK_CHECK(vkCreateDescriptorSetLayout(d, &li, nullptr, &lightingLayout_));
 
   const VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16},
-                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512}};
+                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192}};
   VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-  pi.maxSets = 520;
+  pi.maxSets = 2048;
   pi.poolSizeCount = 2;
   pi.pPoolSizes = sizes;
   VK_CHECK(vkCreateDescriptorPool(d, &pi, nullptr, &descriptorPool_));
@@ -336,7 +350,7 @@ void Renderer::createPipelines() {
   li.pSetLayouts = &frameLayout_;
   VK_CHECK(vkCreatePipelineLayout(d, &li, nullptr, &scenePipelineLayout_));
 
-  const VkDescriptorSetLayout meshSets[] = {frameLayout_, materialLayout_, lightingLayout_};
+  const VkDescriptorSetLayout meshSets[] = {frameLayout_, meshMaterialLayout_, lightingLayout_};
   VkPushConstantRange meshPush{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPush)};
   li.setLayoutCount = 3;
   li.pSetLayouts = meshSets;
@@ -764,21 +778,50 @@ MeshHandle Renderer::uploadMesh(const MeshData& mesh) {
   g.indices = gpu::createBufferWithData(ctx_, mesh.indices.data(), mesh.indices.size() * sizeof(std::uint32_t),
                                         VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
   for (const auto& img : mesh.images)
-    g.textures.push_back(gpu::createTextureRGBA8(ctx_, img.pixels.data(), std::uint32_t(img.width),
-                                                 std::uint32_t(img.height)));
+    g.textures.push_back(gpu::createMaterialTexture(ctx_, img.pixels.data(), std::uint32_t(img.width),
+                                                    std::uint32_t(img.height), img.linear));
+  auto materialSet = [&](const MaterialData* m) {
+    auto view = [&](int image, VkImageView fallback) {
+      return image >= 0 && size_t(image) < g.textures.size() ? g.textures[size_t(image)].view : fallback;
+    };
+    const VkImageView white = whiteTexture_.view;
+    const VkImageView views[5] = {m ? view(m->baseColorImage, white) : white, m ? view(m->normalImage, flatNormal_.view) : flatNormal_.view,
+                                  m ? view(m->metalRoughImage, white) : white, m ? view(m->emissiveImage, white) : white,
+                                  m ? view(m->occlusionImage, white) : white};
+    VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    ai.descriptorPool = descriptorPool_;
+    ai.descriptorSetCount = 1;
+    ai.pSetLayouts = &meshMaterialLayout_;
+    VkDescriptorSet set;
+    VK_CHECK(vkAllocateDescriptorSets(ctx_.device(), &ai, &set));
+    VkDescriptorImageInfo infos[5];
+    VkWriteDescriptorSet writes[5]{};
+    for (std::uint32_t i = 0; i < 5; ++i) {
+      infos[i] = {sampler_, views[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+      writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      writes[i].dstSet = set;
+      writes[i].dstBinding = i;
+      writes[i].descriptorCount = 1;
+      writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      writes[i].pImageInfo = &infos[i];
+    }
+    vkUpdateDescriptorSets(ctx_.device(), 5, writes, 0, nullptr);
+    return set;
+  };
   for (const auto& m : mesh.materials) {
     GpuMaterial gm;
-    const bool hasTex = m.baseColorImage >= 0 && size_t(m.baseColorImage) < g.textures.size();
-    gm.set = allocateMaterialSet(hasTex ? g.textures[size_t(m.baseColorImage)].view : whiteTexture_.view);
+    gm.set = materialSet(&m);
     gm.baseColor = m.baseColorFactor;
     gm.emissive = m.emissive;
     gm.metallic = m.metallic;
     gm.roughness = m.roughness;
     gm.panels = m.panels;
+    gm.textured = m.baseColorImage >= 0;
+    gm.normalMapped = m.normalImage >= 0;
     g.materials.push_back(gm);
   }
   GpuMaterial fallback;  // default material for primitives without one
-  fallback.set = allocateMaterialSet(whiteTexture_.view);
+  fallback.set = materialSet(nullptr);
   fallback.baseColor = {0.8f, 0.8f, 0.8f, 1.0f};
   g.materials.push_back(fallback);
   g.submeshes = mesh.submeshes;
@@ -1113,7 +1156,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                                     : m.materials.size() - 1;
         const GpuMaterial& mat = m.materials[matIndex];
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout_, 1, 1, &mat.set, 0, nullptr);
-        MeshPush push{mat.baseColor, Vec4(mat.emissive, mat.metallic), Vec4(mat.roughness, mat.panels, 0, 0)};
+        MeshPush push{mat.baseColor, Vec4(mat.emissive, mat.metallic),
+                      Vec4(mat.roughness, mat.panels, mat.textured ? 1.0f : 0.0f, mat.normalMapped ? 1.0f : 0.0f)};
         vkCmdPushConstants(cmd, meshPipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDrawIndexed(cmd, sm.indexCount, count, sm.firstIndex, 0, first);
         ++st.drawCalls;

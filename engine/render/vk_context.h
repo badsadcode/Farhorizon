@@ -62,12 +62,14 @@ class VkContext {
   const std::string& deviceName() const { return deviceName_; }
   float timestampPeriodNs() const { return timestampPeriod_; }
   bool timestampsSupported() const { return timestampsSupported_; }
+  bool anisotropySupported() const { return anisotropySupported_; }
   bool validationEnabled() const { return validationEnabled_; }
   static int validationMessageCount();
   void setVsync(bool on);
   bool vsync() const { return options_.vsync; }
 
  private:
+  bool anisotropySupported_ = false;
   void createInstance();
   void pickPhysicalDevice();
   void createDevice();

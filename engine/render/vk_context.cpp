@@ -223,6 +223,10 @@ void VkContext::createDevice() {
   VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
   f2.pNext = &f13;
   f2.features.imageCubeArray = VK_TRUE;  // lamp shadow maps
+  VkPhysicalDeviceFeatures supported{};
+  vkGetPhysicalDeviceFeatures(physical_, &supported);
+  anisotropySupported_ = supported.samplerAnisotropy == VK_TRUE;
+  f2.features.samplerAnisotropy = supported.samplerAnisotropy;
 
   const char* exts[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
   VkDeviceCreateInfo ci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};

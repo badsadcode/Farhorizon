@@ -19,6 +19,7 @@ struct ImageRGBA8 {
   int width = 0;
   int height = 0;
   std::vector<std::uint8_t> pixels;  // width*height*4, sRGB-encoded colour
+  bool linear = false;               // data, not colour: normal, metallic-roughness and occlusion maps
   bool valid() const { return width > 0 && height > 0 && pixels.size() == size_t(width) * height * 4; }
 };
 
@@ -29,6 +30,10 @@ struct MaterialData {
   float roughness = 1.0f;
   Vec3 emissive{0, 0, 0};            // linear
   int baseColorImage = -1;           // index into MeshData::images, -1 = none
+  int normalImage = -1;
+  int metalRoughImage = -1;          // glTF layout: G roughness, B metallic
+  int emissiveImage = -1;
+  int occlusionImage = -1;           // R
   float panels = 1.0f;               // procedural panel seams: 1 for built surfaces, 0 for rock and ground
 };
 

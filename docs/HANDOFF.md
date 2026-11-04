@@ -28,11 +28,9 @@ milestone. How to add one is in the comment at the top of its styles.
 ## Next steps
 **See `docs/ROADMAP.md` for the agreed order.** UI (0.7.0, ADR 0010) and lighting (0.7.1, ADR 0011) are
 done in code and waiting for the owner's playtest. Feedback may send work back there. Next is
-**Blender as the content and point-of-interest editor**: PBR texture maps in the glTF loader and mesh
-shader, `KHR_lights_punctual`, whole-level `.glb` maps with naming conventions (`COL_` colliders,
-`SPAWN_` / `USE_` empties, later `ENEMY_` / `LOOT_`), a Blender Python script for a scale-reference
-scene (1.8 m player capsule, doorways, Sparrow bounds and sockets, landing pad, raider), and an artist
-guide (axes: nose along Blender +Y; 1 unit = 1 m; `socket_*` / `hardpoint_*` empties).
+**points of interest**: reach a Blender map in the game world, then FPS exploration. The Blender editor
+itself is done (0.8.0, ADR 0012, `docs/BLENDER_GUIDE.md`). Rebuild the sample with
+`blender -b --factory-startup --python tools/blender/build_sample_derelict.py`.
 
 The owner's constraint: **all content original.** Atmosphere inspired by 70s/80s lonely
 "used future" sci-fi, but never copy assets, names or designs from existing works.

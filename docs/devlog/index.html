@@ -174,15 +174,30 @@ dialog button { background: none; border: 1px solid var(--seam); color: var(--am
 <section class="strip" aria-label="Project status">
   <div class="wrap">
     <dl>
-      <div><dt>Current build</dt><dd>0.7.3</dd></div>
+      <div><dt>Current build</dt><dd>0.8.0</dd></div>
       <div><dt>Ship</dt><dd>Sparrow</dd></div>
       <div><dt>Location</dt><dd>Cinder Reach</dd></div>
-      <div><dt>Log entries</dt><dd>10</dd></div>
+      <div><dt>Log entries</dt><dd>11</dd></div>
     </dl>
   </div>
 </section>
 
 <main class="wrap log">
+
+  <article class="entry" id="log-11">
+    <div class="rail"><span class="num">LOG 11</span><span class="build">build 0.8.0</span><time datetime="2026-11-04">4 Nov 2026</time></div>
+    <div>
+      <h2>A workshop in Blender</h2>
+      <p>Places in FARHORIZON can now be built in Blender, the free 3D tool. A new add-on turns it into the game's own editor. You model and texture as usual, drop in lights, and place things like player starts, data logs, exits and enemy spawns, each with its own little icon. Then one button drops you straight into the game, standing inside what you just made.</p>
+      <p>To prove it works, we built a small derelict through the add-on. A worn corridor with riveted plates and hazard stripes opens into a cargo bay, where stairs climb to a catwalk and a torn hole in the hull looks out onto the stars. It is only a test map, and nothing lives there yet. But it is the first thing in the game that feels like a place you could get lost in.</p>
+      <p>Ships go through the same workshop, so a new hull can be flying within a minute of the last edit.</p>
+      <div class="shots two">
+        <figure class="wide"><button class="shot" type="button"><img loading="lazy" src="images/log11_corridor.jpg" alt="A dim derelict corridor with riveted metal plates, grime, red-orange hazard stripes and a glowing ceiling lamp."></button><figcaption>Inside the sample derelict, in the game. Everything here was built in Blender.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log11_blender.jpg" alt="Blender's 3D viewport showing the derelict model from outside, with small round icons marking the player start, exit, data logs, enemy spawns and loot."></button><figcaption>The same derelict in Blender. Icons mark where things go.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log11_breach.jpg" alt="Looking out through a torn hole in the cargo bay wall at stars and a coloured nebula."></button><figcaption>The hole in the cargo bay, looking out at the nebula.</figcaption></figure>
+      </div>
+    </div>
+  </article>
 
   <article class="entry" id="log-10">
     <div class="rail"><span class="num">LOG 10</span><span class="build">build 0.7.3</span><time datetime="2026-11-04">4 Nov 2026</time></div>
@@ -330,8 +345,7 @@ dialog button { background: none; border: 1px solid var(--seam); color: var(--am
   <div class="wrap">
     <h2 id="next-heading">Next on the flight plan</h2>
     <ol>
-      <li><span><strong>Build places in Blender.</strong> Models with real textures and materials, and whole locations made there and loaded straight into the game.</span></li>
-      <li><span><strong>Explore on foot.</strong> Dock with a dead derelict, walk in, fight what lives there and leave with the loot.</span></li>
+            <li><span><strong>Explore on foot.</strong> Dock with a dead derelict, walk in, fight what lives there and leave with the loot.</span></li>
       <li><span><strong>Bring friends.</strong> Co-op for up to four players, sharing one ship or flying their own, with walkable decks and a crew at the stations.</span></li>
       <li><span><strong>Land anywhere.</strong> Whole planets to fly down to and explore.</span></li>
     </ol>

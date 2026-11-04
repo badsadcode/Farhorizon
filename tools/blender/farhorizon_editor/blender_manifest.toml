@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+
+id = "farhorizon_editor"
+version = "0.8.0"
+name = "FARHORIZON Editor"
+tagline = "Build maps and ships for FARHORIZON and play them with one button"
+maintainer = "FARHORIZON"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Export into the game's content folder"

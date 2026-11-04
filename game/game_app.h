@@ -60,6 +60,8 @@ struct AppOptions {
   std::filesystem::path loadPath;                // load this save after startup
   std::filesystem::path settingsPath = "settings.json";
   std::filesystem::path uiScript;                // developer test driver (game/ui/ui_script.h)
+  std::filesystem::path mapPath;                 // start on foot in this map (Blender add-on's Play)
+  std::filesystem::path shipMesh;                // fly this .glb instead of the ship's own model
 };
 
 class GameApp {

@@ -3,6 +3,7 @@
 // (mesh + box colliders in tile units) placed on a grid, plus authored colliders, spawn points,
 // interactables and lights. Schema: docs/data_schemas/interior.md.
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -81,6 +82,8 @@ struct InteriorDef {
   Vec3 parkedShipColliderHalfExtents{};     // walk-blocking box around the parked ship (0 = none)
   std::optional<TerrainParams> terrain;     // surface scenes: procedural heightfield
   std::optional<SurfaceSkyDef> surfaceSky;  // surface scenes: atmospheric sky
+  std::shared_ptr<const TriangleCollider> meshCollider;  // maps made in Blender
+  bool keyCastsShadows = false;             // the key light is a real sun, as in a breached hull
 
   // All colliders in interior space (templates placed, rotated and scaled + authored ones).
   std::vector<Aabb> buildColliders() const;

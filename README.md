@@ -104,6 +104,11 @@ the junction and right to the airlock, then **F** steps into the hangar. Walk ba
 press **F** to board, **F** at the seat, and **L** to undock.
 Debug shortcuts: `--start-docked`, `--start-landed`, `--start-in ship|station|surface`, F6 force-dock.
 
+## Build your own maps and ships
+
+Install the Blender add-on and press **Play in Game**: see [docs/BLENDER_GUIDE.md](docs/BLENDER_GUIDE.md).
+Try the sample derelict: `farhorizon --map content/maps/derelict_sample.glb`.
+
 ## Layout
 
 ```

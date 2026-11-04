@@ -11,8 +11,10 @@ Quat CharacterState::viewRotation() const {
 
 namespace {
 // Pushes the capsule out of every collider. Returns true if it is standing on something.
-bool resolve(CharacterState& s, const CharacterParams& p, const std::vector<Aabb>& colliders) {
+bool resolve(CharacterState& s, const CharacterParams& p, const std::vector<Aabb>& colliders,
+             const TriangleCollider* mesh) {
   bool grounded = false;
+  static thread_local std::vector<std::uint32_t> nearby;
   const float offsets[3] = {p.radius, p.height * 0.5f, p.height - p.radius};
   for (int iter = 0; iter < 4; ++iter) {
     bool any = false;
@@ -28,6 +30,20 @@ bool resolve(CharacterState& s, const CharacterParams& p, const std::vector<Aabb
         if (c.normal.y > 0.65f && off == offsets[0]) grounded = true;
       }
     }
+    if (mesh && !mesh->empty()) {
+      for (float off : offsets) {
+        mesh->nearby(s.feet + Vec3{0, off, 0}, p.radius, nearby);
+        for (std::uint32_t tri : nearby) {
+          Contact c;
+          if (!mesh->sphereVsTriangle(tri, s.feet + Vec3{0, off, 0}, p.radius, c)) continue;
+          any = true;
+          s.feet += c.normal * c.depth;
+          const float vn = dot(s.velocity, c.normal);
+          if (vn < 0) s.velocity -= c.normal * vn;
+          if (c.normal.y > 0.65f && off == offsets[0]) grounded = true;
+        }
+      }
+    }
     if (!any) break;
   }
   return grounded;
@@ -35,7 +51,8 @@ bool resolve(CharacterState& s, const CharacterParams& p, const std::vector<Aabb
 }  // namespace
 
 void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterParams& p,
-                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain) {
+                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain,
+                   const TriangleCollider* mesh) {
   if (dt <= 0) return;
   s.yaw += in.yawDelta;
   s.pitch = clamp(s.pitch + in.pitchDelta, radians(-85.0f), radians(85.0f));
@@ -66,7 +83,7 @@ void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterP
   for (int i = 0; i < steps; ++i) {
     const Vec3 before = s.feet;
     s.feet += s.velocity * h;
-    grounded = resolve(s, p, colliders) || grounded;
+    grounded = resolve(s, p, colliders, mesh) || grounded;
     if (terrain && terrain->valid()) {
       const float ground = terrain->heightAt(s.feet.x, s.feet.z);
       if (s.feet.y < ground + 0.02f) {

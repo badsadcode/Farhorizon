@@ -1,0 +1,16 @@
+# Start in the sample derelict (--map content/maps/derelict_sample.glb), walk, and leave by the Exit.
+# Run from an empty folder. The Exit ends a played map, so anything after it failing proves it did not.
+wait 20
+expect-screen none
+hold 60 W
+wait 10
+shot map01_corridor.png
+# Back to the start, then up against the Exit on the wall behind it.
+hold 110 S
+wait 10
+shot map02_exit.png
+key F
+wait 30
+# Still running here means the Exit did nothing.
+expect-screen the-exit-should-have-ended-the-map
+quit

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.7.3 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.8.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ add_library(fh_core STATIC
   game/player/character_controller.cpp
   game/space/docking.cpp
   game/content/interior_def.cpp
+  game/content/map_def.cpp
   game/session/game_session.cpp
   game/session/world_builder.cpp
   game/economy/economy.cpp
@@ -151,6 +152,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_stage6.cpp
     tests/unit/test_ui.cpp
     tests/unit/test_fx.cpp
+    tests/unit/test_map.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

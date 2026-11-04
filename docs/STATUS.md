@@ -119,7 +119,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Engine glow, running lights | ✅ | additive billboards |
 | Instanced meshes | ✅ | |
 | Shadows, AO, reflections | ✅ | ADR 0011 |
-| PBR texture maps | ⬜ | with the Blender pipeline (roadmap step 2) |
+| PBR texture maps | ✅ | 0.8.0, no transparency yet |
 | LOD, GPU particles, TAA | ⬜ | later |
 
 ## Stage 7 — polish
@@ -138,6 +138,11 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Exhaust ribbons, engine glow, speed dust, drive tunnel | ✅ | checked in screenshots; owner to judge in motion |
 | Nebula sky and volumetric clouds | 🟡 | look test at the owner's request; placement and colours are first guesses |
 | Full stop | ✅ | unit test + scripted run, assist on and off |
+| Blender add-on: maps, entities, checks, Play | ✅ | tested in Blender 5.1, in a real window and headless; ADR 0012 |
+| PBR textures, mips, lights from Blender | ✅ | sample map; normal mapping checked by eye |
+| Mesh collision | ✅ | floors, walls, ramps, stairs, closed rooms; unit tests + scripted walk |
+| Ship exterior preview | 🟡 | exports and flies; making a ship permanent still needs a JSON file by hand |
+| Maps reachable in the game world | ⬜ | `--map` and Play only, for now |
 | Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
 
 ## Later stages

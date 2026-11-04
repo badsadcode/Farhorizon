@@ -1,8 +1,11 @@
 #pragma once
 // Small collision toolkit (design doc 9.4): boxes and spheres, enough for ship-vs-station and
 // the on-foot capsule. Not a general physics engine.
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 
+#include "engine/assets/mesh_data.h"
 #include "engine/math/math.h"
 
 namespace fh {
@@ -29,6 +32,27 @@ Vec3 closestPointOnAabb(const Aabb& box, const Vec3& p);
 // Returns true and fills `out` when a sphere overlaps the box.
 bool sphereVsAabb(const Vec3& centre, float radius, const Aabb& box, Contact& out);
 bool sphereVsObb(const Vec3& centre, float radius, const Obb& box, Contact& out);
+// Collision against a triangle mesh, for maps made in Blender: walls, floors, ramps and stairs simply
+// work as modelled. Triangles are two-sided. A uniform grid keeps lookups local.
+class TriangleCollider {
+ public:
+  void build(const std::vector<MeshVertex>& vertices, const std::vector<std::uint32_t>& indices, float cellSize = 2.0f);
+  bool empty() const { return triangles_.empty(); }
+  std::size_t triangleCount() const { return triangles_.size(); }
+  // Triangles that might touch the sphere, each once.
+  void nearby(const Vec3& centre, float radius, std::vector<std::uint32_t>& out) const;
+  bool sphereVsTriangle(std::uint32_t triangle, const Vec3& centre, float radius, Contact& out) const;
+
+ private:
+  struct Triangle {
+    Vec3 a, b, c;
+  };
+  std::uint64_t cellKey(int x, int y, int z) const;
+  std::vector<Triangle> triangles_;
+  std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> cells_;
+  float cellSize_ = 2.0f;
+};
+
 // Rotates an axis-aligned box by a multiple of 90 degrees about +Y (interior pieces).
 Aabb rotateAabbYaw90(const Aabb& box, int quarterTurns);
 

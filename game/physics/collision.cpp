@@ -53,4 +53,89 @@ Aabb rotateAabbYaw90(const Aabb& b, int quarterTurns) {
   return r;
 }
 
+namespace {
+// Closest point on a triangle (Ericson, Real-Time Collision Detection).
+Vec3 closestOnTriangle(const Vec3& p, const Vec3& a, const Vec3& b, const Vec3& c) {
+  const Vec3 ab = b - a, ac = c - a, ap = p - a;
+  const float d1 = dot(ab, ap), d2 = dot(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a;
+  const Vec3 bp = p - b;
+  const float d3 = dot(ab, bp), d4 = dot(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return b;
+  const float vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) return a + ab * (d1 / (d1 - d3));
+  const Vec3 cp = p - c;
+  const float d5 = dot(ab, cp), d6 = dot(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return c;
+  const float vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) return a + ac * (d2 / (d2 - d6));
+  const float va = d3 * d6 - d5 * d4;
+  if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+  const float denom = 1.0f / (va + vb + vc);
+  return a + ab * (vb * denom) + ac * (vc * denom);
+}
+}  // namespace
+
+std::uint64_t TriangleCollider::cellKey(int x, int y, int z) const {
+  const auto part = [](int v) { return std::uint64_t(std::uint32_t(v + (1 << 20))) & 0x1FFFFFu; };
+  return part(x) | (part(y) << 21) | (part(z) << 42);
+}
+
+void TriangleCollider::build(const std::vector<MeshVertex>& vertices, const std::vector<std::uint32_t>& indices,
+                             float cellSize) {
+  cellSize_ = std::max(0.25f, cellSize);
+  triangles_.clear();
+  cells_.clear();
+  triangles_.reserve(indices.size() / 3);
+  for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+    const Triangle t{vertices[indices[i]].position, vertices[indices[i + 1]].position, vertices[indices[i + 2]].position};
+    if (length(cross(t.b - t.a, t.c - t.a)) < 1e-7f) continue;  // degenerate
+    const auto id = std::uint32_t(triangles_.size());
+    triangles_.push_back(t);
+    int lo[3], hi[3];
+    for (int k = 0; k < 3; ++k) {
+      lo[k] = int(std::floor(std::min({t.a[k], t.b[k], t.c[k]}) / cellSize_));
+      hi[k] = int(std::floor(std::max({t.a[k], t.b[k], t.c[k]}) / cellSize_));
+    }
+    for (int z = lo[2]; z <= hi[2]; ++z)
+      for (int y = lo[1]; y <= hi[1]; ++y)
+        for (int x = lo[0]; x <= hi[0]; ++x) cells_[cellKey(x, y, z)].push_back(id);
+  }
+}
+
+void TriangleCollider::nearby(const Vec3& centre, float radius, std::vector<std::uint32_t>& out) const {
+  out.clear();
+  int lo[3], hi[3];
+  for (int k = 0; k < 3; ++k) {
+    lo[k] = int(std::floor((centre[k] - radius) / cellSize_));
+    hi[k] = int(std::floor((centre[k] + radius) / cellSize_));
+  }
+  for (int z = lo[2]; z <= hi[2]; ++z)
+    for (int y = lo[1]; y <= hi[1]; ++y)
+      for (int x = lo[0]; x <= hi[0]; ++x) {
+        const auto it = cells_.find(cellKey(x, y, z));
+        if (it != cells_.end()) out.insert(out.end(), it->second.begin(), it->second.end());
+      }
+  std::sort(out.begin(), out.end());
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+}
+
+bool TriangleCollider::sphereVsTriangle(std::uint32_t triangle, const Vec3& centre, float radius, Contact& out) const {
+  const Triangle& t = triangles_[triangle];
+  const Vec3 closest = closestOnTriangle(centre, t.a, t.b, t.c);
+  const Vec3 away = centre - closest;
+  const float d2 = dot(away, away);
+  if (d2 >= radius * radius) return false;
+  const float d = std::sqrt(d2);
+  if (d > 1e-5f) {
+    out.normal = away / d;
+  } else {  // the centre is on the surface: leave along the face, upward if there is a choice
+    Vec3 n = normalize(cross(t.b - t.a, t.c - t.a));
+    if (n.y < 0) n = -n;
+    out.normal = n;
+  }
+  out.depth = radius - d;
+  return true;
+}
+
 }  // namespace fh

@@ -1,5 +1,8 @@
 #include "game/game_app.h"
 
+#include "engine/assets/gltf_loader.h"
+#include "game/content/map_def.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -84,9 +87,22 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
       if (options_.startIn == "station") session_->perform("exitShip");
     }
   }
+  if (!options_.mapPath.empty()) {
+    std::vector<std::string> mapErrors;
+    auto map = loadMap(options_.mapPath, &mapErrors);
+    if (!map) throw std::runtime_error(mapErrors.empty() ? "could not load the map" : mapErrors.front());
+    for (const auto& w : map->warnings) log::warn("map", "{}", w);
+    session_->docking().forceDock(world());  // the ship waits, clamped, while you explore
+    lastDockState_ = DockState::Docked;
+    const AssetID id = "map.play";
+    interiorPieces_[id].push_back({renderer_->uploadMesh(map->mesh), Mat4::identity()});
+    session_->addInterior(id, std::move(map->def));
+    session_->enterMap(id);
+  }
   applySettings();
   const bool directStart = options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
-                           !options_.loadPath.empty() || options_.autofly;
+                           !options_.loadPath.empty() || options_.autofly || !options_.mapPath.empty() ||
+                           !options_.shipMesh.empty();
   if (!scripted_ && !directStart) openMenu(MenuSystem::Screen::Main);
   else if (!scripted_) setMouseCapture(true);
 }
@@ -381,6 +397,15 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   };
 
   auto shipDef = loadShipDef(*manifest, scene->player.ship, &errors);
+  std::optional<MeshData> shipMeshOverride;
+  if (!options_.shipMesh.empty()) {
+    std::string err;
+    shipMeshOverride = loadGltfMesh(options_.shipMesh, &err);
+    if (!shipMeshOverride) {
+      errors.push_back(err);
+      return false;
+    }
+  }
   if (!shipDef) return false;
   auto shipMesh = loadMesh(shipDef->mesh, shipDef->materialOverrides, "ship '" + shipDef->id + "'",
                            shipDef->meshScale, shipDef->meshRotationDeg, true);
@@ -466,9 +491,13 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   WorldVisuals visuals;
   visuals.ship = [&](const ShipDef&) {
     VisualInfo v;
+    if (shipMeshOverride) {  // straight from Blender: nose along -Z, 1 unit = 1 metre
+      shipMesh->data = *shipMeshOverride;
+      shipMesh->meshFix = Mat4::identity();
+    }
     v.handle = renderer_->uploadMesh(shipMesh->data);
     v.meshFix = shipMesh->meshFix;
-    v.boundsRadius = shipMesh->data.boundsRadius() * shipDef->meshScale;
+    v.boundsRadius = shipMesh->data.boundsRadius() * (shipMeshOverride ? 1.0f : shipDef->meshScale);
     v.sockets = shipMesh->data.sockets;
     return v;
   };
@@ -768,6 +797,7 @@ void GameApp::handleAppInput() {
     log::info("render", "look: {}", looks_.profiles[size_t(activeLook_)].name);
   }
   if (input_.pressed("interact")) session_->interact();
+  if (session_->consumeMapExit()) quit_ = true;  // playing a map from Blender: back to the editor
   if (session_->consumeMarketRequest()) openMarket();
   if (input_.pressed("ui.market") && cockpit) {
     if (MarketPanel::available(*session_)) openMarket();
@@ -1530,7 +1560,7 @@ int GameApp::run() {
     const bool onFootOrSurface = !cockpit || surface;
     const InteriorDef* localScene = onFootOrSurface ? (surface ? surface : session_->activeInterior()) : nullptr;
     params.cameraPosition = view.position;
-    params.sunShadows = settings_.shadows && (!localScene || localScene->surfaceSky.has_value());
+    params.sunShadows = settings_.shadows && (!localScene || localScene->surfaceSky.has_value() || localScene->keyCastsShadows);
     params.pointShadows = settings_.shadows && localScene != nullptr;
     params.ambientOcclusion = settings_.ambientOcclusion;
     params.reflections = settings_.reflections ? 1.0f : 0.0f;

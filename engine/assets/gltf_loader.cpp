@@ -50,7 +50,7 @@ bool fail(std::string* error, const std::filesystem::path& path, const std::stri
 
 }  // namespace
 
-std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::string* error) {
+std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::string* error, GltfSceneInfo* sceneInfo) {
   cgltf_options options{};
   cgltf_data* raw = nullptr;
   const std::string pathStr = path.string();
@@ -72,7 +72,7 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
 
   // ---- Images (decoded lazily per material use, keyed by cgltf image index) ----
   std::vector<int> imageRemap(data->images_count, -2);  // -2 = not attempted
-  auto loadImage = [&](const cgltf_image* img) -> int {
+  auto loadImage = [&](const cgltf_image* img, bool linear = false) -> int {
     const auto idx = static_cast<size_t>(img - data->images);
     if (imageRemap[idx] != -2) return imageRemap[idx];
     std::optional<ImageRGBA8> decoded;
@@ -85,6 +85,7 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
       log::warn("gltf", "{}: data-URI images are not supported; using white", pathStr);
     }
     if (decoded) {
+      decoded->linear = linear;
       mesh.images.push_back(std::move(*decoded));
       imageRemap[idx] = static_cast<int>(mesh.images.size() - 1);
     } else {
@@ -106,7 +107,15 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
       m.roughness = pbr.roughness_factor;
       if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image)
         m.baseColorImage = loadImage(pbr.base_color_texture.texture->image);
+      if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texture->image)
+        m.metalRoughImage = loadImage(pbr.metallic_roughness_texture.texture->image, true);
     }
+    if (src.normal_texture.texture && src.normal_texture.texture->image)
+      m.normalImage = loadImage(src.normal_texture.texture->image, true);
+    if (src.occlusion_texture.texture && src.occlusion_texture.texture->image)
+      m.occlusionImage = loadImage(src.occlusion_texture.texture->image, true);
+    if (src.emissive_texture.texture && src.emissive_texture.texture->image)
+      m.emissiveImage = loadImage(src.emissive_texture.texture->image);
     m.emissive = {src.emissive_factor[0], src.emissive_factor[1], src.emissive_factor[2]};
     if (src.has_emissive_strength) m.emissive *= src.emissive_strength.emissive_strength;
     mesh.materials.push_back(std::move(m));
@@ -116,7 +125,7 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
   Vec3 bmin{std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
   Vec3 bmax = -bmin;
 
-  auto appendPrimitive = [&](const cgltf_primitive& prim, const Mat4& world) -> bool {
+  auto appendPrimitive = [&](MeshData& mesh, const cgltf_primitive& prim, const Mat4& world) -> bool {
     if (prim.type != cgltf_primitive_type_triangles) {
       log::warn("gltf", "{}: skipping non-triangle primitive", pathStr);
       return true;
@@ -181,12 +190,42 @@ std::optional<MeshData> loadGltfMesh(const std::filesystem::path& path, std::str
     const Mat4 world = parent * toMat4(local);
     if (node->name) {
       const std::string_view n(node->name);
-      if (n.rfind("socket_", 0) == 0 || n.rfind("hardpoint_", 0) == 0)
+      if (n.rfind("socket_", 0) == 0 || n.rfind("hardpoint_", 0) == 0 || n.rfind("engine_", 0) == 0)
         mesh.sockets.push_back({std::string(n), world.transformPoint({0, 0, 0}), quatFromMatrix(world)});
     }
+    std::string_view collide;
+    if (sceneInfo) {
+      const std::string name = node->name ? node->name : "";
+      const std::string extras = node->extras.data ? node->extras.data : "";
+      const auto found = extras.find("\"fh_collide\"");
+      if (found != std::string::npos) {
+        if (extras.find("\"none\"", found) != std::string::npos) collide = "none";
+        else if (extras.find("\"only\"", found) != std::string::npos) collide = "only";
+      }
+      if (node->light) {
+        const cgltf_light& l = *node->light;
+        GltfLightInfo li;
+        li.type = l.type == cgltf_light_type_directional ? GltfLightInfo::Type::Sun
+                  : l.type == cgltf_light_type_spot      ? GltfLightInfo::Type::Spot
+                                                         : GltfLightInfo::Type::Point;
+        li.name = name;
+        li.extras = extras;
+        li.position = world.transformPoint({0, 0, 0});
+        li.direction = normalize(world.transformDir({0, 0, -1}));
+        li.color = {l.color[0], l.color[1], l.color[2]};
+        li.intensity = l.intensity;
+        li.range = l.range;
+        sceneInfo->lights.push_back(std::move(li));
+      } else if (!extras.empty()) {
+        sceneInfo->nodes.push_back({name, extras, world.transformPoint({0, 0, 0}), quatFromMatrix(world)});
+      }
+    }
     if (node->mesh)
-      for (cgltf_size p = 0; p < node->mesh->primitives_count; ++p)
-        if (!appendPrimitive(node->mesh->primitives[p], world)) return false;
+      for (cgltf_size p = 0; p < node->mesh->primitives_count; ++p) {
+        if (collide != "only" && !appendPrimitive(mesh, node->mesh->primitives[p], world)) return false;
+        if (sceneInfo && collide != "none" && !appendPrimitive(sceneInfo->collision, node->mesh->primitives[p], world))
+          return false;
+      }
     for (cgltf_size c = 0; c < node->children_count; ++c)
       if (!visit(node->children[c], world)) return false;
     return true;

@@ -19,6 +19,7 @@ build/content_validator content
 | Interiors | `content/interiors/*.interior.json` | [interior.md](interior.md) |
 | Economy (commodities, markets, mining, saves) | `content/economy/` | [economy.md](economy.md) |
 | Audio | `content/audio/audio.json` | [audio.md](audio.md) |
+| Maps from Blender | `content/maps/*.glb` | [../BLENDER_GUIDE.md](../BLENDER_GUIDE.md) |
 | UI theme | `content/ui/theme.json` | [ui_theme.md](ui_theme.md) |
 | Weapons, upgrades, contracts | `content/combat/`, `content/economy/upgrades.json`, `content/missions/` | [combat.md](combat.md) |
 

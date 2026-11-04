@@ -9,6 +9,10 @@ layout(location = 4) in vec3 vObjNormal;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 1, binding = 0) uniform sampler2D baseColorTex;
+layout(set = 1, binding = 1) uniform sampler2D normalTex;
+layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;  // G roughness, B metallic
+layout(set = 1, binding = 3) uniform sampler2D emissiveTex;
+layout(set = 1, binding = 4) uniform sampler2D occlusionTex;   // R
 layout(set = 2, binding = 0) uniform sampler2DArrayShadow sunShadowMap;
 layout(set = 2, binding = 1) uniform samplerCubeArrayShadow pointShadowMap;
 layout(set = 2, binding = 2) uniform sampler2D aoTex;
@@ -17,7 +21,7 @@ layout(set = 2, binding = 3) uniform samplerCube envMap;
 layout(push_constant) uniform Push {
   vec4 baseColor;
   vec4 emissiveMetallic;
-  vec4 params;  // x roughness, y panel lines 0..1
+  vec4 params;  // x roughness, y panel lines 0..1, z has a base colour texture, w has a normal map
 } pc;
 
 const float PI = 3.14159265;
@@ -125,16 +129,30 @@ float pointShadow(int i, vec3 P, vec3 lightPos, float range, float noise) {
 
 void main() {
   vec4 base = pc.baseColor * texture(baseColorTex, vUv);
-  float metallic = clamp(pc.emissiveMetallic.a, 0.0, 1.0);
-  float rough = pc.params.x;
+  vec4 mr = texture(metalRoughTex, vUv);
+  float metallic = clamp(pc.emissiveMetallic.a * mr.b, 0.0, 1.0);
+  float rough = pc.params.x * mr.g;
+  vec3 emissive = pc.emissiveMetallic.rgb * texture(emissiveTex, vUv).rgb;
 
   vec3 N = normalize(vNormal);
   vec3 V = normalize(-vPos);          // camera at origin in render space
   if (dot(N, V) < 0.0) N = -N;        // tolerate thin/double-sided geometry
   const vec3 Ng = N;                  // before the bump: shadow lookups use the true surface
+  if (pc.params.w > 0.5) {
+    // Normal map without stored tangents: the frame comes from screen derivatives (Schueler 2013).
+    vec3 tn = texture(normalTex, vUv).xyz * 2.0 - 1.0;
+    vec3 dp1 = dFdx(vPos), dp2 = dFdy(vPos);
+    vec2 duv1 = dFdx(vUv), duv2 = dFdy(vUv);
+    vec3 dp2perp = cross(dp2, N), dp1perp = cross(N, dp1);
+    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+    float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
+    if (invmax < 1e12) N = normalize(mat3(T * invmax, B * invmax, N) * tn);
+  }
 
   // Worn, dusty, used: mottled albedo and roughness, panel seams on built surfaces, fine bump.
-  float detail = frame.lighting.z * (dot(pc.emissiveMetallic.rgb, vec3(1.0)) > 0.01 ? 0.0 : 1.0);
+  // Real textures win: procedural detail is only for models that have none.
+  float detail = pc.params.z > 0.5 ? 0.0 : frame.lighting.z * (dot(pc.emissiveMetallic.rgb, vec3(1.0)) > 0.01 ? 0.0 : 1.0);
   float seamShade = 0.0;
   if (detail > 0.0) {
     float px = length(fwidth(vObjPos));
@@ -178,6 +196,7 @@ void main() {
   float noise = ign(gl_FragCoord.xy);
   float ao = frame.lighting.x > 0.0 ? texture(aoTex, gl_FragCoord.xy * frame.viewport.zw).r : 1.0;
   ao *= 1.0 - seamShade * 0.35;
+  ao *= texture(occlusionTex, vUv).r;
 
   vec3 diffuseColor = base.rgb * (1.0 - metallic);
   vec3 f0 = mix(vec3(0.04), base.rgb, metallic);
@@ -234,7 +253,7 @@ void main() {
   }
   float specAo = clamp(ao * ao + 0.05, 0.0, 1.0);
   vec3 color = direct * mix(1.0, ao, 0.3) + local * mix(1.0, ao, 0.55) + (fill + rimLight) * ao +
-               (ambient + envDiffuse) * diffuseColor * ao + envSpec * specAo + pc.emissiveMetallic.rgb;
+               (ambient + envDiffuse) * diffuseColor * ao + envSpec * specAo + emissive;
 
   outColor = vec4(applyFog(color, length(vPos)), base.a);  // linear HDR radiance
 }

@@ -71,7 +71,7 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0
         run: |
           root="$PWD"
-          for s in "options_rebind:" "terminal:--start-docked" "graphics_save:--start-docked" "full_stop:"; do
+          for s in "options_rebind:" "terminal:--start-docked" "graphics_save:--start-docked" "full_stop:" "map_sample:--map $root/content/maps/derelict_sample.glb"; do
             name="${s%%:*}"; flag="${s#*:}"
             dir="$root/ui_run/$name"; mkdir -p "$dir"; cd "$dir"
             # Ray-marched clouds are too slow on a software GPU for runs this long.

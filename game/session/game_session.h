@@ -77,6 +77,8 @@ class GameSession {
   ActionResult interact();            // uses the focused interactable
   ActionResult perform(const std::string& action);
   ActionResult leaveSeat();           // cockpit -> ship interior (docked only)
+  ActionResult enterMap(const AssetID& id);  // an interior added with addInterior, at spawn "start"
+  bool consumeMapExit() { const bool r = mapExitRequested_; mapExitRequested_ = false; return r; }
 
   // Message shown to the player (prompts, refusals, terminal text) with its timestamp.
   const std::string& notice() const { return notice_; }
@@ -160,6 +162,7 @@ class GameSession {
   TravelDrive travel_;
   Landing landing_;
   Location location_ = Location::Cockpit;
+  bool mapExitRequested_ = false;
   AssetID shipInterior_;
   std::map<AssetID, InteriorDef> interiors_;
   AssetID activeInteriorId_;

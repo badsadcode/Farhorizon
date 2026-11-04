@@ -10,3 +10,5 @@ imgui.ini
 farhorizon.log
 /screenshots/
 settings.json
+tools/blender/farhorizon_editor.zip
+__pycache__/

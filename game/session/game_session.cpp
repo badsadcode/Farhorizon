@@ -105,6 +105,14 @@ ActionResult GameSession::leaveSeat() {
 }
 
 ActionResult GameSession::perform(const std::string& action) {
+  if (action.rfind("say:", 0) == 0) {  // a data log in a map
+    notify(action.substr(4));
+    return {true, notice_};
+  }
+  if (action == "leaveMap") {
+    mapExitRequested_ = true;
+    return {true, ""};
+  }
   if (action == "takeSeat") {
     if (location_ != Location::ShipInterior) return fail("The pilot seat is aboard your ship");
     location_ = Location::Cockpit;
@@ -136,6 +144,10 @@ ActionResult GameSession::perform(const std::string& action) {
     return {true, "Market terminal"};
   }
   return fail("Unknown action '" + action + "'");
+}
+
+ActionResult GameSession::enterMap(const AssetID& id) {
+  return enterInterior(id, "start", Location::StationInterior);
 }
 
 const Interactable* GameSession::focusedInteractable() const {
@@ -412,7 +424,11 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   if (wasParked_ && !*wasParked_ && parkedNow) onParked();
   wasParked_ = parkedNow;
   if (location_ != Location::Cockpit) {
-    stepCharacter(character_, characterInput_, characterParams_, colliders_, dt, terrain_.valid() ? &terrain_ : nullptr);
+    {
+      const InteriorDef* interior = activeInterior();
+      stepCharacter(character_, characterInput_, characterParams_, colliders_, dt, terrain_.valid() ? &terrain_ : nullptr,
+                    interior ? interior->meshCollider.get() : nullptr);
+    }
     characterInput_.yawDelta = characterInput_.pitchDelta = 0;  // consumed
     characterInput_.jump = false;
     // Safety net: never let a bad collider set drop the player into the void.

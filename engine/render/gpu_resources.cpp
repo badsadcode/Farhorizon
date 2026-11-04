@@ -1,5 +1,7 @@
 #include "engine/render/gpu_resources.h"
 
+#include <algorithm>
+
 #include <atomic>
 #include <cstring>
 
@@ -151,6 +153,53 @@ GpuImage createTextureRGBA8(VkContext& ctx, const std::uint8_t* pixels, std::uin
     imageBarrier(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                  VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  });
+  destroy(ctx, staging);
+  return img;
+}
+
+GpuImage createMaterialTexture(VkContext& ctx, const std::uint8_t* pixels, std::uint32_t w, std::uint32_t h, bool linear) {
+  const VkDeviceSize size = VkDeviceSize(w) * h * 4;
+  GpuBuffer staging = createBuffer(ctx, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
+  std::memcpy(staging.mapped, pixels, size);
+  std::uint32_t mips = 1;
+  for (std::uint32_t d = std::max(w, h); d > 1; d /= 2) ++mips;
+  ImageDesc desc;
+  desc.extent = {w, h};
+  desc.format = linear ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8A8_SRGB;
+  desc.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  desc.mips = mips;
+  GpuImage img = createImage(ctx, desc);
+  ctx.immediateSubmit([&](VkCommandBuffer cmd) {
+    const VkImageAspectFlags color = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrierRange(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
+                      VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, color, 0, mips, 0, 1);
+    VkBufferImageCopy region{};
+    region.imageSubresource = {color, 0, 0, 1};
+    region.imageExtent = {w, h, 1};
+    vkCmdCopyBufferToImage(cmd, staging.buffer, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    std::int32_t mw = std::int32_t(w), mh = std::int32_t(h);
+    for (std::uint32_t mip = 1; mip < mips; ++mip) {
+      imageBarrierRange(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT, color, mip - 1, 1, 0, 1);
+      VkImageBlit blit{};
+      blit.srcSubresource = {color, mip - 1, 0, 1};
+      blit.srcOffsets[1] = {mw, mh, 1};
+      mw = std::max(1, mw / 2);
+      mh = std::max(1, mh / 2);
+      blit.dstSubresource = {color, mip, 0, 1};
+      blit.dstOffsets[1] = {mw, mh, 1};
+      vkCmdBlitImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                     VK_FILTER_LINEAR);
+    }
+    if (mips > 1)
+      imageBarrierRange(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, color, 0, mips - 1, 0, 1);
+    imageBarrierRange(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, color, mips - 1, 1, 0, 1);
   });
   destroy(ctx, staging);
   return img;

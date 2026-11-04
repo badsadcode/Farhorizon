@@ -176,6 +176,8 @@ class Renderer {
     float metallic = 0.0f;
     float roughness = 0.5f;
     float panels = 1.0f;
+    bool textured = false;   // has its own base colour: no procedural grime
+    bool normalMapped = false;
   };
   struct GpuMesh {
     GpuBuffer vertices, indices;
@@ -215,6 +217,8 @@ class Renderer {
   std::filesystem::path shaderDir_;
   VkDescriptorSetLayout frameLayout_ = VK_NULL_HANDLE;
   VkDescriptorSetLayout materialLayout_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout meshMaterialLayout_ = VK_NULL_HANDLE;
+  GpuImage flatNormal_;
   VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
   VkPipelineLayout scenePipelineLayout_ = VK_NULL_HANDLE;  // sky + stars
   VkPipelineLayout meshPipelineLayout_ = VK_NULL_HANDLE;

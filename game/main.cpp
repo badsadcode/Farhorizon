@@ -28,6 +28,8 @@ void printUsage() {
       "  --start-in <where>     debug: start on foot: 'ship', 'station' or 'surface'\n"
       "  --load <file>          load a save game (e.g. saves/autosave.json)\n"
       "  --continue             load saves/quicksave.json\n"
+      "  --map <file.glb>       start on foot in a map made with the Blender add-on\n"
+      "  --ship-mesh <file.glb> fly this model instead of the ship's own\n"
       "  --settings <file>      settings file (default settings.json)\n"
       "  --ui-script <file>     developer: drive the UI with scripted input (game/ui/ui_script.h)\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
@@ -89,6 +91,8 @@ int main(int argc, char** argv) {
     else if (a == "--load") o.loadPath = next();
     else if (a == "--continue") o.loadPath = "saves/quicksave.json";
     else if (a == "--settings") o.settingsPath = next();
+    else if (a == "--map") o.mapPath = next();
+    else if (a == "--ship-mesh") o.shipMesh = next();
     else if (a == "--ui-script") o.uiScript = next();
     else if (a == "--frames") o.exitAfterFrames = std::atoi(next());
     else if (a == "--screenshot") o.screenshotOnExit = std::filesystem::path(next());

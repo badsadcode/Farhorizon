@@ -50,6 +50,8 @@ VkImageView createSubView(VkContext& ctx, const GpuImage& image, VkImageAspectFl
                           std::uint32_t layer);
 // RGBA8 sRGB texture uploaded via staging, left in SHADER_READ_ONLY_OPTIMAL.
 GpuImage createTextureRGBA8(VkContext& ctx, const std::uint8_t* pixels, std::uint32_t w, std::uint32_t h);
+// Material texture with a full mip chain. `linear` is for data maps (normal, metallic-roughness...).
+GpuImage createMaterialTexture(VkContext& ctx, const std::uint8_t* pixels, std::uint32_t w, std::uint32_t h, bool linear);
 void destroy(VkContext& ctx, GpuImage& img);
 
 void imageBarrier(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,

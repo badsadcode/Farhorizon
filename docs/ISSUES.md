@@ -48,3 +48,7 @@
 | 44 | open | fx | Particle tuning for the travel drive is in code, not data. Particle textures are generated, with no way to supply your own image yet. |
 | 45 | open | fx | An exhaust ribbon disappears at once when an NPC ship is destroyed or despawns, instead of fading. The explosion usually covers it. |
 | 46 | open | fx | Tunnel, dust and ribbon strengths are in shaders and code, not data. There is no option to turn off the tunnel for motion-sensitive players yet. |
+| 47 | open | maps | Maps open only with `--map` or the add-on's Play. Nothing in the game world leads to one yet. |
+| 48 | open | render | No transparency in materials: everything is opaque. Spot lights act as point lights, and Area lights do not export. |
+| 49 | open | maps | A map's visible geometry merges into one mesh, with no per-object culling, and each lamp's shadow pass redraws it. Very large maps will need splitting. |
+| 50 | info | blender | The add-on was run in Blender 5.1 only. It declares 4.2 as the minimum, untested there. |

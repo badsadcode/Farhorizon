@@ -4,12 +4,12 @@ _Agreed with the owner, 2026-11-04. The order matters: each step makes the next 
 status lives in `STATUS.md`._
 
 1. **Visuals (in progress).** Shadows, ambient occlusion, reflections, surface detail. ADR 0011.
-2. **Blender as the content and point-of-interest editor.**
+2. **Blender as the content and point-of-interest editor.** First version done in 0.8.0 (ADR 0012).
+   Still to come: docking with a map in the game world, permanent ships from the add-on.
    * Materials and textures from Blender: base colour, normal, metallic-roughness, emissive,
      occlusion. Lights via `KHR_lights_punctual`.
-   * Whole maps as `.glb` files with naming conventions: `COL_` colliders, `SPAWN_`, `USE_`, later
-     `ENEMY_` and `LOOT_` empties.
-   * A scale-reference scene (1.8 m player, doorways, ship bounds) and an artist guide.
+   * Whole maps as `.glb` files, with entities placed through the add-on and solid meshes by default.
+   * A scale reference (1.8 m player, doorway) and an artist guide: `docs/BLENDER_GUIDE.md`.
 3. **Points of interest and FPS gameplay.** Dock with or land near a site, explore it on foot, fight
    and loot. For example a derelict in space. Needs first-person weapons, a damage model on foot,
    enemy AI with navigation, and loot tables.

@@ -1,3 +1,4 @@
+#include "game/content/map_def.h"
 // content_validator: loads the asset manifest and every ship/scene/mesh it references,
 // printing actionable errors. Exit code 0 = content OK. Intended for CI and pre-commit use.
 #include <cstdio>
@@ -19,6 +20,16 @@
 #include "game/progression/upgrades.h"
 
 int main(int argc, char** argv) {
+  if (argc == 3 && std::string(argv[1]) == "--map") {  // the Blender add-on checks its export here
+    std::vector<std::string> errors;
+    const auto map = fh::loadMap(argv[2], &errors);
+    for (const auto& e : errors) std::printf("ERROR: %s\n", e.c_str());
+    if (!map) return 1;
+    for (const auto& w : map->warnings) std::printf("WARNING: %s\n", w.c_str());
+    std::printf("OK: %zu triangles, %zu lights, %zu usable things, %zu markers, %zu images\n", map->mesh.triangleCount(),
+                map->def.lights.size(), map->def.interactables.size(), map->markers.size(), map->mesh.images.size());
+    return 0;
+  }
   if (argc < 2) {
     std::fprintf(stderr, "usage: content_validator <content-dir>\n");
     return 2;

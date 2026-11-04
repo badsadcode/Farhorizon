@@ -44,6 +44,7 @@ struct CharacterState {
 
 // `terrain` (optional): walkable heightfield; slopes steeper than ~55 degrees block movement.
 void stepCharacter(CharacterState& s, const CharacterInput& in, const CharacterParams& p,
-                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain = nullptr);
+                   const std::vector<Aabb>& colliders, float dt, const HeightField* terrain = nullptr,
+                   const TriangleCollider* mesh = nullptr);
 
 }  // namespace fh
