@@ -76,6 +76,9 @@ class Reader {
       d.blinkHz = float(num(l, "blinkHz", false, d.blinkHz));
       d.phase = float(num(l, "phase", false, d.phase));
       d.duty = float(num(l, "duty", false, d.duty));
+      d.range = float(num(l, "range", false, d.range));
+      d.intensity = float(num(l, "intensity", false, d.intensity));
+      d.flicker = float(num(l, "flicker", false, d.flicker));
       if (d.size <= 0 || d.blinkHz < 0 || d.duty <= 0 || d.duty > 1) error("light: size > 0, blinkHz >= 0, duty in (0,1]");
       out.push_back(d);
     }

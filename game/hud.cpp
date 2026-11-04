@@ -266,7 +266,7 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
                               : "Land on the pad: slow, level, nose forward   K autopilot   L cancel";
         break;
       case DockState::Capture: hint = "Clamps engaging..."; break;
-      case DockState::Docked: hint = "DOCKED   F leave seat   L undock"; break;
+      case DockState::Docked: hint = "DOCKED   M market   F leave seat   L undock   F7 save"; break;
       case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
     }
     if (!hint.empty()) centeredText(o, cx, 40, hint, dk.state() == DockState::Docked ? kNav : kPrimary);
@@ -275,6 +275,46 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
       centeredText(o, cx, c.height * 0.78f, "COMMS  " + dk.message(), kNav);
     else if (simT - gs.noticeTime() < 4.0 && !gs.notice().empty())
       centeredText(o, cx, c.height * 0.78f, gs.notice(), kPrimary);
+  }
+
+  // ---- Economy + mining ----
+  if (c.session) {
+    const GameSession& gs = *c.session;
+    const float scale = 2.0f;
+    std::string cr = std::to_string(gs.credits());
+    for (int i = int(cr.size()) - 3; i > 0; i -= 3) cr.insert(size_t(i), ",");
+    const std::string line = std::format("CR {}    HOLD {:.0f}/{:.0f} t", cr, gs.cargo().usedTons(),
+                                         gs.cargo().capacityTons());
+    shadowText(o, c.width - OverlayBuilder::textWidth(line, scale) - 16, 16, line,
+               gs.cargo().freeTons() < 1.0f ? kWarn : kPrimary, scale);
+    // Target composition (after a scan).
+    if (auto t = c.world.target(); t && t->kind == TargetRef::Kind::Asteroid) {
+      const Asteroid& a = c.world.asteroids()[t->index];
+      std::string info;
+      if (gs.mining().isScanned(t->index)) {
+        const CommodityDef* cd = gs.commodities().find(a.resource);
+        info = a.resource.empty() ? std::string("SCAN: barren rock")
+                                  : std::format("SCAN: {}  yield {} t  hardness {:.1f}", cd ? cd->name : a.resource,
+                                                a.yield, a.hardness);
+      } else if (gs.mining().scanning()) {
+        info = std::format("SCANNING {:.0f}%", gs.mining().scanProgress(c.world.simulationTime()) * 100.0f);
+      } else {
+        info = "R  scan target";
+      }
+      shadowText(o, c.width - OverlayBuilder::textWidth(info, scale) - 16, 38, info, kField, scale);
+    }
+    // Mining feedback.
+    const Mining& mn = gs.mining();
+    if (mn.beamActive()) {
+      const float bw = 160, bx = cx - bw * 0.5f, by = c.height * 0.62f;
+      centeredText(o, cx, by - 22, "MINING", kPrimary);
+      o.rect(bx, by, bw, 6, {20, 16, 10, 160});
+      o.rect(bx, by, bw * std::clamp(mn.progress(), 0.0f, 1.0f), 6, kPrimary);
+    } else if (!mn.status().empty()) {
+      centeredText(o, cx, c.height * 0.62f, mn.status(), kWarn);
+    }
+    if (gs.lastMiningEvents().cargoFull || (!mn.chunks().empty() && gs.cargo().freeTons() < 1.0f))
+      centeredText(o, cx, c.height * 0.66f, "CARGO HOLD FULL - sell at a station (M when docked)", kWarn);
   }
 
   // ---- Status line ----

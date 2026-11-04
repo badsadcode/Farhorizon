@@ -16,7 +16,18 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
   vec4 fillDir;        // xyz unit direction toward the fill light (bounce/nebula), w unused
   vec4 fillColor;      // rgb fill colour * intensity (soft diffuse only)
   vec4 rimColorPower;  // rgb rim (edge) light colour, a exponent
+  vec4 fogColorDensity;  // rgb fog colour (linear), a density per metre (0 = off)
+  vec4 lightCount;       // x = number of point lights in use
+  vec4 pointPosRange[8]; // xyz camera-relative position, w range (m)
+  vec4 pointColor[8];    // rgb colour * intensity
 } frame;
+
+vec3 applyFog(vec3 color, float dist) {
+  float d = frame.fogColorDensity.a;
+  if (d <= 0.0) return color;
+  float f = 1.0 - exp(-d * dist);
+  return mix(color, frame.fogColorDensity.rgb, f);
+}
 
 vec3 tonemapACES(vec3 x) {
   // Narkowicz 2015 ACES fit. Output is linear; the sRGB swapchain encodes it.

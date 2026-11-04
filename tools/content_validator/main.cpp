@@ -12,6 +12,8 @@
 #include "game/content/ship_def.h"
 #include "game/content/visual_profile.h"
 #include "game/content/interior_def.h"
+#include "game/economy/economy.h"
+#include "game/audio_director.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -31,6 +33,14 @@ int main(int argc, char** argv) {
         fh::loadShipDef(*manifest, id, &errors);
       } else if (entry.type == "scene") {
         fh::loadSceneDef(*manifest, id, &errors);  // also checks referenced ships and meshes
+      } else if (entry.type == "audio") {
+        fh::AudioDirector director;
+        director.load(*manifest, id, &errors);
+      } else if (entry.type == "commodities") {
+        fh::loadCommodities(*manifest, id, &errors);
+      } else if (entry.type == "market") {
+        if (auto db = fh::loadCommodities(*manifest, "economy.commodities", &errors))
+          fh::loadMarketDef(*manifest, id, *db, &errors);
       } else if (entry.type == "interior") {
         fh::loadInteriorDef(*manifest, id, &errors);
       } else if (entry.type == "visuals") {

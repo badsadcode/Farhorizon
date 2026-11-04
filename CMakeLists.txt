@@ -46,6 +46,11 @@ add_library(fh_core STATIC
   game/content/interior_def.cpp
   game/session/game_session.cpp
   game/session/world_builder.cpp
+  game/economy/economy.cpp
+  game/space/mining.cpp
+  game/persistence/save_game.cpp
+  engine/audio/mixer.cpp
+  game/audio_director.cpp
 )
 target_include_directories(fh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fh_core PUBLIC fh_third_party)
@@ -58,6 +63,7 @@ if(FH_BUILD_GAME)
   add_library(fh_engine STATIC
     engine/platform/window.cpp
     engine/platform/input.cpp
+    engine/audio/audio_device.cpp
     engine/render/vk_context.cpp
     engine/render/gpu_resources.cpp
     engine/render/renderer.cpp
@@ -80,6 +86,7 @@ if(FH_BUILD_GAME)
     game/camera_rig.cpp
     game/ship_controller.cpp
     game/hud.cpp
+    game/market_ui.cpp
   )
   target_link_libraries(farhorizon PRIVATE fh_engine)
   add_dependencies(farhorizon fh_shaders)
@@ -112,6 +119,9 @@ if(FH_BUILD_TESTS)
     tests/unit/test_world.cpp
     tests/unit/test_character.cpp
     tests/unit/test_docking.cpp
+    tests/unit/test_economy.cpp
+    tests/unit/test_stage4.cpp
+    tests/unit/test_audio.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

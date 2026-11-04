@@ -63,6 +63,7 @@ struct DockingBayDef {
 
 struct DockingDef {
   AssetID interior;               // station interior scene entered through the airlock
+  AssetID market;                 // station market (optional)
   float clearanceRange = 3000.0f; // metres from the prop centre
   float captureDistance = 12.0f;  // metres from the bay point
   float captureSpeed = 6.0f;      // m/s
@@ -90,7 +91,15 @@ struct PropDef {
   std::optional<DockingDef> docking;
 };
 
+struct AsteroidResourceDef {
+  std::string commodity;
+  float weight = 1.0f;          // relative chance of being an asteroid's primary resource
+};
+
 struct AsteroidFieldDef {
+  std::vector<AsteroidResourceDef> resources;  // empty = not mineable
+  float yieldPerMetre = 1.0f;   // mineable units per metre of asteroid radius
+  float hardnessMin = 0.8f, hardnessMax = 1.6f;
   std::string id;
   std::string name;
   SystemPosition center;
@@ -124,6 +133,7 @@ struct SceneDef {
   AmbientDef ambient;
   SkyDef sky;
   float exposure = 1.0f;
+  std::int64_t startingCredits = 500;
   double rebaseDistance = 4096.0;
   CameraDef camera;
   PlayerStartDef player;
@@ -148,6 +158,7 @@ struct BenchmarkDef {
   std::string startIn;     // "", "ship" or "station": on-foot benchmark (starts docked)
   float lookTurnDegPerSec = 0.0f;  // on-foot: slow camera pan
   bool autoDock = false;   // request docking and engage the approach autopilot as soon as cleared
+  bool mine = false;       // target the nearest asteroid, face it and hold the mining laser
 };
 
 std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, const AssetID& id,

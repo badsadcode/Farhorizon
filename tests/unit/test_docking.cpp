@@ -3,6 +3,7 @@
 
 #include "engine/assets/asset_manifest.h"
 #include "game/content/interior_def.h"
+#include "game/economy/economy.h"
 #include "game/session/game_session.h"
 #include "game/session/world_builder.h"
 #include "test_framework.h"
@@ -40,6 +41,13 @@ std::optional<Fixture> makeFixture(const DVec3& startOffsetFromStation) {
     if (!def) return std::nullopt;
     f.session->addInterior(id, *def);
   }
+  auto db = loadCommodities(*m, "economy.commodities", &errors);
+  if (!db) return std::nullopt;
+  f.session->setEconomy(*db, scene->startingCredits);
+  for (const auto& p : scene->props)
+    if (p.docking && !p.docking->market.empty())
+      if (auto md = loadMarketDef(*m, p.docking->market, f.session->commodities(), &errors))
+        f.session->addMarket(p.docking->market, *md);
   for (auto& e : errors) std::fprintf(stderr, "    fixture: %s\n", e.c_str());
   return f;
 }
@@ -164,6 +172,7 @@ TEST(stage3_dock_walk_launch_loop_20_times) {
     CHECK(walkTo(s, terminal->position.x, terminal->position.z - 1.5f, 30.0f));
     lookAt(s, terminal->position);
     CHECK(s.interact().ok);
+    CHECK(s.consumeMarketRequest());
     CHECK(walkTo(s, spawn.x, terminal->position.z - 1.5f, 30.0f));
     CHECK(walkTo(s, board->position.x + 1.2f, board->position.z, 30.0f));
     lookAt(s, board->position);

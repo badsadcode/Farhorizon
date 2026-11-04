@@ -49,6 +49,8 @@ struct InteriorLighting {
   Vec3 rimColor{0.0f, 0.0f, 0.0f};
   float rimPower = 3.0f;
   float exposure = 1.0f;
+  Vec3 fogColor{0, 0, 0};
+  float fogDensity = 0.0f;   // per metre
 };
 
 struct InteriorDef {

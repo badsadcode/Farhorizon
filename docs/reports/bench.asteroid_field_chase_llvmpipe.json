@@ -1,14 +1,14 @@
 {
-  "avgCpuMs": 112.0317948068181,
-  "avgFps": 8.926037485379476,
-  "avgGpuMs": 109.96454696590908,
+  "avgCpuMs": 109.41849228888887,
+  "avgFps": 9.139222987644358,
+  "avgGpuMs": 107.47677384444448,
   "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
   "drawCalls": 24,
-  "frames": 88,
-  "maxCpuMs": 136.459977,
-  "maxGpuMs": 166.92138,
-  "minCpuMs": 89.848772,
-  "p99CpuMs": 136.459977,
+  "frames": 90,
+  "maxCpuMs": 141.173298,
+  "maxGpuMs": 188.238825,
+  "minCpuMs": 88.33872500000001,
+  "p99CpuMs": 141.173298,
   "scenario": "bench.asteroid_field_chase",
-  "triangles": 60185
+  "triangles": 56985
 }

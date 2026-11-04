@@ -70,6 +70,7 @@ bool InputState::pressed(const std::string& action) const {
 void InputState::beginFrame() {
   std::fill(keysPressed_.begin(), keysPressed_.end(), false);
   mouseDx_ = mouseDy_ = wheel_ = 0;
+  mouseLeftPressed_ = false;
 }
 
 void InputState::handleEvent(const SDL_Event& e) {
@@ -86,9 +87,16 @@ void InputState::handleEvent(const SDL_Event& e) {
     case SDL_EVENT_MOUSE_MOTION:
       mouseDx_ += e.motion.xrel;
       mouseDy_ += e.motion.yrel;
+      mouseX_ = e.motion.x;
+      mouseY_ = e.motion.y;
       break;
     case SDL_EVENT_MOUSE_WHEEL: wheel_ += e.wheel.y; break;
-    case SDL_EVENT_MOUSE_BUTTON_DOWN: mouseButtons_ |= SDL_BUTTON_MASK(e.button.button); break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+      mouseButtons_ |= SDL_BUTTON_MASK(e.button.button);
+      if (e.button.button == SDL_BUTTON_LEFT) mouseLeftPressed_ = true;
+      mouseX_ = e.button.x;
+      mouseY_ = e.button.y;
+      break;
     case SDL_EVENT_MOUSE_BUTTON_UP: mouseButtons_ &= ~SDL_BUTTON_MASK(e.button.button); break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
       std::fill(keysDown_.begin(), keysDown_.end(), false);

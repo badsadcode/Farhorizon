@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "ambienceGain": 0.85,
+  "effectsGain": 0.9,
+  "engineGain": 0.65,
+  "uiGain": 0.55,
+  "sounds": {
+    "hull_hum": {
+      "file": "audio/hull_hum.wav",
+      "bus": "ambience",
+      "gain": 0.55
+    },
+    "vents": {
+      "file": "audio/vents.wav",
+      "bus": "ambience",
+      "gain": 0.45
+    },
+    "creak_0": {
+      "file": "audio/creak_0.wav",
+      "bus": "ambience",
+      "gain": 0.55
+    },
+    "creak_1": {
+      "file": "audio/creak_1.wav",
+      "bus": "ambience",
+      "gain": 0.55
+    },
+    "creak_2": {
+      "file": "audio/creak_2.wav",
+      "bus": "ambience",
+      "gain": 0.55
+    },
+    "hangar_drone": {
+      "file": "audio/hangar_drone.wav",
+      "bus": "ambience",
+      "gain": 0.6
+    },
+    "space_void": {
+      "file": "audio/space_void.wav",
+      "bus": "ambience",
+      "gain": 0.5
+    },
+    "engine_loop": {
+      "file": "audio/engine_loop.wav",
+      "bus": "engine",
+      "gain": 0.55
+    },
+    "laser_loop": {
+      "file": "audio/laser_loop.wav",
+      "bus": "effects",
+      "gain": 0.45
+    },
+    "clamp": {
+      "file": "audio/clamp.wav",
+      "bus": "effects",
+      "gain": 0.9
+    },
+    "airlock": {
+      "file": "audio/airlock.wav",
+      "bus": "effects",
+      "gain": 0.8
+    },
+    "ui_beep": {
+      "file": "audio/ui_beep.wav",
+      "bus": "ui",
+      "gain": 0.5
+    },
+    "scoop": {
+      "file": "audio/scoop.wav",
+      "bus": "effects",
+      "gain": 0.5
+    },
+    "radio_blip": {
+      "file": "audio/radio_blip.wav",
+      "bus": "ui",
+      "gain": 0.6
+    },
+    "warning": {
+      "file": "audio/warning.wav",
+      "bus": "ui",
+      "gain": 0.5
+    }
+  },
+  "events": {
+    "clamp": "clamp",
+    "impact": "clamp",
+    "airlock": "airlock",
+    "ui": "ui_beep",
+    "radio": "radio_blip",
+    "scoop": "scoop",
+    "warning": "warning"
+  },
+  "locations": {
+    "space": {
+      "beds": [
+        {
+          "sound": "space_void",
+          "gain": 1.0
+        }
+      ],
+      "random": {
+        "sounds": [
+          "creak_2"
+        ],
+        "minInterval": 40,
+        "maxInterval": 90,
+        "gain": 0.35
+      }
+    },
+    "interior.sparrow": {
+      "beds": [
+        {
+          "sound": "hull_hum",
+          "gain": 1.0
+        },
+        {
+          "sound": "vents",
+          "gain": 0.9
+        }
+      ],
+      "random": {
+        "sounds": [
+          "creak_0",
+          "creak_1",
+          "creak_2"
+        ],
+        "minInterval": 12,
+        "maxInterval": 35,
+        "gain": 0.8
+      }
+    },
+    "interior.kestrel_hangar": {
+      "beds": [
+        {
+          "sound": "hangar_drone",
+          "gain": 1.0
+        },
+        {
+          "sound": "vents",
+          "gain": 0.5
+        }
+      ],
+      "random": {
+        "sounds": [
+          "creak_0",
+          "creak_1"
+        ],
+        "minInterval": 15,
+        "maxInterval": 40,
+        "gain": 1.0
+      }
+    }
+  }
+}

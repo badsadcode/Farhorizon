@@ -100,6 +100,20 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
 
   d.materialOverrides = r.materialOverrides(j);
   d.lights = r.lights(j);
+  if (j.contains("mining") && j["mining"].is_object()) {
+    const auto& m = j["mining"];
+    MiningParams& mp = d.mining;
+    mp.range = float(r.num(m, "range", false, mp.range));
+    mp.unitsPerSecond = float(r.num(m, "unitsPerSecond", false, mp.unitsPerSecond));
+    mp.coneDeg = float(r.num(m, "coneDeg", false, mp.coneDeg));
+    mp.scoopRadius = float(r.num(m, "scoopRadius", false, mp.scoopRadius));
+    mp.maxChunks = int(r.num(m, "maxChunks", false, mp.maxChunks));
+    mp.chunkLifetime = float(r.num(m, "chunkLifetime", false, mp.chunkLifetime));
+    mp.chunkSpeed = float(r.num(m, "chunkSpeed", false, mp.chunkSpeed));
+    mp.scanSeconds = float(r.num(m, "scanSeconds", false, mp.scanSeconds));
+    if (mp.range <= 0 || mp.unitsPerSecond <= 0 || mp.maxChunks < 1 || mp.maxChunks > 500)
+      r.error("mining: range/unitsPerSecond > 0 and maxChunks in 1..500");
+  }
   if (j.contains("engineGlow") && j["engineGlow"].is_object()) {
     const auto& g = j["engineGlow"];
     if (g.contains("sockets") && g["sockets"].is_array())

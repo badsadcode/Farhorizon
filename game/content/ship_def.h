@@ -10,6 +10,7 @@
 #include "game/content/light_def.h"
 #include "game/content/material_override.h"
 #include "game/ships/flight_model.h"
+#include "game/space/mining_params.h"
 
 namespace fh {
 
@@ -47,6 +48,7 @@ struct ShipDef {
   std::map<std::string, SocketDef> sockets;  // fallbacks when the mesh has no socket nodes
   std::vector<LightDef> lights;              // ship space
   EngineGlowDef engineGlow;
+  MiningParams mining;
   std::vector<std::string> mounts;
 };
 

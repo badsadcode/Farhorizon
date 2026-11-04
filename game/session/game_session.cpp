@@ -83,9 +83,9 @@ ActionResult GameSession::perform(const std::string& action) {
     return enterInterior(shipInterior_, "airlock", Location::ShipInterior);
   }
   if (action == "terminal") {
-    notice_ = "Station services: market, contracts and repairs open in a later update.";
-    noticeTime_ = world_->simulationTime();
-    return {true, notice_};
+    if (!dockedMarket()) return fail("Terminal offline: this station has no market");
+    marketRequested_ = true;
+    return {true, "Market terminal"};
   }
   return fail("Unknown action '" + action + "'");
 }
@@ -119,10 +119,41 @@ ActionResult GameSession::interact() {
   return perform(it->action);
 }
 
-void GameSession::fixedUpdate(float dt) {
+void GameSession::setEconomy(CommodityDb db, std::int64_t credits) {
+  commodities_ = std::move(db);
+  credits_ = credits;
+  cargo_ = CargoHold(&commodities_, world_->player().def.cargoCapacityTons);
+  mining_.setParams(world_->player().def.mining);
+}
+
+Market* GameSession::dockedMarket() {
+  if (docking_.state() != DockState::Docked || !docking_.station()) return nullptr;
+  const auto& dock = world_->props().at(*docking_.station()).def.docking;
+  if (!dock || dock->market.empty()) return nullptr;
+  auto it = markets_.find(dock->market);
+  if (it == markets_.end()) return nullptr;
+  it->second.advanceTo(world_->simulationTime());
+  return &it->second;
+}
+
+TradeResult GameSession::trade(const std::string& commodity, int units) {
+  Market* m = dockedMarket();
+  if (!m) return {0, 0, "No market: dock at a station first"};
+  const int i = m->entryIndex(commodity);
+  TradeResult r = units > 0 ? m->buy(commodities_, i, units, credits_, cargo_)
+                            : m->sell(commodities_, i, -units, credits_, cargo_);
+  if (r.units > 0)
+    log::info("economy", "{} {} x {} for {} cr (balance {})", units > 0 ? "bought" : "sold", r.units, commodity,
+              r.credits, credits_);
+  return r;
+}
+
+std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   docking_.preStep(*world_, dt);
   world_->fixedUpdate(dt);
   docking_.postStep(*world_, dt);
+  const bool canMine = location_ == Location::Cockpit && docking_.state() == DockState::Undocked;
+  miningEvents_ = mining_.fixedUpdate(*world_, miningTrigger_ && canMine, cargo_, dt);
   if (location_ != Location::Cockpit) {
     stepCharacter(character_, characterInput_, characterParams_, colliders_, dt);
     characterInput_.yawDelta = characterInput_.pitchDelta = 0;  // consumed
@@ -138,6 +169,11 @@ void GameSession::fixedUpdate(float dt) {
       }
     }
   }
+  if (auto delta = world_->rebaseIfNeeded()) {
+    mining_.applyRebase(*delta);
+    return delta;
+  }
+  return std::nullopt;
 }
 
 }  // namespace fh

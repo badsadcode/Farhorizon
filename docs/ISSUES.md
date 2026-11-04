@@ -19,3 +19,8 @@
 | 15 | open | docking | The approach autopilot assumes an approach from above or the side. From directly below the hub it can press against the hull. |
 | 16 | open | interiors | Interior transitions are instant cuts (no seat/airlock animation or loading fade). |
 | 17 | open | interiors | The on-foot camera is not interpolated between fixed steps (possible slight judder at high refresh rates). |
+| 18 | open | audio | The placeholder sounds have only been verified by signal analysis (SDL disk driver), not by listening. The mix needs a human pass. |
+| 19 | open | render | Point lights have no shadows and shine through walls; lamp placement accounts for it. |
+| 20 | open | economy | One station market only, so trade routes need a second market (the outpost, Stage 5). |
+| 21 | open | mining | Asteroids do not shrink visually as they deplete (yield only). |
+| 22 | open | ui | The market panel is the only menu. Settings, a main menu and save slots come in Stage 7. |

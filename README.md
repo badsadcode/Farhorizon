@@ -3,6 +3,14 @@
 A compact, atmospheric 3D space sandbox running on a **purpose-built engine** (C++20, SDL3, Vulkan 1.3).
 It does not use an existing game engine. See `docs/STATUS.md` for what works today.
 
+![Kestrel Hangar 1 under sodium work lights](docs/screenshots/stage4_hangar_usedfuture.jpg)
+
+| Mining | Station exchange terminal | Sparrow cabin |
+|---|---|---|
+| ![](docs/screenshots/stage4_mining.jpg) | ![](docs/screenshots/stage4_market_terminal.jpg) | ![](docs/screenshots/stage4_cabin_usedfuture.jpg) |
+
+Docking and earlier stages:
+
 ![Docking autopilot on final approach to Kestrel Station](docs/screenshots/stage3_docking_approach.jpg)
 
 | Docked on the pad | Sparrow cabin | Kestrel hangar |
@@ -42,6 +50,10 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | B | precision (docking) speed mode |
 | C | recentre the virtual stick |
 | T / G / Backspace | next target / nearest asteroid / clear target |
+| LMB (or Left Alt) | mining laser (target an asteroid with G, aim at it) |
+| R | scan the targeted asteroid (resource, yield, hardness) |
+| M | station market terminal while docked (also F at the hangar terminal) |
+| F7 / F8 | quicksave / load (`saves/`); autosave on every docking |
 | L | request docking / cancel / undock (contextual) |
 | K | docking approach autopilot on/off (while cleared) |
 | F | interact: leave the pilot seat (docked), airlock, board, terminals |
@@ -49,13 +61,18 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | F2 | developer cameras (orbit → free → back) |
 | F1 | developer info overlay |
 | F3 | autofly (scripted test flight) |
-| F4 | cycle visual look (Retro 80s ↔ Clean) |
+| F4 | cycle visual look (Used Future ↔ Retro 80s ↔ Clean) |
 | F5 | hot-reload content (keeps old content if the new content is invalid) |
 | F11 / F12 / F10 | fullscreen / screenshot / quit |
 
 **On foot:** WASD walk, Shift run, Space jump, mouse look, F use.
 
 All bindings and mouse settings live in `content/config/input.json`.
+
+**Try a mining run:** undock (L), fly to the Cinder Drift asteroid field (8 km, use boost), press
+G to target a rock and R to scan it, then hold the left mouse button with the nose on target. Ore
+chunks drift into your scoop. Fly back, dock, press M and sell; prices drop as you flood the
+market. F7 saves anywhere, F8 loads, and `--continue` resumes the quicksave.
 
 **Try the Stage 3 loop:** fly toward Kestrel Station (3 km ahead) and press **L** for clearance,
 then land on the roof pad yourself or press **K**. Once docked, **F** leaves the seat. Walk aft to

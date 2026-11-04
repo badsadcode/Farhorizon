@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "commodities": [
+    {
+      "id": "ore.iron",
+      "name": "Iron Ore",
+      "category": "ore",
+      "basePrice": 28,
+      "massTons": 1,
+      "description": "Grey, heavy, honest. The frontier is built out of it."
+    },
+    {
+      "id": "ore.nickel",
+      "name": "Nickel-Iron",
+      "category": "ore",
+      "basePrice": 46,
+      "massTons": 1,
+      "description": "Metallic asteroid core material. Refineries pay extra."
+    },
+    {
+      "id": "ice.water",
+      "name": "Water Ice",
+      "category": "ore",
+      "basePrice": 19,
+      "massTons": 1,
+      "description": "Drinkable after the third filter. Mostly."
+    },
+    {
+      "id": "goods.rations",
+      "name": "Ration Packs",
+      "category": "goods",
+      "basePrice": 34,
+      "massTons": 1,
+      "description": "Shelf-stable protein bricks. Flavour: 'Beige'."
+    },
+    {
+      "id": "goods.parts",
+      "name": "Machine Parts",
+      "category": "goods",
+      "basePrice": 95,
+      "massTons": 1,
+      "description": "Bearings, valves, seals. Everything out here breaks."
+    },
+    {
+      "id": "goods.medical",
+      "name": "Medical Supplies",
+      "category": "goods",
+      "basePrice": 160,
+      "massTons": 1,
+      "description": "Sutures, stims and anti-radiation tablets."
+    },
+    {
+      "id": "goods.fuelcells",
+      "name": "Fuel Cells",
+      "category": "goods",
+      "basePrice": 72,
+      "massTons": 1,
+      "description": "Charged storage cells for station backup power."
+    }
+  ]
+}

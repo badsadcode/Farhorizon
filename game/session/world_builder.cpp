@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "engine/render/starfield.h"  // Rng
 #include "game/world/asteroid_gen.h"
 
 namespace fh {
@@ -67,6 +68,10 @@ std::unique_ptr<SpaceWorld> buildSpaceWorld(const SceneDef& scene, const ShipDef
     ap.maxScale = f.maxScale;
     ap.variants = f.variants;
     const auto instances = generateAsteroidField(ap);
+    // Composition is derived from its own RNG stream so placement stays unchanged when tuned.
+    Rng comp(0xC0FFEEull ^ (std::uint64_t(f.seed) << 20));
+    float totalWeight = 0;
+    for (const auto& rdef : f.resources) totalWeight += std::max(0.0f, rdef.weight);
     const auto& variants = world->fields()[fieldIndex].variants;
     for (std::uint32_t i = 0; i < instances.size(); ++i) {
       const AsteroidInstance& inst = instances[i];
@@ -79,6 +84,20 @@ std::unique_ptr<SpaceWorld> buildSpaceWorld(const SceneDef& scene, const ShipDef
       a.visual = variants[inst.variant];
       a.field = fieldIndex;
       a.index = i;
+      if (totalWeight > 0) {
+        float pick = comp.uniform() * totalWeight;
+        for (const auto& rdef : f.resources) {
+          pick -= std::max(0.0f, rdef.weight);
+          if (pick <= 0) {
+            a.resource = rdef.commodity;
+            break;
+          }
+        }
+        if (a.resource.empty()) a.resource = f.resources.back().commodity;
+        a.initialYield = std::max(1, int(inst.radius * f.yieldPerMetre * comp.range(0.6f, 1.3f)));
+        a.yield = a.initialYield;
+        a.hardness = comp.range(f.hardnessMin, f.hardnessMax);
+      }
       world->addAsteroid(a);
     }
   }

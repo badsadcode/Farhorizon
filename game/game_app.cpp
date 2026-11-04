@@ -8,6 +8,8 @@
 
 #include "game/content/interior_def.h"
 #include "game/session/world_builder.h"
+#include "game/economy/economy.h"
+#include "game/persistence/save_game.h"
 
 #include "engine/assets/gltf_loader.h"
 #include "engine/core/log.h"
@@ -38,6 +40,12 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     throw std::runtime_error("initial content load failed:\n  " +
                              (contentErrors_.empty() ? std::string("unknown error") : contentErrors_.front()));
   if (benchmark_ && !benchmark_->startIn.empty()) options_.startIn = benchmark_->startIn;
+  {
+    std::vector<std::string> audioErrors;
+    if (!audio_.load(*manifest_, "audio.config", &audioErrors))
+      for (const auto& e : audioErrors) log::warn("audio", "{}", e);
+    if (!benchmark_ && options_.exitAfterFrames == 0) audioDevice_.open(audio_.mixer());  // tests/benchmarks stay silent
+  }
   if (options_.startDocked || !options_.startIn.empty()) {
     session_->docking().forceDock(world());
     lastDockState_ = DockState::Docked;
@@ -51,6 +59,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
 }
 
 GameApp::~GameApp() {
+  audioDevice_.close();  // before SDL_Quit (Window dtor) and before the mixer goes away
   renderer_.reset();
   ctx_.reset();
   window_.reset();
@@ -154,17 +163,24 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
       v.push_back(generateAsteroidMesh(mp));
     }
   }
+  auto commodityDb = loadCommodities(*manifest, "economy.commodities", &errors);
+  if (!commodityDb) return false;
+  std::map<AssetID, MarketDef> marketDefs;
+  for (const auto& p : scene->props)
+    if (p.docking && !p.docking->market.empty() && !marketDefs.count(p.docking->market)) {
+      auto md = loadMarketDef(*manifest, p.docking->market, *commodityDb, &errors);
+      if (!md) return false;
+      marketDefs.emplace(p.docking->market, std::move(*md));
+    }
   for (auto& w : errors) log::warn("content", "{}", w);  // only non-fatal warnings remain here
 
-  // ---- Commit: preserve the player's pose (and docking) across hot reloads ----
+  // ---- Commit. Hot reload and save loading share one path: snapshot -> rebuild -> apply. ----
+  std::optional<SaveGame> restore;
+  if (pendingSave_) restore = std::move(pendingSave_);
+  else if (session_ && !bench) restore = captureSave(*session_, scene_.id);
+  pendingSave_.reset();
   std::optional<SystemPosition> keepPos;
-  std::optional<FlightState> keepState;
-  std::optional<Docking> keepDocking;
-  if (session_ && !bench) {
-    keepPos = world().frame().toSystem(world().player().state.position);
-    keepState = world().player().state;
-    keepDocking = session_->docking();
-  }
+  if (restore) keepPos = SystemPosition{restore->shipPosition};
 
   renderer_->clearMeshes();
   WorldVisuals visuals;
@@ -186,13 +202,9 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     return h;
   };
   auto newSession = std::make_unique<GameSession>(buildSpaceWorld(*scene, *shipDef, visuals, keepPos));
-  if (keepState) {
-    newSession->world().player().state = *keepState;
-    newSession->world().player().state.position = {};
-    newSession->world().player().previous = newSession->world().player().state;
-  }
-  if (keepDocking) newSession->docking() = *keepDocking;
   newSession->setShipInterior(shipDef->interior);
+  newSession->setEconomy(*commodityDb, scene->startingCredits);
+  for (const auto& [mid, md] : marketDefs) newSession->addMarket(mid, md);
   interiorPieces_.clear();
   for (auto& [iid, def] : interiors) {
     std::map<std::string, std::uint32_t> handles;
@@ -205,6 +217,13 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
       list.push_back({handles.at(piece.templ), model});
     }
     newSession->addInterior(iid, std::move(def));
+  }
+  if (restore) {
+    std::string err;
+    if (!applySave(*newSession, *restore, &err)) {
+      errors.push_back("save/restore failed: " + err);
+      log::error("save", "{}", err);
+    }
   }
   std::size_t asteroidCount = newSession->world().asteroids().size();
 
@@ -235,7 +254,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     if (benchmark_) mode = benchmark_->camera;
     if (options_.cameraOverride) mode = *options_.cameraOverride;
     camera_.setMode(cameraModeFromString(mode), world().playerRenderTransform(1.0f));
-    if (benchmark_ && !benchmark_->autoDock && benchmark_->startIn.empty())
+    if (benchmark_ && !benchmark_->autoDock && !benchmark_->mine && benchmark_->startIn.empty())
       controller_.setAutofly(true, benchmark_->throttle, benchmark_->rotation);
     else if (options_.autofly) controller_.setAutofly(true, 0.4f, {0.0f, 0.08f, 0.0f});
   }
@@ -245,10 +264,115 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   return true;
 }
 
+void GameApp::openMarket() {
+  if (!session_->dockedMarket() || market_.isOpen()) return;
+  market_.open();
+  mouseWasCaptured_ = mouseCaptured_;
+  setMouseCapture(false);
+}
+
+void GameApp::closeMarket() {
+  market_.close();
+  setMouseCapture(mouseWasCaptured_);
+}
+
+void GameApp::saveGame(const std::filesystem::path& path, bool quiet) {
+  std::string err;
+  if (writeSaveFile(path, captureSave(*session_, scene_.id), &err)) {
+    if (!quiet) session_->notify("Game saved");
+    log::info("save", "saved to {}", path.string());
+  } else {
+    session_->notify("SAVE FAILED: " + err);
+    log::error("save", "{}", err);
+  }
+}
+
+bool GameApp::loadGame(const std::filesystem::path& path) {
+  std::string err;
+  auto save = readSaveFile(path, &err);
+  if (!save) {
+    if (session_) session_->notify("Load failed: " + err);
+    log::error("save", "load failed: {}", err);
+    return false;
+  }
+  if (save->sceneId != scene_.id && !scene_.id.empty()) options_.sceneId = save->sceneId;
+  if (scene_.id.empty()) options_.sceneId = save->sceneId;
+  pendingSave_ = std::move(save);
+  std::vector<std::string> errors;
+  if (!loadContent(errors)) {
+    contentErrors_ = errors;
+    log::error("save", "load failed while rebuilding the world");
+    return false;
+  }
+  if (market_.isOpen()) closeMarket();
+  camera_.snap();
+  lastDockState_ = session_->docking().state();
+  session_->notify("Game loaded");
+  log::info("save", "loaded {}", path.string());
+  return true;
+}
+
+void GameApp::updateAudio(float dt, float engineDemand, float speedFraction) {
+  AudioWatch& w = audioWatch_;
+  const Docking& d = session_->docking();
+  if (d.state() != w.dock) {
+    if (d.state() == DockState::Capture) audio_.event("clamp");
+    if (d.state() == DockState::Undocking) audio_.event("clamp", 0.8f, 0.85f);
+    w.dock = d.state();
+  }
+  if (d.messageTime() != w.messageTime && !d.message().empty()) {
+    audio_.event("radio");
+    w.messageTime = d.messageTime();
+  }
+  const Location loc = session_->location();
+  if (loc != w.location) {
+    const bool airlock = (w.location == Location::ShipInterior && loc == Location::StationInterior) ||
+                         (w.location == Location::StationInterior && loc == Location::ShipInterior);
+    audio_.event(airlock ? "airlock" : "ui");
+    w.location = loc;
+  }
+  const PlayerShip& p = world().player();
+  if (p.collisions != w.collisions) {
+    audio_.event("impact", std::min(1.0f, p.lastImpactSpeed / 30.0f + 0.3f), 0.6f);
+    w.collisions = p.collisions;
+  }
+  for (int i = 0; i < session_->lastMiningEvents().collected; ++i) audio_.event("scoop", 0.8f, 0.9f + 0.05f * float(i));
+  if (market_.isOpen() != w.marketOpen) {
+    audio_.event("ui", 1.0f, market_.isOpen() ? 1.0f : 0.8f);
+    w.marketOpen = market_.isOpen();
+  }
+  if (session_->credits() != w.credits) {
+    if (market_.isOpen()) audio_.event("ui", 0.8f, 1.25f);
+    w.credits = session_->credits();
+  }
+  AudioState st;
+  st.location = loc == Location::Cockpit ? std::string("space") : session_->activeInteriorId();
+  st.inCockpit = loc == Location::Cockpit && d.state() != DockState::Docked;
+  st.engineDemand = engineDemand;
+  st.speedFraction = speedFraction;
+  st.beamActive = session_->mining().beamActive();
+  audio_.update(st, dt);
+}
+
 void GameApp::handleAppInput() {
   const Transform ship = world().playerRenderTransform(1.0f);
   const bool cockpit = session_->location() == Location::Cockpit;
   if (input_.pressed("app.quit")) quit_ = true;
+  if (market_.isOpen()) {  // the terminal owns the keyboard while open
+    const VkExtent2D ext = renderer_->extent();
+    const float ps = window_->pixelScale();
+    market_.handleInput(input_, *session_, input_.mouseX() * ps, input_.mouseY() * ps, float(ext.width),
+                        float(ext.height));
+    if (!market_.isOpen()) closeMarket();
+    if (input_.pressed("debug.screenshot"))
+      pendingScreenshot_ = std::filesystem::path("screenshots") / std::format("farhorizon_{:03}.png", screenshotCounter_++);
+    return;
+  }
+  if (input_.pressed("game.save")) saveGame("saves/quicksave.json");
+  if (input_.pressed("game.load")) {
+    loadGame("saves/quicksave.json");
+    return;
+  }
   if (input_.pressed("app.toggleMouse")) setMouseCapture(!mouseCaptured_);
   if (input_.pressed("debug.overlay")) showDevOverlay_ = !showDevOverlay_;
   if (input_.pressed("window.fullscreen")) window_->toggleFullscreen();
@@ -260,10 +384,15 @@ void GameApp::handleAppInput() {
     log::info("render", "look: {}", looks_.profiles[size_t(activeLook_)].name);
   }
   if (input_.pressed("interact")) session_->interact();
+  if (session_->consumeMarketRequest()) openMarket();
+  if (input_.pressed("ui.market") && cockpit) {
+    if (session_->dockedMarket()) openMarket();
+    else session_->notify("Market terminals are available while docked");
+  }
   if (cockpit) {
     if (input_.pressed("camera.cycle")) camera_.cycleShipCamera(ship);
     if (input_.pressed("camera.dev")) camera_.toggleDev(ship);
-    if (input_.pressed("camera.autoRotate") && camera_.mode() == CameraMode::Orbit) camera_.toggleAutoRotate();
+    if (input_.pressed("camera.autoRotate") && camera_.mode() == CameraMode::Orbit) camera_.toggleAutoRotate();  // O
     if (input_.pressed("target.next")) world().cycleTarget();
     if (input_.pressed("target.nearestAsteroid")) world().targetNearestAsteroid();
     if (input_.pressed("target.clear")) world().clearTarget();
@@ -280,6 +409,11 @@ void GameApp::handleAppInput() {
     }
     if (input_.pressed("dock.autopilot")) session_->docking().toggleAutopilot();
     if (input_.pressed("debug.forceDock")) session_->docking().forceDock(world());
+    if (input_.pressed("ship.scan")) {
+      const auto& t = world().target();
+      if (t && t->kind == TargetRef::Kind::Asteroid) session_->mining().startScan(t->index, world().simulationTime());
+      else session_->notify("Target an asteroid to scan (G)");
+    }
   }
   if (input_.pressed("debug.reloadAssets")) {
     std::vector<std::string> errors;
@@ -319,7 +453,7 @@ void GameApp::buildDevOverlay() {
   const VkExtent2D ext = renderer_->extent();
   const OverlayColor normal{205, 215, 225, 230}, dim{140, 150, 165, 230}, bad{255, 110, 100, 255};
   std::vector<std::pair<std::string, OverlayColor>> lines;
-  lines.push_back({std::format("FARHORIZON 0.2  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
+  lines.push_back({std::format("FARHORIZON 0.4  {}  {}x{}  vsync {}  val {}", ctx_->deviceName(), ext.width, ext.height,
                                ctx_->vsync() ? "on" : "off", ctx_->validationEnabled() ? "on" : "off"),
                    dim});
   lines.push_back({std::format("FPS {:5.1f}  CPU {:5.2f} ms (max {:5.2f})  GPU {}", s.avgFps, s.avgCpuMs, s.maxCpuMs,
@@ -340,6 +474,7 @@ void GameApp::buildDevOverlay() {
                    vkMsgs > 0 ? bad : dim});
   for (const auto& e : contentErrors_) lines.push_back({e, bad});
   lines.push_back({"W/S throttle  mouse/arrows steer  A/D Space/Ctrl strafe  Q/E roll  Shift boost", dim});
+  lines.push_back({"LMB/Alt mine  R scan  M market (docked)  L dock  K autopilot  F use  F7 save  F8 load", dim});
   lines.push_back({"Z assist  B precision  C recenter  T target  G nearest rock  V camera  F2 dev cam", dim});
   lines.push_back({"Esc mouse  F1 info  F3 autofly  F4 look  F5 reload  F11 fullscreen  F12 shot  F10 quit", dim});
 
@@ -365,6 +500,10 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   hc.lookName = look.name;
   hc.lookShownUntil = lookShownUntil_;
   hc.session = session_.get();
+  if (market_.isOpen()) {  // the terminal takes the whole screen's attention
+    market_.draw(overlay_, *session_, look.hud, float(ext.width), float(ext.height), runTime_);
+    return;
+  }
   if (session_->location() == Location::Cockpit) {
     drawHud(overlay_, hc);
   } else {
@@ -416,11 +555,34 @@ int GameApp::run() {
       world().player().input = hold;
     }
 
+    session_->setMiningTrigger(cockpit && !market_.isOpen() && !devCam &&
+                               ((mouseCaptured_ && input_.mouseLeft()) || input_.down("ship.mine")));
+    if (benchmark_ && benchmark_->mine && cockpit) {  // scripted mining run: face the nearest rock and cut
+      if (!world().target()) world().targetNearestAsteroid();
+      if (const auto& t = world().target(); t && t->kind == TargetRef::Kind::Asteroid) {
+        auto& st = world().player().state;
+        const Vec3 f = normalize(world().asteroids()[t->index].local - st.position);
+        const Vec3 axis = cross(Vec3{0, 0, -1}, f);
+        const float ang = std::acos(std::clamp(dot(Vec3{0, 0, -1}, f), -1.0f, 1.0f));
+        st.orientation = length(axis) > 1e-5f ? Quat::fromAxisAngle(normalize(axis), ang) : Quat{};
+        st.angularVelocity = {};
+        if (!session_->mining().isScanned(t->index) && !session_->mining().scanning())
+          session_->mining().startScan(t->index, world().simulationTime());
+      }
+      session_->setMiningTrigger(true);
+    }
     const int steps = clock_.advance(dt);
     for (int i = 0; i < steps; ++i) {
-      session_->fixedUpdate(float(clock_.step()));
+      const auto delta = session_->fixedUpdate(float(clock_.step()));
+      if (delta) {
+        camera_.applyRebase(*delta);
+        ++rebases_;
+      }
       const DockState ds = session_->docking().state();
-      if (ds != lastDockState_ && ds == DockState::Docked) controller_.setThrottle(0.0f);  // no surprise launch
+      if (ds != lastDockState_ && ds == DockState::Docked) {
+        controller_.setThrottle(0.0f);  // no surprise launch
+        if (!benchmark_) saveGame("saves/autosave.json", true);
+      }
       if (benchmark_ && benchmark_->autoDock) {
         Docking& d = session_->docking();
         if (ds == DockState::Undocked && d.message().empty()) d.request(world());
@@ -428,10 +590,6 @@ int GameApp::run() {
       }
       lastDockState_ = ds;
       camera_.fixedUpdate(float(clock_.step()));
-      if (auto delta = world().rebaseIfNeeded()) {
-        camera_.applyRebase(*delta);
-        ++rebases_;
-      }
     }
 
     // ---- Camera and render data (camera-relative) ----
@@ -503,6 +661,7 @@ int GameApp::run() {
                                      Mat4::scale({a.radius, a.radius, a.radius})});
     }
 
+    float engineDemandForAudio = 0, speedFractionForAudio = 0;
     // ---- Glow sprites: engine exhaust + running lights ----
     std::vector<GlowSprite> glows;
     {
@@ -515,6 +674,8 @@ int GameApp::run() {
       float demand = fin.assist ? std::clamp((fin.throttle * cap - fwdSpeed) / (0.15f * cap) + fin.throttle * 0.6f, 0.0f, 1.0f)
                                 : std::max(0.0f, fin.thrust.z);
       if (player.state.boosting) demand = 1.0f;
+      engineDemandForAudio = demand;
+      speedFractionForAudio = std::clamp(length(player.state.velocity) / std::max(1.0f, cap), 0.0f, 2.0f);
       const Vec3 col = player.state.boosting ? eg.boostColor : eg.color;
       const float size = eg.idleSize + (eg.thrustSize - eg.idleSize) * demand * (player.state.boosting ? 1.4f : 1.0f);
       const float intensity = eg.idleIntensity + (eg.thrustIntensity - eg.idleIntensity) * demand;
@@ -534,10 +695,51 @@ int GameApp::run() {
           const float k = l.intensityAt(t);
           if (k <= 0) continue;
           const Vec3 wp = p.local + p.rotation.rotate(l.position) - view.position;
+          if (l.range > 0) params.pointLights.push_back({wp, l.range, l.color * (k * l.intensity)});
           if (!frustum.sphereVisible(wp, l.size)) continue;
           glows.push_back({Vec4(wp, l.size), Vec4(l.color * k, 0)});
         }
     }
+
+    // ---- Mining beam, impact flare and ore chunks ----
+    if (cockpit) {
+      const Mining& mining = session_->mining();
+      const double t = world().simulationTime();
+      if (mining.beamActive()) {
+        const Vec3 end = mining.beamEnd();
+        for (const auto& mount : player.def.mounts) {
+          auto it = player.sockets.find(mount);
+          if (it == player.sockets.end()) continue;
+          const Vec3 beamStart = ship.position + ship.rotation.rotate(it->second.position);
+          const float len = length(end - beamStart);
+          const int n = std::clamp(int(len / 1.2f), 8, 400);
+          for (int k = 0; k <= n; ++k) {
+            const float f = float(k) / float(n);
+            const float pulse = 0.75f + 0.25f * std::sin(float(t) * 40.0f - f * 30.0f);
+            glows.push_back({Vec4(lerp(beamStart, end, f) - view.position, 0.35f + 0.25f * f),
+                             Vec4(Vec3{3.2f, 1.1f, 0.35f} * pulse, 0)});
+          }
+        }
+        const float flicker = 0.7f + 0.3f * std::sin(float(t) * 53.0f) * std::sin(float(t) * 17.0f);
+        glows.push_back({Vec4(end - view.position, 5.0f * flicker), Vec4(Vec3{4.0f, 1.6f, 0.5f} * flicker, 0)});
+        // The cutting point lights the rock face (and the ship's nose when close).
+        params.pointLights.push_back({end - view.position, 70.0f, Vec3{900.0f, 330.0f, 90.0f} * flicker});
+      }
+      const VisualHandle chunkMesh = world().fields().empty() || world().fields()[0].variants.empty()
+                                         ? player.visual
+                                         : world().fields()[0].variants[0];
+      for (const auto& c : mining.chunks()) {
+        const Vec3 rel = c.local - view.position;
+        if (!frustum.sphereVisible(rel, 2.0f)) continue;
+        const Quat spin = Quat::fromAxisAngle(normalize(Vec3{0.3f, 1.0f, 0.2f}), float(t - c.spawnTime) * 1.7f);
+        items.push_back({chunkMesh, Mat4::translation(rel) * Mat4::rotation(spin) * Mat4::scale({0.8f, 0.8f, 0.8f})});
+        glows.push_back({Vec4(rel, 1.0f), Vec4(1.4f, 0.7f, 0.25f, 0)});
+      }
+    }
+
+    std::sort(params.pointLights.begin(), params.pointLights.end(), [](const PointLight& a, const PointLight& b) {
+      return dot(a.position, a.position) < dot(b.position, b.position);
+    });
 
     // ---- On foot: render the active interior instead of space ----
     if (!cockpit) {
@@ -572,15 +774,24 @@ int GameApp::run() {
                                               Mat4::rotation(Quat::fromAxisAngle({0, 1, 0}, radians(ps.yawDeg))) *
                                               player.meshFix});
         }
+        params.fogColor = L.fogColor;
+        params.fogDensity = L.fogDensity;
+        params.pointLights.clear();
         const double t = world().simulationTime();
         for (const auto& l : idef->lights) {
           const float k = l.intensityAt(t);
           if (k > 0) glows.push_back({Vec4(l.position - view.position, l.size), Vec4(l.color * k, 0)});
+          if (l.range > 0 && k > 0) params.pointLights.push_back({l.position - view.position, l.range, l.color * (k * l.intensity)});
         }
+        // Nearest lamps win the 8 shading slots.
+        std::sort(params.pointLights.begin(), params.pointLights.end(), [](const PointLight& a, const PointLight& b) {
+          return dot(a.position, a.position) < dot(b.position, b.position);
+        });
       }
     }
 
     buildOverlay(view, viewProj, ship);
+    updateAudio(float(dt), engineDemandForAudio, speedFractionForAudio);
 
     const bool lastFrame = options_.exitAfterFrames > 0 && frameCount_ + 1 >= std::uint64_t(options_.exitAfterFrames);
     if (lastFrame && options_.screenshotOnExit) pendingScreenshot_ = options_.screenshotOnExit;

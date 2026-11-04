@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 — Stage 4: mining, cargo, market, save/load + atmosphere pass (2026-11-04)
+* Economy: data-driven commodities (3 ores, 4 goods) and the Kestrel Station Exchange with
+  bounded scarcity pricing, a spread floor, per-unit slippage and deterministic tick restocking.
+  The cargo hold is measured in mass tons.
+* Mining: asteroid composition, yield and hardness per field; scan (R); mining laser (LMB/Alt)
+  with aim cone and range; ore chunks with scoop field and hard caps; depletion persists.
+* Market terminal UI (M when docked, or F at the hangar terminal): CRT-style panel, keyboard and
+  mouse, buy/sell/sell-all, ×10.
+* Save/load: versioned JSON snapshots, atomic write plus `.bak`, F7/F8, autosave on docking,
+  `--load`/`--continue`, saving on foot. Byte-identical save→load→save. Hot reload now uses the
+  same snapshot path.
+* **Stage 4 exit test in CTest:** profitable mining trip, save/reload, no duplication.
+* Atmosphere: 8 point lights per frame, distance fog, flickering failing lamps, the new
+  **Used Future** look (default) with an amber/phosphor CRT HUD, darker and colder art direction,
+  station work floods, and a mining impact light.
+* Audio: software mixer and SDL3 device, a data-driven AudioDirector (ambience beds per
+  location, random hull groans, engine rumble following thrust, laser, clamps, airlock, radio,
+  UI, scoop). All sounds are original, synthesised placeholders.
+* Fixed: a crash on exit (audio stream destroyed after `SDL_Quit`).
+* New benchmark: `bench.mining`. Tests: 56.
+
 ## 0.3.0 — Stage 3: docking and walkable interiors (2026-11-04)
 * Docking state machine: clearance request, approach authorisation, deterministic tolerance-based
   capture with scripted settle, clamps, and undocking. Optional approach autopilot (K).

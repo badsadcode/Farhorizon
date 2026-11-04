@@ -1,14 +1,14 @@
 {
-  "avgCpuMs": 118.67519786746989,
-  "avgFps": 8.426360503032374,
-  "avgGpuMs": 116.42984057831329,
+  "avgCpuMs": 133.86135025675677,
+  "avgFps": 7.470416203645938,
+  "avgGpuMs": 131.95259427027025,
   "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
   "drawCalls": 53,
-  "frames": 83,
-  "maxCpuMs": 142.872038,
-  "maxGpuMs": 166.59321799999998,
-  "minCpuMs": 91.67612,
-  "p99CpuMs": 142.872038,
+  "frames": 74,
+  "maxCpuMs": 161.160207,
+  "maxGpuMs": 223.83846599999998,
+  "minCpuMs": 113.842421,
+  "p99CpuMs": 161.160207,
   "scenario": "bench.ship_interior",
   "triangles": 19895
 }

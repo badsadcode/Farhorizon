@@ -47,6 +47,8 @@ class Docking {
   bool toggleAutopilot();            // only while cleared to approach
   // Debug tool (design doc 17 "force dock/land"): clamp to the nearest station's first bay now.
   bool forceDock(SpaceWorld& world);
+  // Clamp to a specific station bay immediately (save-game restore).
+  bool dockAt(SpaceWorld& world, std::uint32_t prop, std::uint32_t bay, bool announce = false);
 
   // Bay pose in the world's local frame (valid when a station is assigned).
   Transform bayTransform(const SpaceWorld& world) const;

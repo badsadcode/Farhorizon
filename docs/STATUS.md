@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 3 (docking + walkable interiors)._
+_Last updated: 2026-11-04 · Stage 4 (mining, cargo, market, save/load) + atmosphere pass._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -10,7 +10,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
-| Test harness | ✅ | 44 tests (incl. headless 20× Stage 3 loop) + content validation (CTest) |
+| Test harness | ✅ | 56 tests (incl. headless Stage 3 loop and Stage 4 trip) + content validation (CTest) |
 | CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
@@ -60,6 +60,25 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | 20× fly→dock→walk→launch | ✅ | headless CTest on real content + one interactive keyboard/mouse run in the app |
 | Seat/airlock animations | ⬜ | instant cuts for now |
 
+## Stage 4 — mining, cargo, market, save/load
+| Item | State | Notes |
+|---|---|---|
+| Mineable asteroids | ✅ | per-field resources/yield/hardness; scan reveals composition |
+| Mining laser + ore pickup | ✅ | aim cone + range; chunks with scoop field; hard caps |
+| Cargo inventory | ✅ | mass tons, capacity from ship data |
+| Station buy/sell | ✅ | CRT terminal panel (keyboard + mouse) at the hangar terminal or M when docked |
+| Market stock and credits | ✅ | bounded pricing, spread floor, slippage, deterministic restocking |
+| Save/load | ✅ | versioned JSON, atomic + backup, quicksave/autosave, on-foot saves |
+| Profitable trip + reload preserves everything | ✅ | headless CTest on real content |
+| No duplication exploit | ✅ | buy→sell round trips lose money; save→load→save is byte-identical |
+
+## Atmosphere
+| Item | State | Notes |
+|---|---|---|
+| Point lights + fog + flicker | ✅ | 8 lights/frame, per-interior fog, failing lamps |
+| "Used Future" look | ✅ | default; amber/phosphor CRT HUD |
+| Audio | 🟡 | mixer, device, data-driven director with original synthesised placeholders. Nobody has listened yet. |
+
 ## Rendering (design 9.3)
 | Item | State | Notes |
 |---|---|---|
@@ -73,5 +92,4 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Shadows, IBL, LOD, GPU particles, TAA | ⬜ | later |
 
 ## Later stages
-Not started: mining/market/save (4), planet landing (5), combat/contracts (6), polish (7).
-The hangar's services terminal is a placeholder for the Stage 4 market.
+Not started: planet landing (5), combat/contracts (6), polish (7).

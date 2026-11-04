@@ -1,0 +1,74 @@
+{
+  "id": "market.kestrel",
+  "name": "Kestrel Station Exchange",
+  "spread": 0.1,
+  "tickSeconds": 600,
+  "restockFraction": 0.05,
+  "entries": [
+    {
+      "commodity": "ore.iron",
+      "stock": 40,
+      "targetStock": 120,
+      "maxStock": 400,
+      "productionPerHour": -20,
+      "elasticity": 0.7,
+      "minMultiplier": 0.6,
+      "maxMultiplier": 1.6,
+      "sells": false
+    },
+    {
+      "commodity": "ore.nickel",
+      "stock": 20,
+      "targetStock": 80,
+      "maxStock": 300,
+      "productionPerHour": -12,
+      "elasticity": 0.8,
+      "minMultiplier": 0.6,
+      "maxMultiplier": 1.8,
+      "sells": false
+    },
+    {
+      "commodity": "ice.water",
+      "stock": 60,
+      "targetStock": 100,
+      "maxStock": 300,
+      "productionPerHour": -15,
+      "elasticity": 0.6,
+      "minMultiplier": 0.6,
+      "maxMultiplier": 1.5,
+      "sells": false
+    },
+    {
+      "commodity": "goods.rations",
+      "stock": 120,
+      "targetStock": 100,
+      "maxStock": 300,
+      "productionPerHour": 8,
+      "elasticity": 0.5
+    },
+    {
+      "commodity": "goods.parts",
+      "stock": 40,
+      "targetStock": 50,
+      "maxStock": 150,
+      "productionPerHour": 2,
+      "elasticity": 0.6
+    },
+    {
+      "commodity": "goods.medical",
+      "stock": 15,
+      "targetStock": 30,
+      "maxStock": 80,
+      "productionPerHour": 1,
+      "elasticity": 0.9
+    },
+    {
+      "commodity": "goods.fuelcells",
+      "stock": 60,
+      "targetStock": 60,
+      "maxStock": 160,
+      "productionPerHour": 4,
+      "elasticity": 0.6
+    }
+  ]
+}

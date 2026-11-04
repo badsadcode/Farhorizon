@@ -30,6 +30,7 @@ class Window {
 
   // Drawable size in pixels (may differ from window size on high-DPI displays).
   void pixelSize(int& w, int& h) const;
+  float pixelScale() const;  // drawable pixels per window coordinate (high-DPI)
   bool consumeResized();  // true once after any size change
 
   std::vector<const char*> requiredVulkanInstanceExtensions() const;

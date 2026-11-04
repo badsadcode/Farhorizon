@@ -152,6 +152,23 @@
     "bench.docking_autopilot": {
       "type": "benchmark",
       "source": "benchmarks/docking_autopilot.json"
+    },
+    "economy.commodities": {
+      "type": "commodities",
+      "source": "economy/commodities.json"
+    },
+    "market.kestrel": {
+      "type": "market",
+      "source": "economy/markets/kestrel.json"
+    },
+    "bench.mining": {
+      "type": "benchmark",
+      "source": "benchmarks/mining.json"
+    },
+    "audio.config": {
+      "type": "audio",
+      "source": "audio/audio.json",
+      "license": "Original: synthesised by tools/audio_tools/generate_placeholder_sounds.py (placeholders)."
     }
   }
 }

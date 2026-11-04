@@ -56,6 +56,8 @@ std::optional<InteriorDef> parseInteriorDef(const std::string& json, const std::
     L.rimColor = r.vec3(l, "rimColor", false, L.rimColor);
     L.rimPower = float(r.num(l, "rimPower", false, L.rimPower));
     L.exposure = float(r.num(l, "exposure", false, L.exposure));
+    L.fogColor = r.vec3(l, "fogColor", false, L.fogColor);
+    L.fogDensity = float(r.num(l, "fogDensity", false, L.fogDensity));
   }
   if (j.contains("templates") && j["templates"].is_object()) {
     for (const auto& [name, t] : j["templates"].items()) {

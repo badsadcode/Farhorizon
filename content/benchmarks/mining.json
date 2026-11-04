@@ -1,0 +1,19 @@
+{
+  "id": "bench.mining",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 20,
+  "camera": "chase",
+  "player": {
+    "systemPosition": [
+      149597863700.0,
+      11999700.0,
+      -3500004000.0
+    ],
+    "rotationDeg": [
+      0,
+      0,
+      0
+    ]
+  },
+  "mine": true
+}

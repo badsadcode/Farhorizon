@@ -17,6 +17,8 @@ build/content_validator content
 | Visual profiles (looks) | `content/visuals/post_profiles.json` | [visuals.md](visuals.md) |
 | Benchmarks | `content/benchmarks/*.json` | [benchmark.md](benchmark.md) |
 | Interiors | `content/interiors/*.interior.json` | [interior.md](interior.md) |
+| Economy (commodities, markets, mining, saves) | `content/economy/` | [economy.md](economy.md) |
+| Audio | `content/audio/audio.json` | [audio.md](audio.md) |
 
 Conventions: metres, seconds, tons, degrees in data (radians only in code), linear RGB for
 colours unless stated, right-handed +Y up with −Z forward.

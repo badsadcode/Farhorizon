@@ -57,6 +57,12 @@ void Window::setRelativeMouse(bool on) { SDL_SetWindowRelativeMouseMode(window_,
 bool Window::relativeMouse() const { return SDL_GetWindowRelativeMouseMode(window_); }
 
 void Window::pixelSize(int& w, int& h) const { SDL_GetWindowSizeInPixels(window_, &w, &h); }
+float Window::pixelScale() const {
+  int w = 0, h = 0, pw = 0, ph = 0;
+  SDL_GetWindowSize(window_, &w, &h);
+  SDL_GetWindowSizeInPixels(window_, &pw, &ph);
+  return w > 0 ? float(pw) / float(w) : 1.0f;
+}
 
 bool Window::consumeResized() {
   const bool r = resized_;

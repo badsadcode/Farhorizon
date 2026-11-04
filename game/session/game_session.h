@@ -9,6 +9,8 @@
 #include <string>
 
 #include "game/content/interior_def.h"
+#include "game/economy/economy.h"
+#include "game/space/mining.h"
 #include "game/player/character_controller.h"
 #include "game/space/docking.h"
 #include "game/world/space_world.h"
@@ -54,9 +56,34 @@ class GameSession {
 
   // Message shown to the player (prompts, refusals, terminal text) with its timestamp.
   const std::string& notice() const { return notice_; }
+  void notify(const std::string& text) {
+    notice_ = text;
+    noticeTime_ = world_->simulationTime();
+  }
   double noticeTime() const { return noticeTime_; }
 
-  void fixedUpdate(float dt);         // simulates space (always) and the character (on foot)
+  // Simulates space (always), mining, the character (on foot) and the floating origin.
+  // Returns the rebase delta when the origin moved (callers shift their own local state).
+  std::optional<Vec3> fixedUpdate(float dt);
+
+  // ---- Economy (Stage 4) ----
+  void setEconomy(CommodityDb db, std::int64_t credits);  // also sizes the hold from the ship def
+  const CommodityDb& commodities() const { return commodities_; }
+  std::int64_t credits() const { return credits_; }
+  void setCredits(std::int64_t c) { credits_ = c; }
+  CargoHold& cargo() { return cargo_; }
+  const CargoHold& cargo() const { return cargo_; }
+  void addMarket(const AssetID& id, const MarketDef& def) { markets_[id] = Market(def, world_->simulationTime()); }
+  std::map<AssetID, Market>& markets() { return markets_; }
+  Market* dockedMarket();            // market of the station we are docked at (advanced to now)
+  TradeResult trade(const std::string& commodity, int units);  // > 0 buy, < 0 sell
+  bool consumeMarketRequest() { const bool r = marketRequested_; marketRequested_ = false; return r; }
+
+  // ---- Mining ----
+  Mining& mining() { return mining_; }
+  const Mining& mining() const { return mining_; }
+  void setMiningTrigger(bool on) { miningTrigger_ = on; }
+  const MiningEvents& lastMiningEvents() const { return miningEvents_; }
 
  private:
   ActionResult enterInterior(const AssetID& id, const std::string& spawn, Location loc);
@@ -74,6 +101,14 @@ class GameSession {
   CharacterInput characterInput_;
   std::string notice_;
   double noticeTime_ = -100;
+  CommodityDb commodities_;
+  std::int64_t credits_ = 0;
+  CargoHold cargo_;
+  std::map<AssetID, Market> markets_;
+  bool marketRequested_ = false;
+  Mining mining_;
+  bool miningTrigger_ = false;
+  MiningEvents miningEvents_;
 };
 
 }  // namespace fh

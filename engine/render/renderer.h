@@ -38,6 +38,12 @@ struct PostProcessParams {
   float grain = 0.0f;
 };
 
+struct PointLight {
+  Vec3 position{};   // camera-relative
+  float range = 10;  // metres (light reaches zero at range)
+  Vec3 color{1, 1, 1};
+};
+
 struct RenderFrameParams {
   Mat4 viewRotation;               // world->view rotation only (no translation)
   float fovYRadians = 1.0f;
@@ -62,6 +68,9 @@ struct RenderFrameParams {
   Vec3 fillColor{0, 0, 0};         // linear colour * intensity
   Vec3 rimColor{0, 0, 0};
   float rimPower = 3.0f;
+  std::vector<PointLight> pointLights;  // up to 8 are used (nearest first is the caller's job)
+  Vec3 fogColor{0, 0, 0};
+  float fogDensity = 0.0f;         // per metre; 0 = no fog
   PostProcessParams post;
 };
 

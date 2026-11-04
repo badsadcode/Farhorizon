@@ -116,6 +116,22 @@ bool Docking::cancel() {
   return true;
 }
 
+bool Docking::dockAt(SpaceWorld& world, std::uint32_t prop, std::uint32_t bay, bool announce) {
+  if (prop >= world.props().size() || !world.props()[prop].def.docking) return false;
+  if (bay >= world.props()[prop].def.docking->bays.size()) return false;
+  prop_ = prop;
+  bay_ = bay;
+  autopilot_ = false;
+  setState(DockState::Docked, world);
+  const Transform t = bayTransform(world);
+  world.player().state.position = t.position;
+  world.player().state.orientation = t.rotation;
+  world.player().state.velocity = {};
+  world.player().previous = world.player().state;
+  if (announce) say("[debug] Force-docked at " + world.props()[prop].def.name, world);
+  return true;
+}
+
 bool Docking::forceDock(SpaceWorld& world) {
   std::optional<std::uint32_t> best;
   float bestDist = 1e30f;
@@ -127,18 +143,7 @@ bool Docking::forceDock(SpaceWorld& world) {
       best = i;
     }
   }
-  if (!best) return false;
-  prop_ = best;
-  bay_ = 0;
-  autopilot_ = false;
-  setState(DockState::Docked, world);
-  const Transform bay = bayTransform(world);
-  world.player().state.position = bay.position;
-  world.player().state.orientation = bay.rotation;
-  world.player().state.velocity = {};
-  world.player().previous = world.player().state;
-  say("[debug] Force-docked at " + world.props()[*prop_].def.name, world);
-  return true;
+  return best && dockAt(world, *best, 0, true);
 }
 
 bool Docking::toggleAutopilot() {

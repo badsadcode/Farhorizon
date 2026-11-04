@@ -48,7 +48,7 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
 farhorizon [--content DIR] [--shaders DIR] [--scene ID] [--size WxH] [--camera chase|cockpit|orbit|free]
            [--look retro80s|clean] [--autofly] [--validation | --no-validation] [--no-vsync] [--no-overlay]
            [--frames N] [--screenshot FILE] [--benchmark ID] [--bench-out PREFIX]
-           [--start-docked] [--start-in ship|station]
+           [--start-docked] [--start-in ship|station] [--load FILE] [--continue]
 ```
 
 Validation is on by default in Debug builds. With `--validation`, any validation message makes the
@@ -65,6 +65,13 @@ farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_approach
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.docking_autopilot
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.ship_interior
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_hangar
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.mining
 ```
+
+## Audio
+Audio uses the default playback device through SDL3 (WASAPI on Windows). With no device the game
+runs silently and logs a warning. Benchmarks and `--frames` runs are always silent. To capture the
+mix without speakers: `SDL_AUDIO_DRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=out.raw` (float32 stereo
+48 kHz).
 Each run writes `benchmarks/<id>.csv` (per frame: cpu_ms, gpu_ms, draw_calls, triangles) and
 `benchmarks/<id>.json` (summary).

@@ -28,8 +28,12 @@ struct FrameUniforms {  // must match shaders/common.glsl (std140)
   Vec4 fillDir;
   Vec4 fillColor;
   Vec4 rimColorPower;
+  Vec4 fogColorDensity;
+  Vec4 lightCount;
+  Vec4 pointPosRange[8];
+  Vec4 pointColor[8];
 };
-static_assert(sizeof(FrameUniforms) == 336);
+static_assert(sizeof(FrameUniforms) == 624);
 
 struct MeshPush {  // must match mesh.frag push constants
   Vec4 baseColor;
@@ -503,6 +507,13 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.fillDir = Vec4(normalize(p.fillDirection), 0);
   u.fillColor = Vec4(p.fillColor, 0);
   u.rimColorPower = Vec4(p.rimColor, p.rimPower);
+  u.fogColorDensity = Vec4(p.fogColor, p.fogDensity);
+  const size_t nLights = std::min<size_t>(8, p.pointLights.size());
+  u.lightCount = Vec4(float(nLights), 0, 0, 0);
+  for (size_t i = 0; i < nLights; ++i) {
+    u.pointPosRange[i] = Vec4(p.pointLights[i].position, p.pointLights[i].range);
+    u.pointColor[i] = Vec4(p.pointLights[i].color, 0);
+  }
   std::memcpy(fr.uniforms.mapped, &u, sizeof(u));
 
   // ---- Overlay vertices (grow buffer as needed; this slot's GPU work is complete) ----

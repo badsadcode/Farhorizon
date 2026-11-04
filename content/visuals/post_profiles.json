@@ -1,7 +1,59 @@
 {
   "schemaVersion": 1,
-  "default": "retro80s",
+  "default": "usedfuture",
   "profiles": [
+    {
+      "id": "usedfuture",
+      "name": "Used Future",
+      "bloomStrength": 0.6,
+      "bloomThreshold": 1.0,
+      "bloomKnee": 0.5,
+      "bloomRadius": 1.5,
+      "bloomIterations": 4,
+      "shadowTint": [
+        0.8,
+        1.0,
+        0.92
+      ],
+      "highlightTint": [
+        1.12,
+        1.0,
+        0.8
+      ],
+      "saturation": 0.78,
+      "contrast": 1.12,
+      "vignette": 0.5,
+      "scanlines": 0.14,
+      "scanlinePeriod": 3.0,
+      "chromaticAberration": 0.01,
+      "grain": 0.05,
+      "hud": {
+        "primary": [
+          255,
+          176,
+          64,
+          235
+        ],
+        "nav": [
+          120,
+          255,
+          140,
+          235
+        ],
+        "field": [
+          185,
+          230,
+          150,
+          220
+        ],
+        "warn": [
+          255,
+          60,
+          40,
+          255
+        ]
+      }
+    },
     {
       "id": "retro80s",
       "name": "Retro 80s",

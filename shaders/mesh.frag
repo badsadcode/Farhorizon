@@ -62,7 +62,25 @@ void main() {
   vec3 fill = frame.fillColor.rgb * wrap * (diffuseColor + f0 * 0.5);
   float rim = pow(1.0 - NoV, max(frame.rimColorPower.a, 0.5));
   vec3 rimLight = frame.rimColorPower.rgb * rim * (1.0 - 0.6 * NoL);
-  vec3 color = direct + fill + rimLight + ambient * diffuseColor + ambientSpec + pc.emissiveMetallic.rgb;
+  // Point lights (interior lamps, mining flares): smooth windowed inverse-square falloff.
+  vec3 local = vec3(0.0);
+  int count = int(frame.lightCount.x);
+  for (int i = 0; i < 8; ++i) {
+    if (i >= count) break;
+    vec3 Lp = frame.pointPosRange[i].xyz - vPos;
+    float dist = length(Lp);
+    float range = frame.pointPosRange[i].w;
+    if (dist >= range) continue;
+    vec3 Ld = Lp / max(dist, 1e-3);
+    float win = clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0);
+    float atten = win * win / (dist * dist + 1.0);
+    float nl = max(dot(N, Ld), 0.0);
+    vec3 Hp = normalize(Ld + V);
+    vec3 Fp = F_Schlick(max(dot(Ld, Hp), 0.0), f0);
+    vec3 specP = D_GGX(max(dot(N, Hp), 0.0), a) * V_SmithGGXCorrelated(NoV, nl, a) * Fp;
+    local += (diffuseColor / PI * (1.0 - Fp) + specP) * frame.pointColor[i].rgb * nl * atten;
+  }
+  vec3 color = direct + local + fill + rimLight + ambient * diffuseColor + ambientSpec + pc.emissiveMetallic.rgb;
 
-  outColor = vec4(color, base.a);  // linear HDR radiance
+  outColor = vec4(applyFog(color, length(vPos)), base.a);  // linear HDR radiance
 }

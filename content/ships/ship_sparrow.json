@@ -194,5 +194,15 @@
       "duty": 0.1
     }
   ],
-  "interior": "interior.sparrow"
+  "interior": "interior.sparrow",
+  "mining": {
+    "range": 450,
+    "unitsPerSecond": 1.4,
+    "coneDeg": 6,
+    "scoopRadius": 14,
+    "maxChunks": 40,
+    "chunkLifetime": 90,
+    "chunkSpeed": 7,
+    "scanSeconds": 1.5
+  }
 }

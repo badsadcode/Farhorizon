@@ -31,6 +31,7 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
   s.id = r.str(j, "id");
   s.name = r.str(j, "name");
   s.exposure = float(r.num(j, "exposure", false, 1.0));
+  s.startingCredits = static_cast<std::int64_t>(r.num(j, "startingCredits", false, 500.0));
 
   if (j.contains("star")) {
     const auto& st = j["star"];
@@ -128,6 +129,7 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
           const auto& dj = pj["docking"];
           DockingDef d;
           d.interior = r.str(dj, "interior");
+          d.market = r.str(dj, "market", false);
           d.clearanceRange = float(r.num(dj, "clearanceRange", false, d.clearanceRange));
           d.captureDistance = float(r.num(dj, "captureDistance", false, d.captureDistance));
           d.captureSpeed = float(r.num(dj, "captureSpeed", false, d.captureSpeed));
@@ -169,6 +171,13 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
         f.detail = int(r.num(fj, "detail", false, f.detail));
         f.roughness = float(r.num(fj, "roughness", false, f.roughness));
         f.color = r.vec3(fj, "color", false, f.color);
+        if (fj.contains("resources") && fj["resources"].is_array())
+          for (const auto& rj : fj["resources"])
+            f.resources.push_back({r.str(rj, "commodity"), float(r.num(rj, "weight", false, 1.0))});
+        f.yieldPerMetre = float(r.num(fj, "yieldPerMetre", false, f.yieldPerMetre));
+        f.hardnessMin = float(r.num(fj, "hardnessMin", false, f.hardnessMin));
+        f.hardnessMax = float(r.num(fj, "hardnessMax", false, f.hardnessMax));
+        if (f.hardnessMin <= 0 || f.hardnessMax < f.hardnessMin) r.error("asteroid field '" + f.id + "': bad hardness");
         if (f.count > 20000) r.error("asteroid field '" + f.id + "': count must be <= 20000");
         if (f.variants < 1 || f.variants > 16) r.error("asteroid field '" + f.id + "': variants must be 1..16");
         if (f.detail < 0 || f.detail > 4) r.error("asteroid field '" + f.id + "': detail must be 0..4");
@@ -198,6 +207,7 @@ std::optional<SceneDef> loadSceneDef(const AssetManifest& manifest, const AssetI
   for (const auto& p : scene->props) {
     need(p.mesh, "mesh", "prop '" + p.id + "'");
     if (p.docking) need(p.docking->interior, "interior", "prop '" + p.id + "' docking");
+    if (p.docking && !p.docking->market.empty()) need(p.docking->market, "market", "prop '" + p.id + "' docking");
   }
   if (!ok) return std::nullopt;
   return scene;
@@ -230,6 +240,7 @@ std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, cons
   }
   b.startIn = r.str(j, "startIn", false);
   b.autoDock = j.value("autoDock", false);
+  b.mine = j.value("mine", false);
   b.lookTurnDegPerSec = float(r.num(j, "lookTurnDegPerSec", false, 0.0));
   if (!b.startIn.empty() && b.startIn != "ship" && b.startIn != "station") r.error("startIn must be ship or station");
   if (b.durationSeconds <= 0) r.error("durationSeconds must be > 0");

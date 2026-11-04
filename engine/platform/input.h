@@ -29,6 +29,9 @@ class InputState {
   float mouseDy() const { return mouseDy_; }
   float wheel() const { return wheel_; }
   bool mouseLeft() const { return mouseButtons_ & 1u; }
+  bool mouseLeftPressed() const { return mouseLeftPressed_; }  // went down this frame
+  float mouseX() const { return mouseX_; }  // window coordinates (multiply by pixel scale)
+  float mouseY() const { return mouseY_; }
   bool mouseRight() const { return mouseButtons_ & 4u; }
 
   // Called by Window.
@@ -42,6 +45,8 @@ class InputState {
   std::vector<bool> keysPressed_ = std::vector<bool>(512, false);
   float mouseDx_ = 0, mouseDy_ = 0, wheel_ = 0;
   unsigned mouseButtons_ = 0;
+  bool mouseLeftPressed_ = false;
+  float mouseX_ = 0, mouseY_ = 0;
   MouseSettings mouse_;
 };
 

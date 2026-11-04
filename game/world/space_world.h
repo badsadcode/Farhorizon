@@ -61,6 +61,11 @@ struct Asteroid {
   VisualHandle visual = 0;
   std::uint32_t field = 0;
   std::uint32_t index = 0;
+  // Mining (design doc 6): primary resource, remaining/initial yield in units, hardness.
+  std::string resource;
+  int yield = 0;
+  int initialYield = 0;
+  float hardness = 1.0f;
 };
 
 struct AsteroidFieldRuntime {
@@ -105,6 +110,8 @@ class SpaceWorld {
   // Interpolated player transform for rendering (alpha from FixedStepClock).
   Transform playerRenderTransform(float alpha) const;
   Prop& prop(std::uint32_t i) { return props_.at(i); }
+  Asteroid& asteroid(std::uint32_t i) { return asteroids_.at(i); }
+  void setSimulationTime(double t) { time_ = t; }
 
   // Targeting.
   void cycleTarget(double maxAsteroidRange = 6000.0);

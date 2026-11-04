@@ -23,6 +23,8 @@ void printUsage() {
       "  --look <profileId>     visual look, e.g. retro80s or clean\n"
       "  --start-docked         debug: start clamped to the nearest station pad\n"
       "  --start-in <where>     debug: start on foot in the 'ship' or the 'station'\n"
+      "  --load <file>          load a save game (e.g. saves/autosave.json)\n"
+      "  --continue             load saves/quicksave.json\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
       "  --no-validation        disable validation\n"
@@ -66,6 +68,8 @@ int main(int argc, char** argv) {
     else if (a == "--look") o.look = next();
     else if (a == "--start-docked") o.startDocked = true;
     else if (a == "--start-in") o.startIn = next();
+    else if (a == "--load") o.loadPath = next();
+    else if (a == "--continue") o.loadPath = "saves/quicksave.json";
     else if (a == "--frames") o.exitAfterFrames = std::atoi(next());
     else if (a == "--screenshot") o.screenshotOnExit = std::filesystem::path(next());
     else if (a == "--benchmark") o.benchmarkId = next();
@@ -77,6 +81,7 @@ int main(int argc, char** argv) {
   fh::log::setLogFile("farhorizon.log");
   try {
     fh::GameApp app(o);
+    if (!o.loadPath.empty() && !app.loadGame(o.loadPath)) fh::log::warn("app", "starting a new game instead");
     return app.run();
   } catch (const std::exception& e) {
     fh::log::error("fatal", "{}", e.what());
