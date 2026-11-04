@@ -27,21 +27,15 @@ void SpaceWorld::addAsteroid(Asteroid a) {
   asteroids_.push_back(a);
 }
 
-void SpaceWorld::resolveCollision(const Vec3& centre, float radius) {
+void SpaceWorld::resolveContact(const Contact& c) {
   FlightState& s = player_.state;
-  const Vec3 d = s.position - centre;
-  const float minDist = radius + player_.collisionRadius;
-  const float dist2 = dot(d, d);
-  if (dist2 >= minDist * minDist) return;
-  const float dist = std::sqrt(dist2);
-  const Vec3 n = dist > 1e-4f ? d / dist : Vec3{0, 1, 0};
-  s.position = centre + n * minDist;  // push out
-  const float vn = dot(s.velocity, n);
+  s.position += c.normal * c.depth;  // push out
+  const float vn = dot(s.velocity, c.normal);
   if (vn < 0) {
     constexpr float restitution = 0.35f;
     constexpr float friction = 0.85f;
-    const Vec3 tangential = s.velocity - n * vn;
-    s.velocity = tangential * friction - n * (vn * restitution);
+    const Vec3 tangential = s.velocity - c.normal * vn;
+    s.velocity = tangential * friction - c.normal * (vn * restitution);
     if (-vn > 2.0f) {  // ignore resting contact jitter
       ++player_.collisions;
       player_.lastImpactSpeed = -vn;
@@ -51,18 +45,46 @@ void SpaceWorld::resolveCollision(const Vec3& centre, float radius) {
   }
 }
 
+void SpaceWorld::resolveCollision(const Vec3& centre, float radius) {
+  const Vec3 d = player_.state.position - centre;
+  const float minDist = radius + player_.collisionRadius;
+  const float dist2 = dot(d, d);
+  if (dist2 >= minDist * minDist) return;
+  const float dist = std::sqrt(dist2);
+  Contact c;
+  c.normal = dist > 1e-4f ? d / dist : Vec3{0, 1, 0};
+  c.depth = minDist - dist;
+  resolveContact(c);
+}
+
 void SpaceWorld::fixedUpdate(float dt) {
   time_ += dt;
   player_.previous = player_.state;
-  stepFlight(player_.state, player_.input, player_.def.flight, dt);
+  if (player_.kinematic) player_.state.position += player_.state.velocity * dt;  // driven by docking
+  else stepFlight(player_.state, player_.input, player_.def.flight, dt);
 
   for (auto& p : props_)
     if (p.def.spinDegPerSec != 0.0f)
       p.rotation = normalize(Quat::fromAxisAngle(p.def.spinAxis, radians(p.def.spinDegPerSec) * dt) * p.rotation);
   for (auto& a : asteroids_) a.rotation = normalize(Quat::fromAxisAngle(a.spinAxis, a.spinRate * dt) * a.rotation);
 
-  // Sphere collisions against nearby static bodies (brute force: a few hundred bodies at most here).
-  for (const auto& p : props_) resolveCollision(p.local, p.collisionRadius);
+  if (!player_.collisionsEnabled) return;
+  // Collisions against nearby static bodies (brute force: a few hundred bodies at most here).
+  for (const auto& p : props_) {
+    if (p.colliders.empty()) {
+      resolveCollision(p.local, p.collisionRadius);
+      continue;
+    }
+    const Vec3 d = player_.state.position - p.local;
+    const float reach = p.collisionRadius + player_.collisionRadius;
+    if (dot(d, d) > reach * reach) continue;  // broad phase: bounding sphere
+    for (const Obb& local : p.colliders) {
+      const Obb world{p.local + p.rotation.rotate(local.center), normalize(p.rotation * local.rotation),
+                      local.halfExtents};
+      Contact c;
+      if (sphereVsObb(player_.state.position, player_.collisionRadius, world, c)) resolveContact(c);
+    }
+  }
   for (const auto& a : asteroids_) resolveCollision(a.local, a.radius * 0.9f);  // rocks are not full spheres
 }
 

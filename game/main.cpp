@@ -21,6 +21,8 @@ void printUsage() {
       "  --camera <mode>        chase | cockpit | orbit | free\n"
       "  --autofly              scripted gentle flight (smoke tests)\n"
       "  --look <profileId>     visual look, e.g. retro80s or clean\n"
+      "  --start-docked         debug: start clamped to the nearest station pad\n"
+      "  --start-in <where>     debug: start on foot in the 'ship' or the 'station'\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
       "  --no-validation        disable validation\n"
@@ -62,6 +64,8 @@ int main(int argc, char** argv) {
     else if (a == "--camera") o.cameraOverride = next();
     else if (a == "--autofly") o.autofly = true;
     else if (a == "--look") o.look = next();
+    else if (a == "--start-docked") o.startDocked = true;
+    else if (a == "--start-in") o.startIn = next();
     else if (a == "--frames") o.exitAfterFrames = std::atoi(next());
     else if (a == "--screenshot") o.screenshotOnExit = std::filesystem::path(next());
     else if (a == "--benchmark") o.benchmarkId = next();

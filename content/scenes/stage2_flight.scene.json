@@ -90,7 +90,7 @@
         25,
         0
       ],
-      "collisionRadius": 120.0,
+      "collisionRadius": 135.0,
       "marker": "station",
       "materialOverrides": {
         "metal": {
@@ -214,7 +214,45 @@
           ],
           "size": 2.2
         }
-      ]
+      ],
+      "colliders": [
+        {
+          "center": [
+            0,
+            0,
+            0
+          ],
+          "halfExtents": [
+            70,
+            35,
+            105
+          ]
+        }
+      ],
+      "docking": {
+        "interior": "interior.kestrel_hangar",
+        "clearanceRange": 4000,
+        "captureDistance": 12,
+        "captureSpeed": 6,
+        "captureAngleDeg": 15,
+        "approachHeight": 80,
+        "bays": [
+          {
+            "id": "pad1",
+            "name": "Pad 1",
+            "position": [
+              0,
+              38.9,
+              -70
+            ],
+            "rotationDeg": [
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      }
     },
     {
       "id": "station.kestrel.dish",
@@ -222,16 +260,16 @@
       "mesh": "mesh.station.dish",
       "scale": 70.0,
       "systemPosition": [
-        149597871100.0,
+        149597871110.56546,
         12000213.0,
-        -3500003200.0
+        -3500003177.342305
       ],
       "rotationDeg": [
         0,
         25,
         0
       ],
-      "collisionRadius": 40.0,
+      "collisionRadius": 55,
       "targetable": false,
       "marker": "none",
       "materialOverrides": {
@@ -263,6 +301,138 @@
           "size": 2.5,
           "blinkHz": 0.4,
           "duty": 0.25
+        }
+      ],
+      "colliders": [
+        {
+          "center": [
+            0,
+            0,
+            0
+          ],
+          "halfExtents": [
+            30,
+            28,
+            33
+          ]
+        }
+      ]
+    },
+    {
+      "id": "station.kestrel.pad1",
+      "name": "Kestrel Pad 1",
+      "mesh": "mesh.int.platform_large",
+      "scale": 14.0,
+      "systemPosition": [
+        149597871070.41672,
+        12000185.7,
+        -3500003263.441545
+      ],
+      "rotationDeg": [
+        0,
+        25,
+        0
+      ],
+      "collisionRadius": 1.0,
+      "colliders": [
+        {
+          "center": [
+            0,
+            -5,
+            0
+          ],
+          "halfExtents": [
+            0.1,
+            0.1,
+            0.1
+          ]
+        }
+      ],
+      "targetable": false,
+      "marker": "none",
+      "materialOverrides": {
+        "metal": {
+          "metallic": 0.5,
+          "roughness": 0.5
+        },
+        "metalDark": {
+          "metallic": 0.4,
+          "roughness": 0.6
+        },
+        "metalRed": {
+          "metallic": 0.2,
+          "roughness": 0.5,
+          "emissive": [
+            0.35,
+            0.08,
+            0.25
+          ]
+        }
+      },
+      "lights": [
+        {
+          "position": [
+            -13,
+            1.0,
+            -13
+          ],
+          "color": [
+            0.3,
+            2.4,
+            3.2
+          ],
+          "size": 1.4,
+          "blinkHz": 1.2,
+          "phase": 0,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            13,
+            1.0,
+            -13
+          ],
+          "color": [
+            0.3,
+            2.4,
+            3.2
+          ],
+          "size": 1.4,
+          "blinkHz": 1.2,
+          "phase": 0.25,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            13,
+            1.0,
+            13
+          ],
+          "color": [
+            0.3,
+            2.4,
+            3.2
+          ],
+          "size": 1.4,
+          "blinkHz": 1.2,
+          "phase": 0.5,
+          "duty": 0.3
+        },
+        {
+          "position": [
+            -13,
+            1.0,
+            13
+          ],
+          "color": [
+            0.3,
+            2.4,
+            3.2
+          ],
+          "size": 1.4,
+          "blinkHz": 1.2,
+          "phase": 0.75,
+          "duty": 0.3
         }
       ]
     }

@@ -17,6 +17,7 @@ std::optional<ShipDef> parseShipDef(const std::string& json, const std::string& 
   d.id = r.str(j, "id");
   d.name = r.str(j, "name");
   d.mesh = r.str(j, "mesh");
+  d.interior = r.str(j, "interior", false);
   d.meshScale = float(r.num(j, "meshScale", false, 1.0));
   d.meshRotationDeg = r.vec3(j, "meshRotationDeg", false);
   d.massTons = float(r.num(j, "massTons"));
@@ -128,6 +129,10 @@ std::optional<ShipDef> loadShipDef(const AssetManifest& manifest, const AssetID&
     return std::nullopt;
   }
   auto def = parseShipDef(*text, "ship '" + id + "'", errors);
+  if (def && !def->interior.empty() && (!manifest.find(def->interior) || manifest.find(def->interior)->type != "interior")) {
+    if (errors) errors->push_back("ship '" + id + "': interior '" + def->interior + "' not in manifest");
+    return std::nullopt;
+  }
   if (def && !manifest.find(def->mesh)) {
     if (errors) errors->push_back("ship '" + id + "': mesh asset '" + def->mesh + "' not in manifest");
     return std::nullopt;

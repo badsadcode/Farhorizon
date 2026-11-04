@@ -6,6 +6,9 @@
 #include <format>
 #include <map>
 
+#include "game/content/interior_def.h"
+#include "game/session/world_builder.h"
+
 #include "engine/assets/gltf_loader.h"
 #include "engine/core/log.h"
 #include "engine/platform/window.h"
@@ -20,12 +23,6 @@
 namespace fh {
 
 namespace {
-Quat eulerDegToQuat(const Vec3& deg) {
-  // Applied X, then Y, then Z (see docs/data_schemas).
-  return normalize(Quat::fromAxisAngle({0, 0, 1}, radians(deg.z)) * Quat::fromAxisAngle({0, 1, 0}, radians(deg.y)) *
-                   Quat::fromAxisAngle({1, 0, 0}, radians(deg.x)));
-}
-
 struct LoadedMesh {
   MeshData data;
   Mat4 meshFix;
@@ -40,6 +37,15 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
   if (!loadContent(contentErrors_))
     throw std::runtime_error("initial content load failed:\n  " +
                              (contentErrors_.empty() ? std::string("unknown error") : contentErrors_.front()));
+  if (benchmark_ && !benchmark_->startIn.empty()) options_.startIn = benchmark_->startIn;
+  if (options_.startDocked || !options_.startIn.empty()) {
+    session_->docking().forceDock(world());
+    lastDockState_ = DockState::Docked;
+    if (!options_.startIn.empty()) {
+      session_->leaveSeat();
+      if (options_.startIn == "station") session_->perform("exitShip");
+    }
+  }
   const bool scripted = !options_.benchmarkId.empty() || options_.exitAfterFrames > 0;
   if (!scripted) setMouseCapture(true);
 }
@@ -83,7 +89,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
 
   // ---- CPU-side loading (no GPU work until everything succeeded) ----
   auto loadMesh = [&](const AssetID& id, const MaterialOverrides& overrides, const std::string& owner, float scale,
-                      const Vec3& rotDeg) -> std::optional<LoadedMesh> {
+                      const Vec3& rotDeg, bool recenter, bool warnUnusedOverrides = true) -> std::optional<LoadedMesh> {
     auto path = manifest->resolve(id, "mesh");
     if (!path) {
       errors.push_back(owner + ": mesh '" + id + "' is not a mesh asset");
@@ -95,10 +101,11 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
       errors.push_back("mesh '" + id + "': " + err);
       return std::nullopt;
     }
-    applyMaterialOverrides(*mesh, overrides, owner, &errors);
+    // Interior-wide overrides are shared by all pieces, so unmatched names are expected there.
+    applyMaterialOverrides(*mesh, overrides, owner, warnUnusedOverrides ? &errors : nullptr);
     LoadedMesh lm;
     lm.meshFix = Mat4::rotation(eulerDegToQuat(rotDeg)) * Mat4::scale({scale, scale, scale}) *
-                 Mat4::translation(-mesh->boundsCenter());
+                 (recenter ? Mat4::translation(-mesh->boundsCenter()) : Mat4::identity());
     lm.data = std::move(*mesh);
     return lm;
   };
@@ -106,113 +113,100 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   auto shipDef = loadShipDef(*manifest, scene->player.ship, &errors);
   if (!shipDef) return false;
   auto shipMesh = loadMesh(shipDef->mesh, shipDef->materialOverrides, "ship '" + shipDef->id + "'",
-                           shipDef->meshScale, shipDef->meshRotationDeg);
+                           shipDef->meshScale, shipDef->meshRotationDeg, true);
   if (!shipMesh) return false;
 
-  std::vector<LoadedMesh> propMeshes;
+  std::map<std::string, LoadedMesh> propMeshes;  // by prop id
   for (const auto& p : scene->props) {
-    auto m = loadMesh(p.mesh, p.materialOverrides, "prop '" + p.id + "'", p.scale, {0, 0, 0});
+    auto m = loadMesh(p.mesh, p.materialOverrides, "prop '" + p.id + "'", p.scale, {0, 0, 0}, true);
     if (!m) return false;
-    propMeshes.push_back(std::move(*m));
+    propMeshes.emplace(p.id, std::move(*m));
   }
 
-  struct FieldData {
-    std::vector<MeshData> variants;
-    std::vector<AsteroidInstance> instances;
-  };
-  std::vector<FieldData> fieldData;
+  // Interiors: the ship's cabin and every docking station's interior.
+  std::map<AssetID, InteriorDef> interiors;
+  std::vector<AssetID> interiorIds;
+  if (!shipDef->interior.empty()) interiorIds.push_back(shipDef->interior);
+  for (const auto& p : scene->props)
+    if (p.docking) interiorIds.push_back(p.docking->interior);
+  std::map<std::pair<AssetID, std::string>, LoadedMesh> pieceMeshes;  // (interior, template) -> mesh
+  for (const auto& iid : interiorIds) {
+    if (interiors.count(iid)) continue;
+    auto def = loadInteriorDef(*manifest, iid, &errors);
+    if (!def) return false;
+    for (const auto& [tname, t] : def->templates) {
+      auto m = loadMesh(t.mesh, def->materialOverrides, "interior '" + iid + "'", 1.0f, {0, 0, 0}, false, false);
+      if (!m) return false;
+      pieceMeshes.emplace(std::make_pair(iid, tname), std::move(*m));
+    }
+    interiors.emplace(iid, std::move(*def));
+  }
+
+  std::map<std::string, std::vector<MeshData>> fieldMeshes;  // by field id
   for (const auto& f : scene->asteroidFields) {
-    FieldData fd;
-    for (std::uint32_t v = 0; v < f.variants; ++v) {
+    auto& v = fieldMeshes[f.id];
+    for (std::uint32_t i = 0; i < f.variants; ++i) {
       AsteroidMeshParams mp;
-      mp.seed = (std::uint64_t(f.seed) << 8) + v;
+      mp.seed = (std::uint64_t(f.seed) << 8) + i;
       mp.subdivisions = f.detail;
       mp.roughness = f.roughness;
       mp.color = f.color;
-      fd.variants.push_back(generateAsteroidMesh(mp));
+      v.push_back(generateAsteroidMesh(mp));
     }
-    AsteroidFieldParams ap;
-    ap.seed = f.seed;
-    ap.count = f.count;
-    ap.radius = f.radius;
-    ap.thickness = f.thickness;
-    ap.clusters = f.clusters;
-    ap.minScale = f.minScale;
-    ap.maxScale = f.maxScale;
-    ap.variants = f.variants;
-    fd.instances = generateAsteroidField(ap);
-    fieldData.push_back(std::move(fd));
   }
   for (auto& w : errors) log::warn("content", "{}", w);  // only non-fatal warnings remain here
 
-  // ---- Commit: preserve the player's pose across hot reloads ----
+  // ---- Commit: preserve the player's pose (and docking) across hot reloads ----
   std::optional<SystemPosition> keepPos;
   std::optional<FlightState> keepState;
-  if (world_ && !bench) {
-    keepPos = world_->frame().toSystem(world_->player().state.position);
-    keepState = world_->player().state;
+  std::optional<Docking> keepDocking;
+  if (session_ && !bench) {
+    keepPos = world().frame().toSystem(world().player().state.position);
+    keepState = world().player().state;
+    keepDocking = session_->docking();
   }
 
   renderer_->clearMeshes();
-  auto world = std::make_unique<SpaceWorld>();
-  const SystemPosition start = keepPos ? *keepPos : scene->player.position;
-  world->setOrigin(start, scene->rebaseDistance);
-
-  PlayerShip& player = world->player();
-  player.def = *shipDef;
-  player.visual = renderer_->uploadMesh(shipMesh->data);
-  player.meshFix = shipMesh->meshFix;
-  player.collisionRadius =
-      shipDef->collisionRadius > 0 ? shipDef->collisionRadius : shipMesh->data.boundsRadius() * shipDef->meshScale;
-  // Sockets: mesh nodes win; ship JSON provides fallbacks (both end up in ship space).
-  const Quat fixRot = quatFromMatrix(shipMesh->meshFix);
-  for (const auto& s : shipMesh->data.sockets)
-    player.sockets[s.name] = {shipMesh->meshFix.transformPoint(s.position), normalize(fixRot * s.rotation)};
-  for (const auto& [name, s] : shipDef->sockets)
-    if (!player.sockets.count(name)) player.sockets[name] = {s.position, eulerDegToQuat(s.rotationDeg)};
+  WorldVisuals visuals;
+  visuals.ship = [&](const ShipDef&) {
+    VisualInfo v;
+    v.handle = renderer_->uploadMesh(shipMesh->data);
+    v.meshFix = shipMesh->meshFix;
+    v.boundsRadius = shipMesh->data.boundsRadius() * shipDef->meshScale;
+    v.sockets = shipMesh->data.sockets;
+    return v;
+  };
+  visuals.prop = [&](const PropDef& pd) {
+    const LoadedMesh& m = propMeshes.at(pd.id);
+    return VisualInfo{renderer_->uploadMesh(m.data), m.meshFix, m.data.boundsRadius() * pd.scale, {}};
+  };
+  visuals.asteroidVariants = [&](const AsteroidFieldDef& f) {
+    std::vector<VisualHandle> h;
+    for (const auto& m : fieldMeshes.at(f.id)) h.push_back(renderer_->uploadMesh(m));
+    return h;
+  };
+  auto newSession = std::make_unique<GameSession>(buildSpaceWorld(*scene, *shipDef, visuals, keepPos));
   if (keepState) {
-    player.state = *keepState;
-    player.state.position = {};
-  } else {
-    player.state = FlightState{};
-    player.state.orientation = eulerDegToQuat(scene->player.rotationDeg);
-    player.state.boostEnergy = shipDef->flight.boostEnergyCapacity;
+    newSession->world().player().state = *keepState;
+    newSession->world().player().state.position = {};
+    newSession->world().player().previous = newSession->world().player().state;
   }
-  player.previous = player.state;
-
-  for (size_t i = 0; i < scene->props.size(); ++i) {
-    const PropDef& pd = scene->props[i];
-    Prop p;
-    p.def = pd;
-    p.system = pd.position;
-    p.rotation = eulerDegToQuat(pd.rotationDeg);
-    p.visual = renderer_->uploadMesh(propMeshes[i].data);
-    p.meshFix = propMeshes[i].meshFix;
-    p.collisionRadius = pd.collisionRadius > 0 ? pd.collisionRadius : propMeshes[i].data.boundsRadius() * pd.scale;
-    world->addProp(std::move(p));
-  }
-  std::size_t asteroidCount = 0;
-  for (size_t fi = 0; fi < scene->asteroidFields.size(); ++fi) {
-    AsteroidFieldRuntime rt;
-    rt.def = scene->asteroidFields[fi];
-    for (const auto& v : fieldData[fi].variants) rt.variants.push_back(renderer_->uploadMesh(v));
-    const std::uint32_t fieldIndex = world->addAsteroidField(rt);
-    const auto& variants = world->fields()[fieldIndex].variants;
-    for (std::uint32_t ai = 0; ai < fieldData[fi].instances.size(); ++ai) {
-      const AsteroidInstance& inst = fieldData[fi].instances[ai];
-      Asteroid a;
-      a.system = {rt.def.center.metres + DVec3(inst.offset)};
-      a.rotation = inst.rotation;
-      a.spinAxis = inst.spinAxis;
-      a.spinRate = inst.spinRate;
-      a.radius = inst.radius;
-      a.visual = variants[inst.variant];
-      a.field = fieldIndex;
-      a.index = ai;
-      world->addAsteroid(a);
-      ++asteroidCount;
+  if (keepDocking) newSession->docking() = *keepDocking;
+  newSession->setShipInterior(shipDef->interior);
+  interiorPieces_.clear();
+  for (auto& [iid, def] : interiors) {
+    std::map<std::string, std::uint32_t> handles;
+    for (const auto& [tname, t] : def.templates) handles[tname] = renderer_->uploadMesh(pieceMeshes.at({iid, tname}).data);
+    auto& list = interiorPieces_[iid];
+    for (const auto& piece : def.pieces) {
+      const Mat4 model = Mat4::translation(piece.position) *
+                         Mat4::rotation(Quat::fromAxisAngle({0, 1, 0}, radians(90.0f * float(piece.yawQuarterTurns)))) *
+                         Mat4::scale({piece.scale, piece.scale, piece.scale});
+      list.push_back({handles.at(piece.templ), model});
     }
+    newSession->addInterior(iid, std::move(def));
   }
+  std::size_t asteroidCount = newSession->world().asteroids().size();
 
   StarfieldParams sp;
   sp.seed = scene->starfield.seed;
@@ -232,46 +226,66 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   manifest_ = std::move(manifest);
   benchmark_ = bench;
   scene_ = std::move(*scene);
-  world_ = std::move(world);
+  session_ = std::move(newSession);
+  lastDockState_ = session_->docking().state();
   if (firstLoad) {
     camera_.configureDev(scene_.camera.fovDeg, scene_.camera.orbitDistance, scene_.camera.yawDeg,
                          scene_.camera.pitchDeg, scene_.camera.autoRotateDegPerSec);
     std::string mode = scene_.camera.initialMode;
     if (benchmark_) mode = benchmark_->camera;
     if (options_.cameraOverride) mode = *options_.cameraOverride;
-    camera_.setMode(cameraModeFromString(mode), world_->playerRenderTransform(1.0f));
-    if (benchmark_) controller_.setAutofly(true, benchmark_->throttle, benchmark_->rotation);
+    camera_.setMode(cameraModeFromString(mode), world().playerRenderTransform(1.0f));
+    if (benchmark_ && !benchmark_->autoDock && benchmark_->startIn.empty())
+      controller_.setAutofly(true, benchmark_->throttle, benchmark_->rotation);
     else if (options_.autofly) controller_.setAutofly(true, 0.4f, {0.0f, 0.08f, 0.0f});
   }
   camera_.snap();
-  log::info("content", "scene '{}' loaded: {} props, {} asteroids in {} fields, {} stars", scene_.id,
-            world_->props().size(), asteroidCount, world_->fields().size(), sp.count);
+  log::info("content", "scene '{}' loaded: {} props, {} asteroids in {} fields, {} interiors, {} stars", scene_.id,
+            world().props().size(), asteroidCount, world().fields().size(), interiorPieces_.size(), sp.count);
   return true;
 }
 
 void GameApp::handleAppInput() {
-  const Transform ship = world_->playerRenderTransform(1.0f);
+  const Transform ship = world().playerRenderTransform(1.0f);
+  const bool cockpit = session_->location() == Location::Cockpit;
   if (input_.pressed("app.quit")) quit_ = true;
   if (input_.pressed("app.toggleMouse")) setMouseCapture(!mouseCaptured_);
   if (input_.pressed("debug.overlay")) showDevOverlay_ = !showDevOverlay_;
   if (input_.pressed("window.fullscreen")) window_->toggleFullscreen();
   if (input_.pressed("debug.screenshot"))
     pendingScreenshot_ = std::filesystem::path("screenshots") / std::format("farhorizon_{:03}.png", screenshotCounter_++);
-  if (input_.pressed("camera.cycle")) camera_.cycleShipCamera(ship);
-  if (input_.pressed("camera.dev")) camera_.toggleDev(ship);
-  if (input_.pressed("camera.autoRotate") && camera_.mode() == CameraMode::Orbit) camera_.toggleAutoRotate();
-  if (input_.pressed("target.next")) world_->cycleTarget();
-  if (input_.pressed("target.nearestAsteroid")) world_->targetNearestAsteroid();
-  if (input_.pressed("target.clear")) world_->clearTarget();
   if (input_.pressed("visual.cycleLook") && !looks_.profiles.empty()) {
     activeLook_ = (activeLook_ + 1) % int(looks_.profiles.size());
     lookShownUntil_ = runTime_ + 2.0;
     log::info("render", "look: {}", looks_.profiles[size_t(activeLook_)].name);
   }
-  if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
+  if (input_.pressed("interact")) session_->interact();
+  if (cockpit) {
+    if (input_.pressed("camera.cycle")) camera_.cycleShipCamera(ship);
+    if (input_.pressed("camera.dev")) camera_.toggleDev(ship);
+    if (input_.pressed("camera.autoRotate") && camera_.mode() == CameraMode::Orbit) camera_.toggleAutoRotate();
+    if (input_.pressed("target.next")) world().cycleTarget();
+    if (input_.pressed("target.nearestAsteroid")) world().targetNearestAsteroid();
+    if (input_.pressed("target.clear")) world().clearTarget();
+    if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
+    if (input_.pressed("dock.request")) {
+      Docking& d = session_->docking();
+      switch (d.state()) {
+        case DockState::Undocked: d.request(world()); break;
+        case DockState::RequestingClearance:
+        case DockState::ApproachAuthorized: d.cancel(); break;
+        case DockState::Docked: d.undock(world()); break;
+        default: break;
+      }
+    }
+    if (input_.pressed("dock.autopilot")) session_->docking().toggleAutopilot();
+    if (input_.pressed("debug.forceDock")) session_->docking().forceDock(world());
+  }
   if (input_.pressed("debug.reloadAssets")) {
     std::vector<std::string> errors;
-    if (loadContent(errors)) {
+    if (!cockpit) {
+      contentErrors_ = {"Reload is only available from the pilot seat"};
+    } else if (loadContent(errors)) {
       log::info("content", "hot reload OK");
       contentErrors_ = errors;  // may contain warnings
     } else {
@@ -282,11 +296,26 @@ void GameApp::handleAppInput() {
   }
 }
 
+void GameApp::handleFootInput(float /*dt*/) {
+  CharacterInput& ci = session_->characterInput();
+  auto axis = [&](const char* neg, const char* pos) {
+    return (input_.down(pos) ? 1.0f : 0.0f) - (input_.down(neg) ? 1.0f : 0.0f);
+  };
+  ci.move = {axis("foot.left", "foot.right"), axis("foot.back", "foot.forward")};
+  ci.run = input_.down("foot.run");
+  if (input_.pressed("foot.jump")) ci.jump = true;
+  if (mouseCaptured_) {
+    const float sens = 0.0025f;
+    ci.yawDelta += input_.mouseDx() * sens;
+    ci.pitchDelta -= input_.mouseDy() * sens * (input_.mouse().invertY ? -1.0f : 1.0f);
+  }
+}
+
 void GameApp::buildDevOverlay() {
   const FrameSummary s = stats_.windowSummary();
   const RenderStats& rs = renderer_->stats();
-  const PlayerShip& p = world_->player();
-  const SystemPosition sys = world_->frame().toSystem(p.state.position);
+  const PlayerShip& p = world().player();
+  const SystemPosition sys = world().frame().toSystem(p.state.position);
   const VkExtent2D ext = renderer_->extent();
   const OverlayColor normal{205, 215, 225, 230}, dim{140, 150, 165, 230}, bad{255, 110, 100, 255};
   std::vector<std::pair<std::string, OverlayColor>> lines;
@@ -297,10 +326,10 @@ void GameApp::buildDevOverlay() {
                                rs.gpuMs >= 0 ? std::format("{:5.2f} ms", rs.gpuMs) : std::string("n/a")),
                    normal});
   lines.push_back({std::format("draws {}  tris {}  instances {}  asteroids vis {}/{}", rs.drawCalls, rs.triangles,
-                               rs.meshInstances, visibleAsteroids_, world_->asteroids().size()),
+                               rs.meshInstances, visibleAsteroids_, world().asteroids().size()),
                    normal});
   lines.push_back({std::format("GPU mem {:.1f} MB   origin gen {} ({} this run)  local {:.0f} m",
-                               double(gpu::allocatedBytes()) / (1024.0 * 1024.0), world_->frame().generation(), rebases_,
+                               double(gpu::allocatedBytes()) / (1024.0 * 1024.0), world().frame().generation(), rebases_,
                                length(p.state.position)),
                    normal});
   lines.push_back({std::format("star dist {}   impacts {}", formatDistance(length(sys.metres - scene_.star.position.metres)),
@@ -329,13 +358,19 @@ void GameApp::buildDevOverlay() {
 void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const Transform& ship) {
   overlay_.clear();
   const VkExtent2D ext = renderer_->extent();
-  HudContext hc{*world_, controller_, world_->player().input, ship, view, camera_.mode(), viewProj,
+  HudContext hc{world(), controller_, world().player().input, ship, view, camera_.mode(), viewProj,
                 float(ext.width), float(ext.height), mouseCaptured_, runTime_};
   const VisualProfile& look = looks_.profiles[size_t(activeLook_)];
   hc.palette = look.hud;
   hc.lookName = look.name;
   hc.lookShownUntil = lookShownUntil_;
-  drawHud(overlay_, hc);
+  hc.session = session_.get();
+  if (session_->location() == Location::Cockpit) {
+    drawHud(overlay_, hc);
+  } else {
+    InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud};
+    drawInteriorHud(overlay_, ic);
+  }
   if (showDevOverlay_) buildDevOverlay();
 }
 
@@ -361,44 +396,60 @@ int GameApp::run() {
     if (mouseCaptured_ && !window_->hasFocus()) setMouseCapture(false);
 
     handleAppInput();
+    const bool cockpit = session_->location() == Location::Cockpit;
     const bool devCam = camera_.isDev();
     const bool freeCam = camera_.mode() == CameraMode::Free;
-    controller_.update(input_, float(dt), mouseCaptured_ && !devCam, world_->player().state.boostEnergy,
-                       world_->player().input);
-    if (freeCam) {  // WASD drives the free camera; the ship holds its set-speed and stops turning
+    if (cockpit) {
+      controller_.update(input_, float(dt), mouseCaptured_ && !devCam, world().player().state.boostEnergy,
+                         world().player().input);
+    } else {
+      handleFootInput(float(dt));
+      if (benchmark_ && benchmark_->lookTurnDegPerSec != 0.0f)
+        session_->characterInput().yawDelta += radians(benchmark_->lookTurnDegPerSec) * float(dt);
+      world().player().input = FlightInput{};  // nobody at the controls
+    }
+    if (cockpit && freeCam) {  // WASD drives the free camera; the ship holds its set-speed and stops turning
       FlightInput hold;
       hold.throttle = controller_.throttle();
       hold.assist = controller_.assist();
       hold.mode = controller_.mode();
-      world_->player().input = hold;
+      world().player().input = hold;
     }
 
     const int steps = clock_.advance(dt);
     for (int i = 0; i < steps; ++i) {
-      world_->fixedUpdate(float(clock_.step()));
+      session_->fixedUpdate(float(clock_.step()));
+      const DockState ds = session_->docking().state();
+      if (ds != lastDockState_ && ds == DockState::Docked) controller_.setThrottle(0.0f);  // no surprise launch
+      if (benchmark_ && benchmark_->autoDock) {
+        Docking& d = session_->docking();
+        if (ds == DockState::Undocked && d.message().empty()) d.request(world());
+        if (ds == DockState::ApproachAuthorized && !d.autopilot()) d.toggleAutopilot();
+      }
+      lastDockState_ = ds;
       camera_.fixedUpdate(float(clock_.step()));
-      if (auto delta = world_->rebaseIfNeeded()) {
+      if (auto delta = world().rebaseIfNeeded()) {
         camera_.applyRebase(*delta);
         ++rebases_;
       }
     }
 
     // ---- Camera and render data (camera-relative) ----
-    const Transform ship = world_->playerRenderTransform(float(clock_.alpha()));
-    const CameraView view = camera_.update(ship, world_->player(), input_, float(dt), devCam || !mouseCaptured_);
+    const Transform ship = world().playerRenderTransform(float(clock_.alpha()));
+    CameraView view = camera_.update(ship, world().player(), input_, float(dt), devCam || !mouseCaptured_);
     const VkExtent2D ext = renderer_->extent();
     RenderFrameParams params;
     params.viewRotation = view.viewRotation();
     params.fovYRadians = radians(view.fovDeg);
     params.nearPlane = 0.05f;
-    const SystemPosition camSys = world_->frame().toSystem(view.position);
+    const SystemPosition camSys = world().frame().toSystem(view.position);
     params.sunDirection = Vec3(normalize(scene_.star.position.metres - camSys.metres));
     params.sunColor = scene_.star.color * scene_.star.intensity;
     params.sunAngularRadiusRadians = radians(scene_.star.angularDiameterDeg * 0.5f);
     params.ambientSky = scene_.ambient.skyColor;
     params.ambientGround = scene_.ambient.groundColor;
     params.exposure = scene_.exposure;
-    params.timeSeconds = float(world_->simulationTime());
+    params.timeSeconds = float(world().simulationTime());
     params.galacticTiltRadians = radians(scene_.starfield.galacticPlaneTiltDeg);
     params.skyBase = scene_.sky.baseColor;
     params.skyBand = scene_.sky.bandColor;
@@ -434,17 +485,17 @@ int GameApp::run() {
     const Frustum frustum = Frustum::fromViewProj(viewProj);
 
     std::vector<MeshDrawItem> items;
-    items.reserve(world_->asteroids().size() + world_->props().size() + 1);
-    const PlayerShip& player = world_->player();
+    items.reserve(world().asteroids().size() + world().props().size() + 1);
+    const PlayerShip& player = world().player();
     items.push_back({player.visual, Mat4::translation(ship.position - view.position) * Mat4::rotation(ship.rotation) *
                                         player.meshFix});
-    for (const auto& p : world_->props()) {
+    for (const auto& p : world().props()) {
       const Vec3 rel = p.local - view.position;
       if (!frustum.sphereVisible(rel, p.collisionRadius * 1.5f)) continue;
       items.push_back({p.visual, Mat4::translation(rel) * Mat4::rotation(p.rotation) * p.meshFix});
     }
     visibleAsteroids_ = 0;
-    for (const auto& a : world_->asteroids()) {
+    for (const auto& a : world().asteroids()) {
       const Vec3 rel = a.local - view.position;
       if (!frustum.sphereVisible(rel, a.radius)) continue;
       ++visibleAsteroids_;
@@ -455,7 +506,7 @@ int GameApp::run() {
     // ---- Glow sprites: engine exhaust + running lights ----
     std::vector<GlowSprite> glows;
     {
-      const double t = world_->simulationTime();
+      const double t = world().simulationTime();
       const EngineGlowDef& eg = player.def.engineGlow;
       // Exhaust brightness follows forward thrust demand (set-speed error or direct thrust) and boost.
       const FlightInput& fin = player.input;
@@ -478,7 +529,7 @@ int GameApp::run() {
         const Vec3 wp = ship.position + ship.rotation.rotate(l.position) - view.position;
         glows.push_back({Vec4(wp, l.size), Vec4(l.color * k, 0)});
       }
-      for (const auto& p : world_->props())
+      for (const auto& p : world().props())
         for (const auto& l : p.def.lights) {
           const float k = l.intensityAt(t);
           if (k <= 0) continue;
@@ -486,6 +537,47 @@ int GameApp::run() {
           if (!frustum.sphereVisible(wp, l.size)) continue;
           glows.push_back({Vec4(wp, l.size), Vec4(l.color * k, 0)});
         }
+    }
+
+    // ---- On foot: render the active interior instead of space ----
+    if (!cockpit) {
+      if (const InteriorDef* idef = session_->activeInterior()) {
+        const CharacterState& ch = session_->character();
+        view.position = ch.eye(session_->characterParams());
+        view.rotation = ch.viewRotation();
+        view.fovDeg = 75.0f;
+        params.viewRotation = view.viewRotation();
+        params.fovYRadians = radians(view.fovDeg);
+        const InteriorLighting& L = idef->lighting;
+        params.sunDirection = L.keyDirection;
+        params.sunColor = L.keyColor;
+        params.sunGlare = 0.0f;
+        params.ambientSky = L.ambientSky;
+        params.ambientGround = L.ambientGround;
+        params.fillDirection = L.fillDirection;
+        params.fillColor = L.fillColor;
+        params.rimColor = L.rimColor;
+        params.rimPower = L.rimPower;
+        params.exposure = L.exposure;
+        params.drawSky = idef->showSky;
+        params.drawStars = idef->showSky;
+        if (!idef->showSky) params.skyBase = {0.004f, 0.004f, 0.006f};
+        items.clear();
+        glows.clear();
+        for (const auto& pi : interiorPieces_[session_->activeInteriorId()])
+          items.push_back({pi.mesh, Mat4::translation(-view.position) * pi.model});
+        if (idef->parkedShip) {
+          const auto& ps = *idef->parkedShip;
+          items.push_back({player.visual, Mat4::translation(ps.position - view.position) *
+                                              Mat4::rotation(Quat::fromAxisAngle({0, 1, 0}, radians(ps.yawDeg))) *
+                                              player.meshFix});
+        }
+        const double t = world().simulationTime();
+        for (const auto& l : idef->lights) {
+          const float k = l.intensityAt(t);
+          if (k > 0) glows.push_back({Vec4(l.position - view.position, l.size), Vec4(l.color * k, 0)});
+        }
+      }
     }
 
     buildOverlay(view, viewProj, ship);
@@ -508,6 +600,9 @@ int GameApp::run() {
 
     if (lastFrame) quit_ = true;
     if (benchmark_ && runTime_ >= benchSeconds) quit_ = true;
+    if (benchmark_ && benchmark_->autoDock && session_->docking().state() == DockState::Docked &&
+        session_->docking().stateTime() > 2.0)
+      quit_ = true;  // docking benchmark ends once clamped
   }
 
   if (benchmark_) {
@@ -526,7 +621,7 @@ int GameApp::run() {
     log::info("bench", "wrote {} and {}", csv.string(), json.string());
   }
   log::info("app", "exiting after {} frames, {} rebases, {} impacts, {} validation messages", frameCount_, rebases_,
-            world_->player().collisions, VkContext::validationMessageCount());
+            world().player().collisions, VkContext::validationMessageCount());
   return VkContext::validationMessageCount() > 0 && options_.validation ? 2 : 0;
 }
 

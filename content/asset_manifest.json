@@ -47,6 +47,111 @@
     "bench.station_approach": {
       "type": "benchmark",
       "source": "benchmarks/station_approach.json"
+    },
+    "mesh.int.corridor": {
+      "type": "mesh",
+      "source": "models/interior/corridor.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_end": {
+      "type": "mesh",
+      "source": "models/interior/corridor_end.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_end' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_window": {
+      "type": "mesh",
+      "source": "models/interior/corridor_window.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_window' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_split": {
+      "type": "mesh",
+      "source": "models/interior/corridor_split.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_split' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_corner": {
+      "type": "mesh",
+      "source": "models/interior/corridor_corner.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_corner' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_wall": {
+      "type": "mesh",
+      "source": "models/interior/corridor_wall.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_wall' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.corridor_open": {
+      "type": "mesh",
+      "source": "models/interior/corridor_open.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'corridor_open' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.desk_chair_arms": {
+      "type": "mesh",
+      "source": "models/interior/desk_chairArms.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'desk_chairArms' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.desk_computer_screen": {
+      "type": "mesh",
+      "source": "models/interior/desk_computerScreen.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'desk_computerScreen' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.desk_computer_corner": {
+      "type": "mesh",
+      "source": "models/interior/desk_computerCorner.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'desk_computerCorner' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.machine_barrel_large": {
+      "type": "mesh",
+      "source": "models/interior/machine_barrelLarge.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'machine_barrelLarge' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.barrels": {
+      "type": "mesh",
+      "source": "models/interior/barrels.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'barrels' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.platform_large": {
+      "type": "mesh",
+      "source": "models/interior/platform_large.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'platform_large' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.structure_closed": {
+      "type": "mesh",
+      "source": "models/interior/structure_closed.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'structure_closed' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.gate_complex": {
+      "type": "mesh",
+      "source": "models/interior/gate_complex.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'gate_complex' (kenney.nl). Placeholder interior piece."
+    },
+    "mesh.int.supports_high": {
+      "type": "mesh",
+      "source": "models/interior/supports_high.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'supports_high' (kenney.nl). Placeholder interior piece."
+    },
+    "interior.sparrow": {
+      "type": "interior",
+      "source": "interiors/sparrow.interior.json"
+    },
+    "interior.kestrel_hangar": {
+      "type": "interior",
+      "source": "interiors/kestrel_hangar.interior.json"
+    },
+    "mesh.int.platform_center": {
+      "type": "mesh",
+      "source": "models/interior/platform_center.glb",
+      "license": "CC0 1.0 - Kenney Space Kit 'platform_center' (kenney.nl). Placeholder interior piece."
+    },
+    "bench.station_hangar": {
+      "type": "benchmark",
+      "source": "benchmarks/station_hangar.json"
+    },
+    "bench.ship_interior": {
+      "type": "benchmark",
+      "source": "benchmarks/ship_interior.json"
+    },
+    "bench.docking_autopilot": {
+      "type": "benchmark",
+      "source": "benchmarks/docking_autopilot.json"
     }
   }
 }

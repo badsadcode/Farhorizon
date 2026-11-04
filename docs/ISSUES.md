@@ -10,8 +10,12 @@
 | 6 | open | assets | Hot reload is manual (F5). There is no file watcher yet. |
 | 7 | open | platform | Under Xvfb (no window manager) the F11 toggle state cannot be observed. Verify on Windows. |
 | 8 | info | perf | The software rasterizer (llvmpipe) is GPU-bound on the procedural sky (5-octave fbm ×3 per pixel). This should be negligible on real GPUs. Bake it to a cubemap if it ever shows up in profiles. |
-| 9 | open | physics | The station proxy collides as one sphere. Docking (Stage 3) needs per-part colliders and scripted capture. |
+| 9 | fixed (0.3) | physics | Props support oriented-box colliders; docking uses scripted capture onto a roof pad. |
 | 10 | open | input | No in-game rebinding UI; rebinding means editing `input.json` and pressing F5. |
-| 11 | open | camera | The cockpit camera sees the exterior hull top as a flat "dash" (there is no interior mesh yet). |
+| 11 | open | camera | In flight, the cockpit camera still sees the exterior hull top as a flat "dash". The walkable cabin exists, but flight uses the exterior view. |
 | 12 | open | render | The retro look costs ~25 ms more than `clean` on the software rasteriser (expected to be negligible on GPUs). Bloom is iterative Gaussian, not a mip pyramid. |
 | 13 | open | gameplay | No in-system travel drive yet (design 4.2); the station is 3 km away and the asteroid field 8 km away to keep cruise travel short. |
+| 14 | open | interiors | Interior lighting is flat (one key light + fill + rim, no point lights or shadows). The Kenney placeholder pieces leave small ceiling gaps that show the clear colour or sky. |
+| 15 | open | docking | The approach autopilot assumes an approach from above or the side. From directly below the hub it can press against the hull. |
+| 16 | open | interiors | Interior transitions are instant cuts (no seat/airlock animation or loading fade). |
+| 17 | open | interiors | The on-foot camera is not interpolated between fixed steps (possible slight judder at high refresh rates). |

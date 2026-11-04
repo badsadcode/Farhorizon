@@ -111,6 +111,40 @@ std::optional<SceneDef> parseSceneDef(const std::string& json, const std::string
         p.marker = r.str(pj, "marker", false, p.marker);
         p.materialOverrides = r.materialOverrides(pj);
         p.lights = r.lights(pj);
+        if (pj.contains("colliders")) {
+          if (!pj["colliders"].is_array()) r.error("prop '" + p.id + "': 'colliders' must be an array");
+          else
+            for (const auto& cj : pj["colliders"]) {
+              BoxColliderDef b;
+              b.center = r.vec3(cj, "center");
+              b.halfExtents = r.vec3(cj, "halfExtents");
+              b.rotationDeg = r.vec3(cj, "rotationDeg", false);
+              if (b.halfExtents.x <= 0 || b.halfExtents.y <= 0 || b.halfExtents.z <= 0)
+                r.error("prop '" + p.id + "': collider halfExtents must be > 0");
+              p.colliders.push_back(b);
+            }
+        }
+        if (pj.contains("docking")) {
+          const auto& dj = pj["docking"];
+          DockingDef d;
+          d.interior = r.str(dj, "interior");
+          d.clearanceRange = float(r.num(dj, "clearanceRange", false, d.clearanceRange));
+          d.captureDistance = float(r.num(dj, "captureDistance", false, d.captureDistance));
+          d.captureSpeed = float(r.num(dj, "captureSpeed", false, d.captureSpeed));
+          d.captureAngleDeg = float(r.num(dj, "captureAngleDeg", false, d.captureAngleDeg));
+          d.approachHeight = float(r.num(dj, "approachHeight", false, d.approachHeight));
+          if (dj.contains("bays") && dj["bays"].is_array())
+            for (const auto& bj : dj["bays"]) {
+              DockingBayDef b;
+              b.id = r.str(bj, "id");
+              b.name = r.str(bj, "name");
+              b.position = r.vec3(bj, "position");
+              b.rotationDeg = r.vec3(bj, "rotationDeg", false);
+              d.bays.push_back(b);
+            }
+          if (d.bays.empty()) r.error("prop '" + p.id + "': docking needs at least one bay");
+          p.docking = d;
+        }
         if (p.scale <= 0) r.error("prop '" + p.id + "': scale must be > 0");
         s.props.push_back(p);
       }
@@ -161,7 +195,10 @@ std::optional<SceneDef> loadSceneDef(const AssetManifest& manifest, const AssetI
     }
   };
   need(scene->player.ship, "ship", "player");
-  for (const auto& p : scene->props) need(p.mesh, "mesh", "prop '" + p.id + "'");
+  for (const auto& p : scene->props) {
+    need(p.mesh, "mesh", "prop '" + p.id + "'");
+    if (p.docking) need(p.docking->interior, "interior", "prop '" + p.id + "' docking");
+  }
   if (!ok) return std::nullopt;
   return scene;
 }
@@ -191,6 +228,10 @@ std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, cons
     b.throttle = float(r.num(j["autofly"], "throttle", false, 0.0));
     b.rotation = r.vec3(j["autofly"], "rotation", false);
   }
+  b.startIn = r.str(j, "startIn", false);
+  b.autoDock = j.value("autoDock", false);
+  b.lookTurnDegPerSec = float(r.num(j, "lookTurnDegPerSec", false, 0.0));
+  if (!b.startIn.empty() && b.startIn != "ship" && b.startIn != "station") r.error("startIn must be ship or station");
   if (b.durationSeconds <= 0) r.error("durationSeconds must be > 0");
   if (!r.ok()) return std::nullopt;
   return b;

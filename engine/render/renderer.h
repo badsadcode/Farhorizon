@@ -50,6 +50,9 @@ struct RenderFrameParams {
   float exposure = 1.0f;
   float timeSeconds = 0.0f;
   float galacticTiltRadians = 0.5f;
+  bool drawSky = true;             // false for enclosed interiors
+  bool drawStars = true;
+  float sunGlare = 1.0f;           // 0 hides the star disc and glare (interior key lights)
   Vec3 skyBase{0.0016f, 0.0019f, 0.0030f};
   Vec3 skyBand{0.020f, 0.018f, 0.024f};
   float skyBandIntensity = 1.0f;

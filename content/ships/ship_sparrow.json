@@ -193,5 +193,6 @@
       "phase": 0.5,
       "duty": 0.1
     }
-  ]
+  ],
+  "interior": "interior.sparrow"
 }

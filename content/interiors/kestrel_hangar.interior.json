@@ -1,0 +1,860 @@
+{
+  "id": "interior.kestrel_hangar",
+  "name": "Kestrel Station - Hangar 1",
+  "kind": "station",
+  "gravity": 9.81,
+  "showSky": true,
+  "lighting": {
+    "keyDirection": [
+      0.35,
+      1.0,
+      0.25
+    ],
+    "keyColor": [
+      1.4,
+      1.25,
+      1.1
+    ],
+    "ambientSky": [
+      0.1,
+      0.09,
+      0.13
+    ],
+    "ambientGround": [
+      0.06,
+      0.045,
+      0.04
+    ],
+    "fillDirection": [
+      0.0,
+      0.3,
+      -1.0
+    ],
+    "fillColor": [
+      0.1,
+      0.04,
+      0.16
+    ],
+    "rimColor": [
+      0.14,
+      0.05,
+      0.24
+    ],
+    "rimPower": 3.0,
+    "exposure": 1.0
+  },
+  "materialOverrides": {
+    "metal": {
+      "metallic": 0.6,
+      "roughness": 0.45
+    },
+    "metalDark": {
+      "metallic": 0.5,
+      "roughness": 0.6
+    },
+    "metalRed": {
+      "metallic": 0.3,
+      "roughness": 0.5
+    },
+    "dark": {
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "emissive": [
+        0.05,
+        0.2,
+        0.28
+      ]
+    }
+  },
+  "templates": {
+    "floor": {
+      "mesh": "mesh.int.platform_large",
+      "colliders": []
+    },
+    "wall_block": {
+      "mesh": "mesh.int.structure_closed",
+      "colliders": []
+    },
+    "pillar": {
+      "mesh": "mesh.int.supports_high",
+      "colliders": [
+        {
+          "min": [
+            -0.3,
+            0,
+            -0.3
+          ],
+          "max": [
+            0.3,
+            1,
+            0.3
+          ]
+        }
+      ]
+    },
+    "door": {
+      "mesh": "mesh.int.gate_complex",
+      "colliders": [
+        {
+          "min": [
+            -0.5,
+            0,
+            -0.25
+          ],
+          "max": [
+            0.5,
+            1,
+            0.25
+          ]
+        }
+      ]
+    },
+    "console": {
+      "mesh": "mesh.int.desk_computer_screen",
+      "colliders": [
+        {
+          "min": [
+            -0.26,
+            0,
+            -0.11
+          ],
+          "max": [
+            0.26,
+            0.38,
+            0.11
+          ]
+        }
+      ]
+    },
+    "barrel_large": {
+      "mesh": "mesh.int.machine_barrel_large",
+      "colliders": [
+        {
+          "min": [
+            -0.3,
+            0,
+            -0.3
+          ],
+          "max": [
+            0.3,
+            0.6,
+            0.3
+          ]
+        }
+      ]
+    },
+    "barrels": {
+      "mesh": "mesh.int.barrels",
+      "colliders": [
+        {
+          "min": [
+            -0.28,
+            0,
+            -0.25
+          ],
+          "max": [
+            0.28,
+            0.2,
+            0.25
+          ]
+        }
+      ]
+    }
+  },
+  "pieces": [
+    {
+      "template": "floor",
+      "position": [
+        -18,
+        0,
+        -18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -18,
+        0,
+        -6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -18,
+        0,
+        6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -18,
+        0,
+        18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -6,
+        0,
+        -18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -6,
+        0,
+        -6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -6,
+        0,
+        6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        -6,
+        0,
+        18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        6,
+        0,
+        -18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        6,
+        0,
+        -6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        6,
+        0,
+        6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        6,
+        0,
+        18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        18,
+        0,
+        -18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        18,
+        0,
+        -6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        18,
+        0,
+        6
+      ],
+      "scale": 6
+    },
+    {
+      "template": "floor",
+      "position": [
+        18,
+        0,
+        18
+      ],
+      "scale": 6
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -18,
+        0,
+        30
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -6,
+        0,
+        30
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        6,
+        0,
+        30
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        18,
+        0,
+        30
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -30,
+        0,
+        -18
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        30,
+        0,
+        -18
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -30,
+        0,
+        -6
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        30,
+        0,
+        -6
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -30,
+        0,
+        6
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        30,
+        0,
+        6
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        -30,
+        0,
+        18
+      ],
+      "scale": 12
+    },
+    {
+      "template": "wall_block",
+      "position": [
+        30,
+        0,
+        18
+      ],
+      "scale": 12
+    },
+    {
+      "template": "pillar",
+      "position": [
+        -23,
+        0.6,
+        -22
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        -23,
+        0.6,
+        -8
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        -23,
+        0.6,
+        8
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        -23,
+        0.6,
+        22
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        23,
+        0.6,
+        -22
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        23,
+        0.6,
+        -8
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        23,
+        0.6,
+        8
+      ],
+      "scale": 8
+    },
+    {
+      "template": "pillar",
+      "position": [
+        23,
+        0.6,
+        22
+      ],
+      "scale": 8
+    },
+    {
+      "template": "door",
+      "position": [
+        0,
+        0.6,
+        23.5
+      ],
+      "yawDeg": 180,
+      "scale": 8
+    },
+    {
+      "template": "console",
+      "position": [
+        -6,
+        0.6,
+        22.6
+      ],
+      "yawDeg": 180,
+      "scale": 2.4
+    },
+    {
+      "template": "console",
+      "position": [
+        -9,
+        0.6,
+        22.6
+      ],
+      "yawDeg": 180,
+      "scale": 2.4
+    },
+    {
+      "template": "barrel_large",
+      "position": [
+        14,
+        0.6,
+        19
+      ],
+      "scale": 3
+    },
+    {
+      "template": "barrel_large",
+      "position": [
+        17,
+        0.6,
+        19
+      ],
+      "scale": 3
+    },
+    {
+      "template": "barrels",
+      "position": [
+        15.5,
+        0.6,
+        15
+      ],
+      "scale": 4
+    },
+    {
+      "template": "barrels",
+      "position": [
+        -16,
+        0.6,
+        -14
+      ],
+      "scale": 4
+    }
+  ],
+  "colliders": [
+    {
+      "min": [
+        -24,
+        -1,
+        -24
+      ],
+      "max": [
+        24,
+        0.6,
+        24
+      ]
+    },
+    {
+      "min": [
+        -24,
+        0,
+        24
+      ],
+      "max": [
+        24,
+        12,
+        36
+      ]
+    },
+    {
+      "min": [
+        -36,
+        0,
+        -24
+      ],
+      "max": [
+        -24,
+        12,
+        24
+      ]
+    },
+    {
+      "min": [
+        24,
+        0,
+        -24
+      ],
+      "max": [
+        36,
+        12,
+        24
+      ]
+    },
+    {
+      "min": [
+        -24,
+        0,
+        -25
+      ],
+      "max": [
+        24,
+        12,
+        -24
+      ]
+    }
+  ],
+  "lights": [
+    {
+      "position": [
+        -18,
+        10.5,
+        23.6
+      ],
+      "color": [
+        3.0,
+        1.8,
+        0.7
+      ],
+      "size": 1.2
+    },
+    {
+      "position": [
+        -6,
+        10.5,
+        23.6
+      ],
+      "color": [
+        3.0,
+        1.8,
+        0.7
+      ],
+      "size": 1.2
+    },
+    {
+      "position": [
+        6,
+        10.5,
+        23.6
+      ],
+      "color": [
+        3.0,
+        1.8,
+        0.7
+      ],
+      "size": 1.2
+    },
+    {
+      "position": [
+        18,
+        10.5,
+        23.6
+      ],
+      "color": [
+        3.0,
+        1.8,
+        0.7
+      ],
+      "size": 1.2
+    },
+    {
+      "position": [
+        -21,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.0,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        -15,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.125,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        -9,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.25,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        -3,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.375,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        3,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.5,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        9,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.625,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        15,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.75,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        21,
+        0.9,
+        -23.8
+      ],
+      "color": [
+        3.0,
+        0.4,
+        2.6
+      ],
+      "size": 0.6,
+      "blinkHz": 0.6,
+      "phase": 0.875,
+      "duty": 0.35
+    },
+    {
+      "position": [
+        -7.5,
+        2.0,
+        22.4
+      ],
+      "color": [
+        0.4,
+        2.0,
+        2.6
+      ],
+      "size": 0.5
+    }
+  ],
+  "parkedShip": {
+    "position": [
+      0,
+      3.05,
+      -2
+    ],
+    "yawDeg": 0,
+    "colliderHalfExtents": [
+      5.0,
+      2.6,
+      7.6
+    ]
+  },
+  "spawns": {
+    "fromShip": {
+      "position": [
+        9.0,
+        0.65,
+        2.0
+      ],
+      "yawDeg": 245
+    }
+  },
+  "interactables": [
+    {
+      "id": "board",
+      "action": "boardShip",
+      "prompt": "Board the Sparrow",
+      "position": [
+        5.6,
+        1.6,
+        -2
+      ],
+      "radius": 2.2
+    },
+    {
+      "id": "services",
+      "action": "terminal",
+      "prompt": "Station services terminal",
+      "position": [
+        -7.5,
+        1.6,
+        22.4
+      ],
+      "radius": 2.2
+    }
+  ]
+}

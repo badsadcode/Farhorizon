@@ -40,6 +40,12 @@ add_library(fh_core STATIC
   game/ships/flight_model.cpp
   game/world/asteroid_gen.cpp
   game/world/space_world.cpp
+  game/physics/collision.cpp
+  game/player/character_controller.cpp
+  game/space/docking.cpp
+  game/content/interior_def.cpp
+  game/session/game_session.cpp
+  game/session/world_builder.cpp
 )
 target_include_directories(fh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fh_core PUBLIC fh_third_party)
@@ -104,6 +110,8 @@ if(FH_BUILD_TESTS)
     tests/unit/test_starfield.cpp
     tests/unit/test_flight.cpp
     tests/unit/test_world.cpp
+    tests/unit/test_character.cpp
+    tests/unit/test_docking.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)
   target_compile_definitions(fh_unit_tests PRIVATE

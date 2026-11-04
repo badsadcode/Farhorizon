@@ -6,6 +6,7 @@
 #include "engine/debug/overlay.h"
 #include "game/camera_rig.h"
 #include "game/content/visual_profile.h"
+#include "game/session/game_session.h"
 #include "game/ship_controller.h"
 #include "game/world/space_world.h"
 
@@ -25,7 +26,17 @@ struct HudContext {
   HudPalette palette;
   std::string lookName;      // active visual profile, shown briefly after switching
   double lookShownUntil = 0;
+  const GameSession* session = nullptr;  // docking state, notices
 };
+
+struct InteriorHudContext {
+  const GameSession& session;
+  float width = 0, height = 0;
+  bool mouseCaptured = false;
+  double time = 0;
+  HudPalette palette;
+};
+void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c);
 
 void drawHud(OverlayBuilder& o, const HudContext& c);
 std::string formatDistance(double metres);

@@ -205,12 +205,105 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
   else if (auto near = c.world.nearestAsteroidSurface(); near && near->first < 80.0f && near->second > 5.0f)
     centeredText(o, cx, c.height * 0.22f, std::format("PROXIMITY  {:.0f} m", std::max(0.0f, near->first)), kWarn, 3.0f);
 
+  // ---- Docking ----
+  if (c.session) {
+    const GameSession& gs = *c.session;
+    const Docking& dk = gs.docking();
+    const double simT = gs.world().simulationTime();
+    if (dk.state() == DockState::ApproachAuthorized || dk.state() == DockState::Capture) {
+      const Transform bay = dk.bayTransform(gs.world());
+      const Vec3 column = dk.approachPoint(gs.world());
+      auto pb = proj.point(bay.position);
+      auto pc = proj.point(column);
+      if (pb && pc) {  // approach column: dashed line from the pad up to the approach point
+        for (int i = 0; i < 10; i += 2) {
+          const float t0 = float(i) / 10.0f, t1 = float(i + 1) / 10.0f;
+          o.line(pb->x + (pc->x - pb->x) * t0, pb->y + (pc->y - pb->y) * t0, pb->x + (pc->x - pb->x) * t1,
+                 pb->y + (pc->y - pb->y) * t1, 2, kNav);
+        }
+      }
+      if (pb && proj.onScreen(*pb)) {  // pad: square marker
+        const float r = 12;
+        o.line(pb->x - r, pb->y - r, pb->x + r, pb->y - r, 2, kNav);
+        o.line(pb->x + r, pb->y - r, pb->x + r, pb->y + r, 2, kNav);
+        o.line(pb->x + r, pb->y + r, pb->x - r, pb->y + r, 2, kNav);
+        o.line(pb->x - r, pb->y + r, pb->x - r, pb->y - r, 2, kNav);
+        shadowText(o, pb->x + 18, pb->y - 7, "PAD", kNav);
+      } else {
+        edgeArrow(o, c, bay.position, kNav, "PAD " + formatDistance(length(bay.position - fs.position)));
+      }
+      if (dk.state() == DockState::ApproachAuthorized) {
+        const DockApproachInfo& a = dk.approach();
+        const auto* dd = gs.world().props()[*dk.station()].def.docking ? &*gs.world().props()[*dk.station()].def.docking
+                                                                       : nullptr;
+        if (dd) {
+          const float x = c.width - 330, y = c.height * 0.35f;
+          o.rect(x - 10, y - 8, 320, 92, {10, 8, 16, 150});
+          shadowText(o, x, y, dk.autopilot() ? "FINAL APPROACH  [AUTO]" : "FINAL APPROACH", kPrimary);
+          shadowText(o, x, y + 22, std::format("DIST  {:6.0f} / {:.0f} m", a.distance, dd->captureDistance),
+                     a.distanceOk ? kField : kWarn);
+          shadowText(o, x, y + 42, std::format("SPEED {:6.1f} / {:.0f} m/s", a.speed, dd->captureSpeed),
+                     a.speedOk ? kField : kWarn);
+          shadowText(o, x, y + 62, std::format("ALIGN {:6.1f} / {:.0f} deg", a.angleError, dd->captureAngleDeg),
+                     a.angleOk ? kField : kWarn);
+        }
+      }
+    }
+    // Docking state + context hints.
+    std::string hint;
+    switch (dk.state()) {
+      case DockState::Undocked: {
+        for (const auto& p : gs.world().props())
+          if (p.def.docking && length(p.local - fs.position) <= p.def.docking->clearanceRange) {
+            hint = "L  request docking at " + p.def.name;
+            break;
+          }
+        break;
+      }
+      case DockState::RequestingClearance: hint = "Awaiting clearance...   L cancel"; break;
+      case DockState::ApproachAuthorized:
+        hint = dk.autopilot() ? "Docking autopilot engaged   K manual   L cancel"
+                              : "Land on the pad: slow, level, nose forward   K autopilot   L cancel";
+        break;
+      case DockState::Capture: hint = "Clamps engaging..."; break;
+      case DockState::Docked: hint = "DOCKED   F leave seat   L undock"; break;
+      case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
+    }
+    if (!hint.empty()) centeredText(o, cx, 40, hint, dk.state() == DockState::Docked ? kNav : kPrimary);
+    // Radio chatter subtitles (accessibility, doc 11).
+    if (simT - dk.messageTime() < 6.0 && !dk.message().empty())
+      centeredText(o, cx, c.height * 0.78f, "COMMS  " + dk.message(), kNav);
+    else if (simT - gs.noticeTime() < 4.0 && !gs.notice().empty())
+      centeredText(o, cx, c.height * 0.78f, gs.notice(), kPrimary);
+  }
+
   // ---- Status line ----
   std::string status = cameraModeName(c.cameraMode);
   if (c.controller.autofly()) status += "   AUTOFLY";
   if (!c.mouseCaptured && shipCam) status += "   MOUSE FREE (Esc to steer)";
   centeredText(o, cx, 16, status, kDim);
   if (c.time < c.lookShownUntil) centeredText(o, cx, c.height * 0.30f, "LOOK: " + c.lookName, kPrimary, 3.0f);
+}
+
+void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
+  kPrimary = toColor(c.palette.primary);
+  kDim = toColor(c.palette.primary, 0.5f);
+  kNav = toColor(c.palette.nav);
+  kField = toColor(c.palette.field);
+  kWarn = toColor(c.palette.warn);
+  const float cx = c.width * 0.5f, cy = c.height * 0.5f;
+  const GameSession& s = c.session;
+  const InteriorDef* def = s.activeInterior();
+  o.circle(cx, cy, 2.5f, 2, kPrimary, 8);  // crosshair dot
+  if (const Interactable* it = s.focusedInteractable()) {
+    o.circle(cx, cy, 10, 2, kNav, 16);
+    centeredText(o, cx, cy + 26, "[F]  " + it->prompt, kNav, 2.5f);
+  }
+  if (def) centeredText(o, cx, 16, std::string(locationName(s.location())) + "   " + def->name, kDim);
+  if (!c.mouseCaptured) centeredText(o, cx, 40, "MOUSE FREE (Esc to look around)", kDim);
+  if (s.world().simulationTime() - s.noticeTime() < 4.0 && !s.notice().empty())
+    centeredText(o, cx, c.height * 0.78f, s.notice(), kPrimary);
+  shadowText(o, 16, c.height - 30, "WASD walk   Shift run   Space jump   F use   Esc mouse", kDim, 1.5f);
 }
 
 }  // namespace fh

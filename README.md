@@ -3,11 +3,15 @@
 A compact, atmospheric 3D space sandbox running on a **purpose-built engine** (C++20, SDL3, Vulkan 1.3).
 It does not use an existing game engine. See `docs/STATUS.md` for what works today.
 
-![Approaching Kestrel Station, Retro 80s look](docs/screenshots/stage2_station_retro80s.jpg)
+![Docking autopilot on final approach to Kestrel Station](docs/screenshots/stage3_docking_approach.jpg)
+
+| Docked on the pad | Sparrow cabin | Kestrel hangar |
+|---|---|---|
+| ![](docs/screenshots/stage3_docked.jpg) | ![](docs/screenshots/stage3_cabin.jpg) | ![](docs/screenshots/stage3_hangar.jpg) |
 
 | Retro 80s look (default) | Clean look (F4) |
 |---|---|
-| ![](docs/screenshots/stage2_asteroids_chase.jpg) | ![](docs/screenshots/stage2_station_clean.jpg) |
+| ![](docs/screenshots/stage2_station_retro80s.jpg) | ![](docs/screenshots/stage2_station_clean.jpg) |
 
 ## Quick start
 
@@ -38,6 +42,9 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | B | precision (docking) speed mode |
 | C | recentre the virtual stick |
 | T / G / Backspace | next target / nearest asteroid / clear target |
+| L | request docking / cancel / undock (contextual) |
+| K | docking approach autopilot on/off (while cleared) |
+| F | interact: leave the pilot seat (docked), airlock, board, terminals |
 | V | chase ↔ cockpit camera |
 | F2 | developer cameras (orbit → free → back) |
 | F1 | developer info overlay |
@@ -46,13 +53,21 @@ including headless runs and benchmarks, are in [`docs/BUILDING.md`](docs/BUILDIN
 | F5 | hot-reload content (keeps old content if the new content is invalid) |
 | F11 / F12 / F10 | fullscreen / screenshot / quit |
 
+**On foot:** WASD walk, Shift run, Space jump, mouse look, F use.
+
 All bindings and mouse settings live in `content/config/input.json`.
+
+**Try the Stage 3 loop:** fly toward Kestrel Station (3 km ahead) and press **L** for clearance,
+then land on the roof pad yourself or press **K**. Once docked, **F** leaves the seat. Walk aft to
+the junction and right to the airlock, then **F** steps into the hangar. Walk back to the ship,
+press **F** to board, **F** at the seat, and **L** to undock.
+Debug shortcuts: `--start-docked`, `--start-in ship|station`, F6 force-dock.
 
 ## Layout
 
 ```
 engine/   core, math, platform (SDL3), assets (glTF, images), render (Vulkan), debug
-game/     content definitions, flight model, world (asteroids, props, collisions), cameras, HUD, app
+game/     content defs, flight model, world, docking, interiors, character controller, session, cameras, HUD, app
 shaders/  GLSL, compiled to SPIR-V at build time
 content/  data-driven content: asset manifest, ships, scenes, input bindings, models
 tools/    content_validator, asset_tools (GLB repair)

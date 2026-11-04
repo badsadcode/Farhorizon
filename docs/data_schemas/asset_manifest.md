@@ -4,7 +4,7 @@
 {
   "schemaVersion": 1,
   "assets": {
-    "<assetId>": { "type": "mesh|ship|scene|config|visuals|benchmark", "source": "relative/path", "license": "optional provenance" }
+    "<assetId>": { "type": "mesh|ship|scene|config|visuals|benchmark|interior", "source": "relative/path", "license": "optional provenance" }
   }
 }
 ```

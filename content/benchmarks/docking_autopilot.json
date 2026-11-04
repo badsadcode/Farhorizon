@@ -1,0 +1,19 @@
+{
+  "id": "bench.docking_autopilot",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 60,
+  "camera": "chase",
+  "player": {
+    "systemPosition": [
+      149597871560.0,
+      12000280.0,
+      -3500002650.0
+    ],
+    "rotationDeg": [
+      0,
+      53,
+      0
+    ]
+  },
+  "autoDock": true
+}

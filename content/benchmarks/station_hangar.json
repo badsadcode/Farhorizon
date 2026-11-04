@@ -1,0 +1,8 @@
+{
+  "id": "bench.station_hangar",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "startIn": "station",
+  "lookTurnDegPerSec": 20
+}

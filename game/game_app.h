@@ -2,6 +2,7 @@
 // FARHORIZON application: loads a data-defined space scene and runs the Stage 2 flight sandbox
 // (player ship, station proxy, asteroid fields, HUD, targeting) with developer tooling.
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,6 +16,7 @@
 #include "game/camera_rig.h"
 #include "game/content/scene_def.h"
 #include "game/content/visual_profile.h"
+#include "game/session/game_session.h"
 #include "game/ship_controller.h"
 #include "game/world/space_world.h"
 
@@ -40,6 +42,8 @@ struct AppOptions {
   int exitAfterFrames = 0;                       // 0 = run until closed
   std::optional<std::filesystem::path> screenshotOnExit;
   std::optional<std::string> look;               // visual profile id override
+  bool startDocked = false;                      // debug: force-dock at the nearest station
+  std::string startIn;                           // debug: "ship" or "station" (implies startDocked)
 };
 
 class GameApp {
@@ -52,6 +56,8 @@ class GameApp {
   bool loadContent(std::vector<std::string>& errors);  // all-or-nothing; keeps old state on failure
   void handleAppInput();
   void buildOverlay(const CameraView& view, const Mat4& viewProj, const Transform& ship);
+  void handleFootInput(float dt);
+  SpaceWorld& world() { return session_->world(); }
   void buildDevOverlay();
   void setMouseCapture(bool on);
 
@@ -66,7 +72,13 @@ class GameApp {
   VisualProfileSet looks_;
   int activeLook_ = 0;
   double lookShownUntil_ = 0;
-  std::unique_ptr<SpaceWorld> world_;
+  std::unique_ptr<GameSession> session_;
+  struct PieceInstance {
+    std::uint32_t mesh;
+    Mat4 model;  // interior space
+  };
+  std::map<AssetID, std::vector<PieceInstance>> interiorPieces_;
+  DockState lastDockState_ = DockState::Undocked;
   ShipController controller_;
   CameraRig camera_;
   FixedStepClock clock_;

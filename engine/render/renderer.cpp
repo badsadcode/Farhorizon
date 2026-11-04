@@ -497,7 +497,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   // Rows of the rotation-only view matrix are the camera axes in render space.
   u.camRight = Vec4(p.viewRotation.at(0, 0), p.viewRotation.at(0, 1), p.viewRotation.at(0, 2), 0);
   u.camUp = Vec4(p.viewRotation.at(1, 0), p.viewRotation.at(1, 1), p.viewRotation.at(1, 2), 0);
-  u.skyBase = Vec4(p.skyBase, 0);
+  u.skyBase = Vec4(p.skyBase, p.sunGlare);
   u.skyBand = Vec4(p.skyBand, p.skyBandIntensity);
   u.skyNebula = Vec4(p.skyNebula, p.skyNebulaStrength);
   u.fillDir = Vec4(normalize(p.fillDirection), 0);
@@ -569,7 +569,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   colorAtt.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  colorAtt.clearValue.color = {{0, 0, 0, 1}};
+  colorAtt.clearValue.color = {{p.skyBase.x, p.skyBase.y, p.skyBase.z, 1}};  // visible when the sky is off
   VkRenderingAttachmentInfo depthAtt{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   depthAtt.imageView = depth_.view;
   depthAtt.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
@@ -593,14 +593,16 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   st.gpuMs = stats_.gpuMs;
 
   // Sky
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipelineLayout_, 0, 1, &fr.frameSet, 0, nullptr);
-  vkCmdDraw(cmd, 3, 1, 0, 0);
-  ++st.drawCalls;
-  ++st.triangles;
+  if (p.drawSky) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline_);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+    ++st.drawCalls;
+    ++st.triangles;
+  }
 
   // Stars (instanced)
-  if (starCount_ > 0) {
+  if (starCount_ > 0 && p.drawStars) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, starPipeline_);
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &starBuffer_.buffer, &off);

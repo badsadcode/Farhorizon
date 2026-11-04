@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "engine/math/frames.h"
+#include "game/physics/collision.h"
 #include "game/content/scene_def.h"
 #include "game/content/ship_def.h"
 #include "game/ships/flight_model.h"
@@ -34,6 +35,8 @@ struct PlayerShip {
   std::map<std::string, Transform> sockets;  // ship space
   std::uint32_t collisions = 0;
   float lastImpactSpeed = 0.0f;
+  bool kinematic = false;          // docking/autopilot drives the state directly (no flight model)
+  bool collisionsEnabled = true;   // false while clamped to a pad
   double lastImpactTime = -100.0;
 };
 
@@ -44,7 +47,8 @@ struct Prop {
   Quat rotation{};
   VisualHandle visual = 0;
   Mat4 meshFix;
-  float collisionRadius = 10.0f;
+  float collisionRadius = 10.0f;   // bounding sphere; also used when `colliders` is empty
+  std::vector<Obb> colliders;      // prop space
 };
 
 struct Asteroid {
@@ -100,6 +104,7 @@ class SpaceWorld {
 
   // Interpolated player transform for rendering (alpha from FixedStepClock).
   Transform playerRenderTransform(float alpha) const;
+  Prop& prop(std::uint32_t i) { return props_.at(i); }
 
   // Targeting.
   void cycleTarget(double maxAsteroidRange = 6000.0);
@@ -118,6 +123,7 @@ class SpaceWorld {
 
  private:
   void resolveCollision(const Vec3& centre, float radius);
+  void resolveContact(const Contact& c);
 
   LocalFrame frame_;
   PlayerShip player_;

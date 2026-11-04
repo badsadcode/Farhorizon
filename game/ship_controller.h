@@ -14,6 +14,7 @@ class ShipController {
   // Builds the flight input for this frame. `mouseSteering` is true while the mouse is captured.
   void update(const InputState& in, float dt, bool mouseSteering, float boostEnergy, FlightInput& out);
   void recenter() { stick_ = {}; }
+  void setThrottle(float t) { throttle_ = t; }
   Vec2 stick() const { return stick_; }
   float throttle() const { return throttle_; }
   bool assist() const { return assist_; }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0 — Stage 3: docking and walkable interiors (2026-11-04)
+* Docking state machine: clearance request, approach authorisation, deterministic tolerance-based
+  capture with scripted settle, clamps, and undocking. Optional approach autopilot (K).
+  Radio-chatter subtitles and approach HUD (pad marker, approach column, distance/speed/alignment
+  readout, context hints).
+* Station proxy: oriented-box colliders, a roof landing pad with blinking guide lights, and a dish
+  collider.
+* Walkable interiors from data (piece templates with colliders, spawns, interactables, lights):
+  the **Sparrow cabin** (cockpit seat, windows onto space, cargo, airlock) and **Kestrel Hangar 1**
+  (open bay to space, your parked ship, services terminal, pillars and props), built from CC0
+  Kenney pieces.
+* First-person capsule controller (collide-and-slide, gravity, jump, no tunnelling).
+* `GameSession` (location state, interaction rules, active interior) and `world_builder`, shared by
+  the app and the headless tests.
+* **Stage 3 exit test in CTest:** 20 full fly → dock → walk → exit → walk → board → sit → undock
+  cycles on real content.
+* Debug tools: F6 / `--start-docked` force-dock, `--start-in ship|station`.
+* New benchmarks: docking autopilot, ship interior, station hangar.
+* Renderer: optional sky and stars, star-glare control, clear colour for enclosed interiors.
+
 ## 0.2.0 — Stage 2: ship flight, plus a retro 80s look (2026-11-04)
 * 6DOF flight model (assist on/off, precision/cruise/boost, energy-limited boost), driven entirely
   by ship JSON. Deterministic and unit-tested.

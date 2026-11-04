@@ -1,0 +1,8 @@
+{
+  "id": "bench.ship_interior",
+  "scene": "scene.stage2_flight",
+  "durationSeconds": 10,
+  "camera": "chase",
+  "startIn": "ship",
+  "lookTurnDegPerSec": 25
+}

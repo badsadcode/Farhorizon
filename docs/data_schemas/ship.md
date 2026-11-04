@@ -4,6 +4,7 @@
 |---|---|---|---|
 | `id`, `name` | string | ✓ | `id` should equal the manifest ID |
 | `mesh` | AssetID | ✓ | `mesh` asset (GLB/glTF) |
+| `interior` | AssetID | | walkable cabin (`interior` asset) |
 | `meshScale` | number | | uniform scale (default 1) |
 | `meshRotationDeg` | [x,y,z] | | fixes exporter axes so the nose points −Z; applied X, then Y, then Z |
 | `materialOverrides` | object | | by glTF material name: `baseColor` [r,g,b(,a)] linear, `metallic`, `roughness`, `emissive` [r,g,b] |

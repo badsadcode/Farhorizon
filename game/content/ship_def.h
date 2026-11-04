@@ -33,6 +33,7 @@ struct ShipDef {
   std::string id;
   std::string name;
   AssetID mesh;
+  AssetID interior;               // walkable interior (optional)
   float meshScale = 1.0f;
   Vec3 meshRotationDeg{0, 0, 0};  // corrects exporter axis conventions
   MaterialOverrides materialOverrides;  // by glTF material name

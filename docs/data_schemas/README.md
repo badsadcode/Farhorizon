@@ -16,6 +16,7 @@ build/content_validator content
 | Input bindings | `content/config/input.json` | [input.md](input.md) |
 | Visual profiles (looks) | `content/visuals/post_profiles.json` | [visuals.md](visuals.md) |
 | Benchmarks | `content/benchmarks/*.json` | [benchmark.md](benchmark.md) |
+| Interiors | `content/interiors/*.interior.json` | [interior.md](interior.md) |
 
 Conventions: metres, seconds, tons, degrees in data (radians only in code), linear RGB for
 colours unless stated, right-handed +Y up with −Z forward.

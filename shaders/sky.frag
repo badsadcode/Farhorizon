@@ -45,9 +45,10 @@ void main() {
   float cosR = frame.sunDirCos.w;
   vec3 sun = frame.sunColorExp.rgb;
   float disc = smoothstep(cosR - 0.00002, cosR + 0.00002, c);
-  col += disc * sun * 60.0;
+  float glare = frame.skyBase.a;
+  col += disc * sun * 60.0 * glare;
   float ang = acos(clamp(c, -1.0, 1.0));
-  col += sun * (0.020 * exp(-ang * 9.0) + 0.06 * exp(-ang * 70.0) + 0.6 * exp(-ang * 600.0));
+  col += sun * glare * (0.020 * exp(-ang * 9.0) + 0.06 * exp(-ang * 70.0) + 0.6 * exp(-ang * 600.0));
 
   outColor = vec4(col, 1.0);  // linear HDR radiance
 }

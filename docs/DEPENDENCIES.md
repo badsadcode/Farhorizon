@@ -22,4 +22,5 @@ The license texts sit next to each vendored library in `third_party/`.
 |---|---|---|
 | `content/models/stations/station_hub_placeholder.glb` | Kenney "Space Kit", `hangar_largeA` | CC0 1.0. Placeholder station proxy, repaired with `tools/asset_tools/repair_kenney_glb.py`. |
 | `content/models/stations/station_dish_placeholder.glb` | Kenney "Space Kit", `satelliteDish_large` | CC0 1.0. Placeholder, repaired as above. |
+| `content/models/interior/*.glb` | Kenney "Space Kit" corridor, platform, structure, gate, supports, desk, chair and barrel pieces | CC0 1.0. Placeholder interior pieces, repaired with `tools/asset_tools/repair_kenney_glb.py`. |
 | `content/models/ships/sparrow_placeholder.glb` | Kenney "Space Kit", `craft_cargoA` (kenney.nl) | CC0 1.0. **Placeholder** until the real Sparrow model exists. Repaired once: the scene root pointed at a child node (invalid glTF), and the grid offset was removed. See `asset.extras` in the file. |

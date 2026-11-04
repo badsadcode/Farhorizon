@@ -48,6 +48,7 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
 farhorizon [--content DIR] [--shaders DIR] [--scene ID] [--size WxH] [--camera chase|cockpit|orbit|free]
            [--look retro80s|clean] [--autofly] [--validation | --no-validation] [--no-vsync] [--no-overlay]
            [--frames N] [--screenshot FILE] [--benchmark ID] [--bench-out PREFIX]
+           [--start-docked] [--start-in ship|station]
 ```
 
 Validation is on by default in Debug builds. With `--validation`, any validation message makes the
@@ -61,6 +62,9 @@ Benchmarks are data (`content/benchmarks/*.json`): a scene, a start pose, a came
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.empty_space_cockpit
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.asteroid_field_chase
 farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_approach
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.docking_autopilot
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.ship_interior
+farhorizon --no-vsync --size 1920x1080 --benchmark bench.station_hangar
 ```
 Each run writes `benchmarks/<id>.csv` (per frame: cpu_ms, gpu_ms, draw_calls, triangles) and
 `benchmarks/<id>.json` (summary).

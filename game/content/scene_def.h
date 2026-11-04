@@ -48,6 +48,29 @@ struct PlayerStartDef {
   Vec3 rotationDeg{0, 0, 0};
 };
 
+struct BoxColliderDef {
+  Vec3 center{};        // prop space (scaled metres)
+  Vec3 halfExtents{1, 1, 1};
+  Vec3 rotationDeg{};
+};
+
+struct DockingBayDef {
+  std::string id;
+  std::string name;
+  Vec3 position{};      // prop space: where the ship's centre rests when clamped
+  Vec3 rotationDeg{};   // prop space: ship orientation when clamped (nose = -Z, up = +Y)
+};
+
+struct DockingDef {
+  AssetID interior;               // station interior scene entered through the airlock
+  float clearanceRange = 3000.0f; // metres from the prop centre
+  float captureDistance = 12.0f;  // metres from the bay point
+  float captureSpeed = 6.0f;      // m/s
+  float captureAngleDeg = 15.0f;
+  float approachHeight = 80.0f;   // autopilot approach column height above the bay
+  std::vector<DockingBayDef> bays;
+};
+
 // Static (optionally spinning) scene object such as a station proxy or a beacon.
 struct PropDef {
   std::string id;
@@ -63,6 +86,8 @@ struct PropDef {
   std::string marker = "station";   // HUD marker category: station, outpost, beacon...
   MaterialOverrides materialOverrides;
   std::vector<LightDef> lights;     // prop space (scaled metres), rotate with the prop
+  std::vector<BoxColliderDef> colliders;  // empty = bounding sphere (collisionRadius)
+  std::optional<DockingDef> docking;
 };
 
 struct AsteroidFieldDef {
@@ -120,6 +145,9 @@ struct BenchmarkDef {
   std::optional<PlayerStartDef> playerOverride;  // ship field unused; pose only
   float throttle = 0.0f;
   Vec3 rotation{0, 0, 0};  // pitch, yaw, roll commands in [-1,1]
+  std::string startIn;     // "", "ship" or "station": on-foot benchmark (starts docked)
+  float lookTurnDegPerSec = 0.0f;  // on-foot: slow camera pan
+  bool autoDock = false;   // request docking and engage the approach autopilot as soon as cleared
 };
 
 std::optional<BenchmarkDef> loadBenchmarkDef(const AssetManifest& manifest, const AssetID& id,
