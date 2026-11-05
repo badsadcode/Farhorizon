@@ -72,6 +72,7 @@ std::vector<MenuAction> MenuSystem::update(Ui& ui, MenuEnv& env) {
     case Screen::Main: mainMenu(ui, env, out); break;
     case Screen::Pause: pauseMenu(ui, env, out); break;
     case Screen::Options: options(ui, env, out); break;
+    case Screen::Join: joinMenu(ui, env, out); break;
     case Screen::Load: slots(ui, env, out, false); break;
     case Screen::Save: slots(ui, env, out, true); break;
     case Screen::ConfirmQuit: confirm(ui, out, "Quit to desktop?", MenuAction::Type::Quit); break;
@@ -99,6 +100,8 @@ void MenuSystem::mainMenu(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
     else out.push_back({MenuAction::Type::NewGame, {}});
   }
   y += step;
+  if (ui.menuItem(x, y, w, "JOIN GAME")) open(Screen::Join);
+  y += step;
   if (ui.menuItem(x, y, w, "LOAD GAME")) open(Screen::Load);
   y += step;
   if (ui.menuItem(x, y, w, "OPTIONS")) open(Screen::Options);
@@ -121,9 +124,9 @@ void MenuSystem::pauseMenu(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
   const float step = 58, w = pw - 60;
   if (ui.menuItem(px + 30, y, w, "RESUME")) out.push_back({MenuAction::Type::Resume, {}});
   y += step;
-  if (ui.menuItem(px + 30, y, w, "SAVE GAME")) open(Screen::Save);
+  if (ui.menuItem(px + 30, y, w, "SAVE GAME", !env.networked)) open(Screen::Save);
   y += step;
-  if (ui.menuItem(px + 30, y, w, "LOAD GAME")) open(Screen::Load);
+  if (ui.menuItem(px + 30, y, w, "LOAD GAME", !env.networked)) open(Screen::Load);
   y += step;
   if (ui.menuItem(px + 30, y, w, "OPTIONS")) open(Screen::Options);
   y += step;
@@ -293,6 +296,33 @@ void MenuSystem::slots(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out, bool 
   }
   if (ui.button(px + 40, py + ph - 70, 200, 44, "BACK")) back();
   ui.hintBar(saving ? "ENTER save to slot (overwrites)    ESC back" : "ENTER load    ESC back");
+}
+
+void MenuSystem::joinMenu(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
+  const UiTheme& t = ui.theme();
+  ui.backdrop(0.55f);
+  const float W = ui.width() / ui.scale(), H = ui.height() / ui.scale();
+  const float pw = 860, ph = 560, px = (W - pw) * 0.5f, py = (H - ph) * 0.5f;
+  ui.panel(px, py, pw, ph);
+  ui.spacedTitle(px + 40, py + 30, "JOIN GAME", t.heading + 8, t.textBright);
+  ui.draw().line(ui.s(px + 40), ui.s(py + 84), ui.s(px + pw - 40), ui.s(py + 84), 1.0f, t.textDim);
+  float y = py + 112;
+  const float x = px + 40, w = pw - 80, step = t.rowHeight + 10;
+  bool go = ui.textRow(x, y, w, "SERVER ADDRESS", env.settings.joinAddress, 80);
+  y += step;
+  go = ui.textRow(x, y, w, "YOUR NAME", env.settings.joinName, 24) || go;
+  y += step;
+  go = ui.textRow(x, y, w, "PASSWORD", joinPassword_, 40, true) || go;
+  y += step + 8;
+  ui.label(x + 6, y, "The address is the one your host gave you. Add :port if it is not the usual 27777.", t.small, t.textDim);
+  y += 42;
+  const bool ready = !env.settings.joinAddress.empty() && !env.connecting;
+  if (ui.button(x, y, 300, 56, env.connecting ? "CONNECTING..." : "CONNECT", ready) || (go && ready))
+    out.push_back({MenuAction::Type::Join, {}});
+  if (ui.button(x + 320, y, 180, 56, env.connecting ? "CANCEL" : "BACK")) back();
+  y += 76;
+  if (!env.netStatus.empty()) ui.textBlock(x + 6, y, w - 12, env.netStatus, t.small, OverlayColor{235, 120, 90, 255}, 3);
+  ui.hintBar("UP/DOWN or TAB next field    ENTER connect    ESC back");
 }
 
 void MenuSystem::confirm(Ui& ui, std::vector<MenuAction>& out, const char* question, MenuAction::Type yes) {

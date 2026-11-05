@@ -42,6 +42,7 @@ struct UiScriptHost {
   std::function<int()> footMagazine;
   std::function<void()> aimAtEnemy;
   std::function<int()> crewCount;
+  std::function<void(const std::string&)> typeText;
   std::function<void()> faceCrew;
   std::function<void(const Vec3&)> walkTo;
 };

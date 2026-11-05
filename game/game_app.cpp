@@ -3,7 +3,8 @@
 #include "engine/assets/gltf_loader.h"
 #include "game/content/map_def.h"
 
-#include <SDL3/SDL_messagebox.h>
+#include <SDL3/SDL_clipboard.h>
+#include <SDL3/SDL_keyboard.h>
 
 #include <algorithm>
 #include <chrono>
@@ -271,6 +272,21 @@ UiInput GameApp::uiInput() {
   in.accept = input_.pressed("ui.accept");
   in.back = input_.pressed("ui.back");
   in.tabNext = input_.pressed("ui.tabNext");
+  if (menus_.typing()) {  // the letters that also move around menus are only letters here
+    in.up = input_.scancodePressedOrRepeat(SDL_SCANCODE_UP);
+    in.down = input_.scancodePressedOrRepeat(SDL_SCANCODE_DOWN) || input_.scancodePressedOrRepeat(SDL_SCANCODE_TAB);
+    in.left = in.right = in.tabNext = false;
+    in.accept = input_.scancodePressedOrRepeat(SDL_SCANCODE_RETURN);
+    in.back = input_.scancodePressedOrRepeat(SDL_SCANCODE_ESCAPE);
+    in.backspace = input_.scancodePressedOrRepeat(SDL_SCANCODE_BACKSPACE);
+    in.text = input_.typedText();
+    if (input_.scancodePressedOrRepeat(SDL_SCANCODE_V) && (SDL_GetModState() & SDL_KMOD_CTRL)) {
+      if (char* clip = SDL_GetClipboardText()) {
+        in.text = clip;
+        SDL_free(clip);
+      }
+    }
+  }
   return in;
 }
 
@@ -284,7 +300,7 @@ void GameApp::buildMenus() {
   if (settings_.look.empty() && !looks_.profiles.empty()) settings_.look = looks_.profiles[size_t(activeLook_)].id;
   bool canContinue = false;
   for (const auto& s : slots_) canContinue |= s.exists;
-  MenuEnv env{settings_, input_, lookNames, lookIds, slots_, canContinue, "FARHORIZON 0.7  ·  test build"};
+  MenuEnv env{settings_, input_, lookNames, lookIds, slots_, canContinue, "FARHORIZON 0.14  ·  test build", session_->networked(), menuJoining_, netStatus_};
   UiInput in = uiInput();
   // Rebinding: this key press belongs to the capture. Just opened: the Esc that opened the pause
   // menu is still "pressed" this frame and must not close it again.
@@ -335,7 +351,14 @@ void GameApp::handleMenuActions() {
         refreshSaveSlots();
         menus_.open(MenuSystem::Screen::Pause);
         break;
-      case T::QuitToMenu: openMenu(MenuSystem::Screen::Main); break;
+      case T::QuitToMenu:
+        if (hostLink_ || clientLink_) leaveNetGame("");
+        else openMenu(MenuSystem::Screen::Main);
+        break;
+      case T::Join:
+        persistSettings();
+        startJoin(settings_.joinAddress, settings_.joinName, menus_.joinPassword());
+        break;
       case T::Quit: quit_ = true; break;
       case T::SettingsChanged: applySettings(); break;
       case T::BindingsChanged:
@@ -659,7 +682,54 @@ void GameApp::closeMarket() {
   setMouseCapture(mouseWasCaptured_);
 }
 
+void GameApp::startJoin(const std::string& address, const std::string& name, const std::string& password) {
+  netStatus_.clear();
+  clientLink_.reset();
+  std::vector<std::string> errors;
+  freshStart_ = true;
+  const bool ok = loadContent(errors);  // a clean copy of the world to show what the server says
+  freshStart_ = false;
+  if (!ok) {
+    netStatus_ = "Could not load the game's content.";
+    return;
+  }
+  const size_t colon = address.rfind(':');
+  const std::string host = address.substr(0, colon);
+  const int port = colon == std::string::npos ? int(net::kDefaultPort) : std::atoi(address.c_str() + colon + 1);
+  if (host.empty() || port <= 0 || port > 65535) {
+    netStatus_ = "That address doesn't look right. It should look like 203.0.113.7 or 203.0.113.7:27777";
+    return;
+  }
+  clientLink_ = std::make_unique<net::ClientLink>(*session_);
+  if (!clientLink_->start(host, std::uint16_t(port), name.empty() ? std::string("Crew") : name, password)) {
+    netStatus_ = clientLink_->failure();
+    clientLink_.reset();
+    freshStart_ = true;
+    loadContent(errors);
+    freshStart_ = false;
+    return;
+  }
+  menuJoining_ = true;
+}
+
+void GameApp::leaveNetGame(std::string reason) {
+  clientLink_.reset();
+  hostLink_.reset();
+  menuJoining_ = false;
+  netStatus_ = reason;
+  std::vector<std::string> errors;
+  freshStart_ = true;
+  loadContent(errors);  // the networked world is gone: back to one that belongs to nobody
+  freshStart_ = false;
+  openMenu(MenuSystem::Screen::Main);
+  if (!reason.empty()) menus_.open(MenuSystem::Screen::Join);
+}
+
 void GameApp::saveGame(const std::filesystem::path& path, bool quiet) {
+  if (clientLink_) {
+    session_->notify("The server keeps this world");
+    return;
+  }
   std::string err;
   if (writeSaveFile(path, captureSave(*session_, scene_.id), &err)) {
     if (!quiet) session_->notify("Game saved");
@@ -671,6 +741,10 @@ void GameApp::saveGame(const std::filesystem::path& path, bool quiet) {
 }
 
 bool GameApp::loadGame(const std::filesystem::path& path) {
+  if (clientLink_) {
+    session_->notify("The server keeps this world");
+    return false;
+  }
   std::string err;
   auto save = readSaveFile(path, &err);
   if (!save) {
@@ -1145,6 +1219,7 @@ int GameApp::run() {
                           case S::Options: return std::string("options");
                           case S::Load: return std::string("load");
                           case S::Save: return std::string("save");
+                          case S::Join: return std::string("join");
                           default: return std::string("confirm");
                         }
                       },
@@ -1174,6 +1249,7 @@ int GameApp::run() {
                         }
                       },
                       [this] { return int(session_->crew().size()); },
+                      [this](const std::string& text) { input_.injectText(text); },
                       [this] {  // test driver only: look at the other crew member, or at the seat if they are in it
                         CharacterState& c = session_->character();
                         const Vec3 eye = c.eye(session_->characterParams());
@@ -1210,10 +1286,18 @@ int GameApp::run() {
       clientLink_->pump();
       if (clientLink_->lost()) {
         log::error("net", "{}", clientLink_->failure());
-        if (options_.uiScript.empty() && !scripted_ && !quit_)  // nobody is there to press OK in a scripted run
-          SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "FARHORIZON", clientLink_->failure().c_str(), nullptr);
-        quit_ = true;
+        leaveNetGame(clientLink_->failure());
+      } else if (menuJoining_ && clientLink_->joined()) {
+        menuJoining_ = false;
+        resumeGame();
+      } else if (menuJoining_ && menus_.screen() != MenuSystem::Screen::Join) {
+        leaveNetGame("");  // cancelled
       }
+    }
+    if (menus_.typing() != textInputOn_) {
+      textInputOn_ = menus_.typing();
+      if (textInputOn_) SDL_StartTextInput(window_->handle());
+      else SDL_StopTextInput(window_->handle());
     }
     const bool simPaused = menus_.active() && !session_->networked();
     const bool cockpit = session_->location() == Location::Cockpit;

@@ -181,6 +181,11 @@ class GameApp {
   std::optional<SimPlayer> scriptWalker_;  // the walk-to command in UI scripts
   std::unique_ptr<net::HostLink> hostLink_;
   std::unique_ptr<net::ClientLink> clientLink_;
+  bool menuJoining_ = false;      // the Join game screen is waiting for the server
+  bool textInputOn_ = false;
+  std::string netStatus_;
+  void startJoin(const std::string& address, const std::string& name, const std::string& password);
+  void leaveNetGame(std::string reason);  // by value: it may come from the link this closes
   std::uint32_t crewMesh_ = 0;
   std::vector<InteriorHudContext::CrewTag> crewTags_;
   void drawCrew(const AssetID& place, bool aboardShip, const Mat4& placeToView, const CameraView& view,

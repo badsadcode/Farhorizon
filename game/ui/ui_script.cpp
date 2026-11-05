@@ -194,6 +194,8 @@ void UiScript::step(const UiScriptHost& host) {
     pushButton(mouseX_, mouseY_, true);
   } else if (cmd == "release-mouse") {
     pushButton(mouseX_, mouseY_, false);
+  } else if (cmd == "type") {
+    host.typeText(rest(in));
   } else if (cmd == "face-crew") {
     host.faceCrew();
   } else if (cmd == "expect-crew") {

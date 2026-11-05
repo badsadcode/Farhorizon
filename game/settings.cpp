@@ -66,6 +66,10 @@ std::optional<Settings> parseSettings(const std::string& text, std::string* erro
         s.bindings[action] = names;
       }
   }
+  if (auto n = j.value("network", json::object()); n.is_object()) {
+    if (n.contains("joinAddress") && n["joinAddress"].is_string()) s.joinAddress = n["joinAddress"].get<std::string>();
+    if (n.contains("joinName") && n["joinName"].is_string()) s.joinName = n["joinName"].get<std::string>();
+  }
   if (auto h = j.value("gameplay", json::object()); h.is_object()) {
     flag(h, "showDevOverlay", s.showDevOverlay);
     flag(h, "showContractTracker", s.showContractTracker);
@@ -91,6 +95,7 @@ std::string serializeSettings(const Settings& s) {
   json binds = json::object();
   for (const auto& [a, k] : s.bindings) binds[a] = k;
   j["controls"] = {{"mouseSensitivity", s.mouseSensitivity}, {"invertY", s.invertY}, {"bindings", binds}};
+  j["network"] = {{"joinAddress", s.joinAddress}, {"joinName", s.joinName}};
   j["gameplay"] = {{"showDevOverlay", s.showDevOverlay},
                    {"showContractTracker", s.showContractTracker},
                    {"showHints", s.showHints}};

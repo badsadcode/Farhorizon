@@ -74,7 +74,7 @@
 | 70 | open | render | Aboard a ship, placed reflection probes are skipped, so shiny surfaces there only get the live probe. Sun shadows also reach only as far as the cascades cover. |
 | 71 | open | ships | Interior screens and the reactor core are flat bright blocks with no detail, and crates are plain colours. |
 | 72 | open | net | A networked game has no pirates, mining, landing or fights: they are not shared yet, so they are switched off. Terminals only work for the host. |
-| 73 | partly fixed (0.14) | net | The server requires a password. Game traffic is not encrypted, the password is stored as readable text in server_config.json, and joining is command-line only. |
+| 73 | partly fixed (0.14) | net | The server requires a password. Game traffic is not encrypted, the password is stored as readable text in server_config.json, and hosting from the game is command-line only. |
 | 74 | open | net | Only tested with two windows on one PC, so packet loss and real network delay have not been seen. A client who loses the connection just exits. |
 | 75 | open | net | Other players are a stiff figure with no walking or sitting animation, one colour for everyone, and no sound of their footsteps. |
 | 76 | open | net | A client does not see the travel drive tunnel or engine effects as the host does, and in a passenger seat sees the normal flight HUD with no controls. |

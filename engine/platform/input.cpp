@@ -115,10 +115,19 @@ void InputState::beginFrame() {
   std::fill(keysRepeated_.begin(), keysRepeated_.end(), false);
   mouseDx_ = mouseDy_ = wheel_ = 0;
   mouseLeftPressed_ = mouseLeftReleased_ = false;
+  typedText_ = std::move(injectedText_);
+  injectedText_.clear();
+}
+
+bool InputState::scancodePressedOrRepeat(int scancode) const {
+  return scancode >= 0 && size_t(scancode) < keysPressed_.size() && (keysPressed_[size_t(scancode)] || keysRepeated_[size_t(scancode)]);
 }
 
 void InputState::handleEvent(const SDL_Event& e) {
   switch (e.type) {
+    case SDL_EVENT_TEXT_INPUT:
+      if (e.text.text) typedText_ += e.text.text;
+      break;
     case SDL_EVENT_KEY_DOWN:
       if (size_t(e.key.scancode) < keysDown_.size()) {
         if (!e.key.repeat) keysPressed_[size_t(e.key.scancode)] = true;

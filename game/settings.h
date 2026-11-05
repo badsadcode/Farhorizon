@@ -18,6 +18,9 @@ struct Settings {
   float uiScale = 1.0f;         // 0.75..1.5, on top of the resolution scale
   bool cameraShake = true;
   bool shadows = true;
+  // The Join game screen. The password is deliberately not kept.
+  std::string joinAddress;
+  std::string joinName;
   bool ambientOcclusion = true;
   bool reflections = true;
   bool volumetricClouds = true;

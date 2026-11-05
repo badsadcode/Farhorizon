@@ -121,8 +121,8 @@ void drawSetup(App& a, net::DedicatedServer& server, const std::filesystem::path
   y += 62;
   if (!a.status.empty()) a.o.textPx(28, y, a.status, a.statusBad ? kBad : kGood, 17);
   y += 30;
-  a.o.textPx(28, y, "To join, a player runs:", kDim, 15);
-  a.o.textPx(28, y + 22, std::format("farhorizon --join <your public address>:{} --password <password> --name <name>", a.portText), kText, 15);
+  a.o.textPx(28, y, "To join, a player chooses Join game in the main menu and types:", kDim, 15);
+  a.o.textPx(28, y + 22, std::format("<your public address>:{}   and the password", a.portText), kText, 15);
   a.o.textPx(28, y + 46, std::format("The world is saved in {}", savePath.string()), kDim, 14);
 }
 
@@ -186,7 +186,7 @@ void drawHelp(App& a) {
   line("5. Send your friend that address, the port and the password.");
   y += 14;
   heading("YOUR FRIEND JOINS WITH");
-  line(std::format("farhorizon --join <your public address>:{} --password <password> --name <name>", a.portText), kAccent);
+  line(std::format("Join game, in the game's main menu. Server address: <your public address>:{}", a.portText), kAccent);
   y += 14;
   heading("IF IT DOESN'T CONNECT");
   line("Open the LOG tab while your friend tries. If 'connection from' appears, the router works.");

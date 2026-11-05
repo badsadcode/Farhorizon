@@ -8,6 +8,7 @@ shot 01_main.png
 # Main menu -> Options. CONTINUE is disabled with no saves, so focus starts on NEW GAME.
 key Down
 key Down
+key Down
 key Return
 wait 3
 expect-screen options
@@ -130,6 +131,7 @@ wait 3
 expect-screen main
 
 # Load screen and confirm dialogs (focus is back on NEW GAME; LOAD GAME is next).
+key Down
 key Down
 key Return
 wait 3

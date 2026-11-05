@@ -1,0 +1,50 @@
+# Joins through the main menu, as a player would. Needs a server: farhorizon_server --start --port 27891 --password kestrel
+wait 20
+expect-screen main
+# First a wrong password, which should bring us back here with the reason.
+key Down
+wait 2
+key Return
+wait 5
+expect-screen join
+shot join01_empty.png
+type 127.0.0.1:27891
+wait 3
+key Down
+wait 2
+type Mara
+wait 3
+key Down
+wait 2
+type wrong
+wait 3
+shot join02_filled.png
+key Return
+wait 120
+expect-screen join
+shot join03_refused.png
+# Back on the screen with focus on the first field. Down to the password, and correct it.
+key Down
+wait 2
+key Down
+wait 2
+key Backspace
+wait 2
+key Backspace
+wait 2
+key Backspace
+wait 2
+key Backspace
+wait 2
+key Backspace
+wait 2
+type kestrel
+wait 3
+key Return
+wait 120
+expect-screen none
+expect-crew 1
+expect-location cockpit
+shot join04_joined.png
+wait 30
+quit

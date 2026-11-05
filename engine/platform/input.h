@@ -23,6 +23,10 @@ class InputState {
 
   bool down(const std::string& action) const;
   bool pressed(const std::string& action) const;  // went down this frame
+  // Text typed this frame, for text fields, and a physical key regardless of what it is bound to.
+  const std::string& typedText() const { return typedText_; }
+  void injectText(const std::string& text) { injectedText_ += text; }  // for test scripts: arrives next frame
+  bool scancodePressedOrRepeat(int scancode) const;
   bool pressedOrRepeat(const std::string& action) const;  // pressed, or OS key repeat (menus)
 
   // Runtime rebinding (Options menu). Key names are SDL scancode names ("W", "Left Shift").
@@ -50,6 +54,7 @@ class InputState {
   void endEvents();
 
  private:
+  std::string typedText_, injectedText_;
   std::unordered_map<std::string, std::vector<int>> bindings_;  // action -> SDL_Scancode list
   std::vector<bool> keysDown_ = std::vector<bool>(512, false);
   std::vector<bool> keysPressed_ = std::vector<bool>(512, false);

@@ -18,6 +18,8 @@ struct UiInput {
   float wheel = 0;
   bool up = false, down = false, left = false, right = false;
   bool accept = false, back = false, tabNext = false;
+  std::string text;        // typed this frame
+  bool backspace = false;
 };
 
 // Layout scale shared by the menus, terminal and HUD: 1080p design pixels -> drawable pixels.
@@ -66,6 +68,8 @@ class Ui {
   bool sliderRow(float x, float y, float w, std::string_view label, float& value, float lo, float hi, float step,
                  std::string_view valueText);
   bool toggleRow(float x, float y, float w, std::string_view label, bool& value);
+  // A text field. Returns true when Enter is pressed on it.
+  bool textRow(float x, float y, float w, std::string_view label, std::string& value, size_t maxLength, bool secret = false);
   bool choiceRow(float x, float y, float w, std::string_view label, int& index, const std::vector<std::string>& options);
   // `conflict` marks a key that another action also fires on.
   bool keyRow(float x, float y, float w, std::string_view label, std::string_view keys, bool listening,

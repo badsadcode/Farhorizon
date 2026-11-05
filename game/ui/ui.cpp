@@ -192,6 +192,30 @@ bool Ui::sliderRow(float x, float y, float w, std::string_view text, float& valu
   return std::fabs(value - before) > 1e-6f;
 }
 
+bool Ui::textRow(float x, float y, float w, std::string_view text, std::string& value, size_t maxLength, bool secret) {
+  const int id = nextFocus();
+  const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
+  const bool hot = hovered(X, Y, W, H);
+  hoverFocus(id, hot);
+  if (hot && in_.mousePressed) focus_ = id;
+  const bool focused = focus_ == id;
+  rowFrame(X, Y, W, H, focused);
+  const float px = s(theme_->body);
+  const float ty = Y + (H - OverlayBuilder::lineHeight(px)) * 0.5f;
+  o_->textPx(X + s(16), ty, text, focused ? theme_->textBright : theme_->text, px);
+  if (focused) {
+    for (const char c : in_.text)
+      if (value.size() < maxLength && static_cast<unsigned char>(c) >= 32) value.push_back(c);
+    if (in_.backspace && !value.empty()) value.pop_back();
+  }
+  std::string shown = secret ? std::string(value.size(), '*') : value;
+  if (focused && std::fmod(time_, 1.0) < 0.5) shown += "_";
+  const float boxX = X + W * 0.42f, boxW = W * 0.58f - s(14);
+  o_->rect(boxX, Y + s(5), boxW, H - s(10), theme_->panel);
+  o_->textPx(boxX + s(10), ty, fitText(shown, px, boxW - s(20)), theme_->textBright, px);
+  return focused && in_.accept;
+}
+
 bool Ui::toggleRow(float x, float y, float w, std::string_view text, bool& value) {
   const int id = nextFocus();
   const float X = s(x), Y = s(y), W = s(w), H = s(theme_->rowHeight);
