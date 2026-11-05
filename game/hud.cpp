@@ -731,9 +731,13 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
     const Durability& d = s.combat().player();
     const float speed = length(s.world().player().state.velocity);
     const std::string state = s.travel().active() ? std::string("DRIVE ENGAGED") : std::format("{:.0f} m/s", speed);
-    p.centered(cx, p.s(14) + 2 * p.lineH(small), std::format("HELM EMPTY   {}   HULL {:.0f}%", state, d.hullFraction() * 100.0f),
+    std::string helm = "HELM EMPTY";
+    for (const CrewMember& m : s.crew())
+      if (m.location == Location::Cockpit && m.pilot) helm = m.name + " AT THE HELM";
+    p.centered(cx, p.s(14) + 2 * p.lineH(small), std::format("{}   {}   HULL {:.0f}%", helm, state, d.hullFraction() * 100.0f),
                d.hullFraction() < 0.5f ? kWarn : kDim, small);
   }
+  for (const auto& tag : c.crewTags) p.centered(tag.x, tag.y, tag.name, kPrimary, small);
   economyPanel(p, s, c.width);
   if (c.showContractTracker) contractsPanel(p, s);
   if (s.world().simulationTime() - s.noticeTime() < 4.0 && !s.notice().empty())

@@ -55,6 +55,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Local scene swap | ✅ | separate interior scenes; space keeps simulating; the ship stays clamped |
 | On-foot controller | ✅ | capsule collide-and-slide, gravity, jump; unit-tested |
 | Seat interaction | ✅ | F leaves the seat (docked only) / takes the seat |
+| Networked co-op test | 🟡 | Host and join by command line; flying and walking shared (0.13, ADR 0016); combat etc. not yet |
 | Walkable ship | ✅ | Sparrow: two decks, stair, real windows; leave the helm in flight (0.12, ADR 0015) |
 | Airlock + station hangar | ✅ | exit into Kestrel Hangar 1 with the parked ship visible; board again |
 | 20× fly→dock→walk→launch | ✅ | headless CTest on real content + one interactive keyboard/mouse run in the app |

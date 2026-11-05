@@ -19,6 +19,8 @@
 #include "engine/audio/audio_device.h"
 #include "game/audio_director.h"
 #include "game/foot/foot_view.h"
+#include "game/hud.h"
+#include "game/net/net_link.h"
 #include "game/session/sim_player.h"
 #include "game/fx/light_selector.h"
 #include "game/fx/particles.h"
@@ -42,6 +44,10 @@ class VkContext;
 class Renderer;
 
 struct AppOptions {
+  std::uint16_t hostPort = 0;      // non-zero: host a game on this UDP port (--host)
+  std::string joinAddress;         // non-empty: join a game (--join address[:port])
+  std::uint16_t joinPort = 0;
+  std::string playerName;          // --name
   std::filesystem::path contentDir;
   std::filesystem::path shaderDir;
   std::string sceneId = "scene.stage2_flight";
@@ -172,6 +178,13 @@ class GameApp {
   FootMeshes footMeshes_;
   FootView footView_;
   std::optional<SimPlayer> scriptWalker_;  // the walk-to command in UI scripts
+  std::unique_ptr<net::HostLink> hostLink_;
+  std::unique_ptr<net::ClientLink> clientLink_;
+  std::uint32_t crewMesh_ = 0;
+  std::vector<InteriorHudContext::CrewTag> crewTags_;
+  void helmCommand(const std::string& name, PlayerId who);
+  void drawCrew(const AssetID& place, bool aboardShip, const Mat4& placeToView, const CameraView& view,
+                const RenderFrameParams& params, std::vector<MeshDrawItem>& items);
   AssetID lampSelectorScene_;
   float tunnelAmount_ = 0.0f;
   std::vector<Vec3> travelNozzles_;  // relative to the ship

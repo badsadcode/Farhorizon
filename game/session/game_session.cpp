@@ -268,6 +268,10 @@ bool GameSession::engageTravel() {
 }
 
 bool GameSession::requestLanding() {
+  if (networked_) {
+    notify("Landing with a crew comes later");
+    return false;
+  }
   if (location() != Location::Cockpit || !freeFlight()) return fail("Cannot begin a landing right now").ok;
   return landing_.request(*world_);
 }
@@ -288,12 +292,16 @@ ActionResult GameSession::leaveSeat(PlayerId who) {
   if (!parked() && (docking_.state() != DockState::Undocked || landing_.busy()))
     return failFor(s, "Not during docking or landing");
   if (shipInterior_.empty()) return failFor(s, "This ship has no walkable interior");
+  const bool wasFlying = !parked() && players_[size_t(s)].pilot;
   const bool flying = !parked();
   const bool cruising = travel_.active();
   ActionResult r = enterInterior(s, shipInterior_, "seat", Location::ShipInterior);
+  players_[size_t(s)].pilot = false;
   if (r.ok && flying) {
     CrewMember& m = players_[size_t(s)];
-    m.notice = cruising ? "You leave the helm. The drive holds its course." : "You leave the helm. The ship brakes to a stop.";
+    m.notice = !wasFlying              ? "You leave your seat."
+               : cruising              ? "You leave the helm. The drive holds its course."
+                                       : "You leave the helm. The ship brakes to a stop.";
     m.noticeTime = world_->simulationTime();
     r.message = m.notice;
   }
@@ -341,6 +349,12 @@ ActionResult GameSession::perform(PlayerId who, const std::string& action) {
     const auto station = docking_.station();
     const auto& dock = world_->props().at(*station).def.docking;
     if (!dock) return failFor(s, "This station has no walkable interior");
+    if (networked_) {  // enemies are not shared over the network yet
+      auto def = interiors_.find(dock->interior);
+      const bool hostile = def != interiors_.end() && std::any_of(def->second.markers.begin(), def->second.markers.end(),
+                                                                  [](const InteriorMarker& mk) { return mk.type == "enemy_spawn"; });
+      if (hostile) return failFor(s, "Fights with a crew come later. The airlock stays shut.");
+    }
     return enterInterior(s, dock->interior, "fromShip", Location::StationInterior);
   }
   if (action == "boardShip") {
@@ -852,7 +866,53 @@ TradeResult GameSession::trade(PlayerId who, const std::string& commodity, int u
   return r;
 }
 
+void GameSession::setNetClient(bool on) {
+  netClient_ = on;
+  PlayerShip& ship = world_->player();
+  ship.kinematic = on;  // moved by what the host reports
+  ship.collisionsEnabled = !on;
+  ship.state.velocity = {};
+}
+
+void GameSession::netApplyShipStatus(bool docked, std::uint32_t prop, std::uint32_t bay, float hull, float shield) {
+  Durability& d = combat_.player();
+  d.hull = hull;
+  d.shield = shield;
+  if (docked && docking_.state() != DockState::Docked) {
+    docking_.dockAt(*world_, prop, bay);
+    wasParked_ = true;
+  } else if (!docked && docking_.state() == DockState::Docked) {
+    docking_.clearForNetClient();
+    wasParked_ = false;
+  }
+}
+
+void GameSession::netApplyPlace(PlayerId who, Location where, const AssetID& interior, bool pilot) {
+  const int s = slotOf(who);
+  if (s < 0) return;
+  CrewMember& m = players_[size_t(s)];
+  m.pilot = pilot;
+  if (where == Location::Cockpit) {
+    if (m.location != Location::Cockpit) {
+      leavePlace(s);
+      m.location = Location::Cockpit;
+    }
+    return;
+  }
+  if (m.location == where && m.interior == interior) return;
+  auto def = interiors_.find(interior);
+  if (def == interiors_.end() || def->second.spawns.empty()) return;  // the caller sets the position
+  enterInterior(s, interior, def->second.spawns.begin()->first, where);
+}
+
 std::optional<Vec3> GameSession::fixedUpdate(float dt) {
+  if (netClient_) {
+    world_->fixedUpdate(dt);
+    for (auto& [id, in] : instances_) stepInstance(id, in, dt);
+    for (CrewMember& m : players_)
+      if (m.location == Location::Cockpit) m.input = CharacterInput{};
+    return world_->rebaseIfNeeded();
+  }
   docking_.preStep(*world_, dt);
   travel_.preStep(*world_, world_->player().def.travel, dt);
   if (travel_.state() == TravelState::Transit || travel_.state() == TravelState::Decelerating)
@@ -860,7 +920,7 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   landing_.preStep(*world_, dt);
   world_->fixedUpdate(dt);
   docking_.postStep(*world_, dt);
-  const bool canMine = pilotSlot() >= 0 && freeFlight();
+  const bool canMine = pilotSlot() >= 0 && freeFlight() && !networked_;
   miningEvents_ = mining_.fixedUpdate(*world_, miningTrigger_ && canMine, cargo_, dt);
   // Collisions hurt (only in free flight; clamps and pads are gentle).
   PlayerShip& ps = world_->player();

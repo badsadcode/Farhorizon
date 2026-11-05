@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.0 — Someone else aboard (2026-11-05)
+Roadmap step 4.3: the first networked test. One person flies while another walks the ship, on two computers.
+* **Host with `--host`, join with `--join <address>`, and pick a name with `--name`.** It uses UDP port 27777,
+  or `--port` for another. There is no menu for it yet. See `docs/NETWORK_TEST.md`.
+* **The host runs the world.** Clients send their controls and show what the host reports, so they can't cheat
+  by changing their copy. Your own legs still respond at once, and a disagreement is corrected.
+* **You can see each other,** in a new work suit with a name overhead, including whoever sits at the helm. The
+  deck readout says who has it.
+* **Anyone can take the helm** if it is free, and steer from the far end of the connection.
+* **Not shared yet, so switched off in a networked game:** pirates, mining, landing, terminals for anyone but the
+  host, and walking into a place with enemies. Other players' sounds and a password also come later.
+* The world no longer pauses for a menu in a networked game.
+* New library: ENet (MIT licence).
+
 ## 0.12.0 — Leaving the helm (2026-11-05)
 Roadmap step 4.2, in single-player: the ship is a place you can walk around while it flies.
 * **Press F in flight to leave the seat.** The ship brakes to a stop by itself, and if the travel drive is

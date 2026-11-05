@@ -5,6 +5,7 @@ Versions are pinned. Any new dependency needs an entry here and a mention in an 
 
 | Library | Version | License | Scope in FARHORIZON | How it is consumed |
 |---|---|---|---|---|
+| ENet | `v1.3.18` (git tag) | MIT | UDP networking for co-op. | CMake FetchContent |
 | SDL3 | `release-3.4.8` (git tag) | zlib | Window, input events, Vulkan surface creation. Audio later. | CMake FetchContent, static |
 | Vulkan headers + loader | SDK ≥ 1.3.250 | Apache-2.0 | Graphics API | System / Vulkan SDK (`find_package(Vulkan)`) |
 | glslang (`glslangValidator`) | from Vulkan SDK | BSD-3 / Apache-2.0 | Build-time GLSL → SPIR-V | Build tool only |

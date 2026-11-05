@@ -251,3 +251,23 @@ box((0, -0.101, 0.1), (0.3, 0.004, 0.035), stripe, bevel=0.0)
 box((0, 0, 0.183), (0.12, 0.05, 0.012), stripe, bevel=0.002)
 box((0.11, -0.102, 0.15), (0.03, 0.004, 0.015), lamp, bevel=0.0)
 export("loot_ammo")
+
+# ---- Another crew member: a worn work suit. The origin is at the feet, facing +Y ----------------------
+reset()
+suit = material("crew_suit", (0.34, 0.27, 0.13), 0.05, 0.7)
+dark_suit = material("crew_suit_dark", (0.07, 0.07, 0.08), 0.2, 0.55)
+visor = material("crew_visor", (0.02, 0.05, 0.06), 0.3, 0.12, (0.25, 0.65, 0.7), 0.5)
+lamp = material("crew_lamp", (0.3, 0.25, 0.1), 0.0, 0.4, (1.0, 0.85, 0.55), 1.5)
+for side in (-1, 1):
+    box((side * 0.12, 0, 0.42), (0.15, 0.17, 0.84), suit, bevel=0.02)       # legs
+    box((side * 0.12, 0.03, 0.05), (0.16, 0.28, 0.1), dark_suit, bevel=0.02)  # boots
+    box((side * 0.31, 0, 1.17), (0.11, 0.13, 0.56), suit, bevel=0.02)       # arms
+    box((side * 0.31, 0, 0.86), (0.11, 0.12, 0.1), dark_suit, bevel=0.015)  # gloves
+box((0, 0, 1.15), (0.48, 0.25, 0.62), suit, bevel=0.03)                     # torso
+box((0, -0.18, 1.2), (0.36, 0.14, 0.46), dark_suit, bevel=0.02)             # back pack
+box((0, 0.13, 1.28), (0.2, 0.02, 0.09), dark_suit, bevel=0.0)               # chest plate
+box((0, 0, 0.84), (0.46, 0.25, 0.07), dark_suit, bevel=0.0)                 # belt
+blob((0, 0, 1.63), (0.15, 0.16, 0.17), suit)                                # helmet
+blob((0, 0.075, 1.65), (0.115, 0.1, 0.09), visor)
+box((0.13, 0.08, 1.72), (0.03, 0.05, 0.03), lamp, bevel=0.0)
+export("crew_suit")

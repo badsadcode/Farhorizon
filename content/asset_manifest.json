@@ -98,6 +98,11 @@
       "source": "models/foot/crawler_dead.glb",
       "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
     },
+    "mesh.foot.crew_suit": {
+      "type": "mesh",
+      "source": "models/foot/crew_suit.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_foot_assets.py."
+    },
     "mesh.foot.crawler_leg": {
       "type": "mesh",
       "source": "models/foot/crawler_leg.glb",

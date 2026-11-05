@@ -73,3 +73,8 @@
 | 69 | open | ships | The Sparrow's two-deck interior is much bigger than its exterior model, and its windows do not line up with the hull. The exterior needs rebuilding to fit. |
 | 70 | open | render | Aboard a ship, placed reflection probes are skipped, so shiny surfaces there only get the live probe. Sun shadows also reach only as far as the cascades cover. |
 | 71 | open | ships | Interior screens and the reactor core are flat bright blocks with no detail, and crates are plain colours. |
+| 72 | open | net | A networked game has no pirates, mining, landing or fights: they are not shared yet, so they are switched off. Terminals only work for the host. |
+| 73 | open | net | There is no password or encryption, and hosting and joining are command-line only. Do not expose the port to the internet. Comes with 4.4. |
+| 74 | open | net | Only tested with two windows on one PC, so packet loss and real network delay have not been seen. A client who loses the connection just exits. |
+| 75 | open | net | Other players are a stiff figure with no walking or sitting animation, one colour for everyone, and no sound of their footsteps. |
+| 76 | open | net | A client does not see the travel drive tunnel or engine effects as the host does, and in a passenger seat sees the normal flight HUD with no controls. |

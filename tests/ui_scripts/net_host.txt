@@ -1,0 +1,11 @@
+# The host of a two-window test: flies while the other player walks. Start net_client.txt alongside it,
+# from another folder, with: farhorizon --host --name Tomek ...
+wait 500
+expect-crew 2
+expect-location cockpit
+hold 200 W
+wait 20
+shot host01_flying.png
+expect-crew 2
+wait 400
+quit

@@ -108,8 +108,20 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     session_->addInterior(id, std::move(map->def));
     session_->enterMap(id);
   }
+  if (!options_.playerName.empty()) session_->player(session_->localPlayer())->name = options_.playerName;
+  if (options_.hostPort != 0) {
+    hostLink_ = std::make_unique<net::HostLink>(*session_);
+    if (!hostLink_->start(options_.hostPort)) throw std::runtime_error("could not open the network port");
+    session_->notify(std::format("Hosting on port {}", options_.hostPort));
+  }
+  if (!options_.joinAddress.empty()) {
+    clientLink_ = std::make_unique<net::ClientLink>(*session_);
+    const std::uint16_t port = options_.joinPort ? options_.joinPort : net::kDefaultPort;
+    const std::string name = options_.playerName.empty() ? std::string("Crew") : options_.playerName;
+    if (!clientLink_->start(options_.joinAddress, port, name)) throw std::runtime_error(clientLink_->failure());
+  }
   applySettings();
-  const bool directStart = options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
+  const bool directStart = options_.hostPort != 0 || !options_.joinAddress.empty() || options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
                            !options_.loadPath.empty() || options_.autofly || !options_.mapPath.empty() ||
                            !options_.shipMesh.empty() || !options_.startAt.empty();
   if (!scripted_ && !directStart) openMenu(MenuSystem::Screen::Main);
@@ -563,6 +575,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   }
   for (const char* loot : {"salvage", "medical", "cache", "ammo"})
     if (!footMesh(std::string("mesh.foot.loot_") + loot, footMeshes_.loot[loot])) return false;
+  if (!footMesh("mesh.foot.crew_suit", crewMesh_)) return false;
   interiorPieces_.clear();
   for (auto& [iid, def] : interiors) {
     std::map<std::string, std::uint32_t> handles;
@@ -842,7 +855,10 @@ void GameApp::handleAppInput() {
     persistSettings();
     log::info("render", "look: {}", looks_.profiles[size_t(activeLook_)].name);
   }
-  if (input_.pressed("interact")) session_->interact();
+  if (input_.pressed("interact")) {
+    if (clientLink_) clientLink_->sendCommand("interact");
+    else session_->interact();
+  }
   if (session_->consumeMapExit()) quit_ = true;  // playing a map from Blender: back to the editor
   if (session_->consumeMarketRequest()) openMarket();
   if (input_.pressed("ui.market") && cockpit) {
@@ -853,6 +869,10 @@ void GameApp::handleAppInput() {
     if (input_.pressed("camera.cycle")) camera_.cycleShipCamera(ship);
     if (input_.pressed("camera.dev")) camera_.toggleDev(ship);
     if (input_.pressed("camera.autoRotate") && camera_.mode() == CameraMode::Orbit) camera_.toggleAutoRotate();  // O
+    if (clientLink_) {
+      for (const char* name : {"nav.next", "travel.engage", "dock.request", "dock.autopilot"})
+        if (input_.pressed(name)) clientLink_->sendCommand(name);
+    } else {
     if (input_.pressed("target.next")) world().cycleTarget();
     if (input_.pressed("target.nearestAsteroid")) world().targetNearestAsteroid();
     if (input_.pressed("target.clear")) world().clearTarget();
@@ -867,58 +887,21 @@ void GameApp::handleAppInput() {
       session_->notify("Weapons: MINING LASER");
     }
     if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
-    if (input_.pressed("nav.next")) {
-      const auto dests = world().navDestinations();
-      if (!dests.empty()) {
-        size_t next = 0;
-        if (const auto& t = world().target())
-          for (size_t i = 0; i < dests.size(); ++i)
-            if (dests[i] == *t) next = (i + 1) % dests.size();
-        world().setTarget(dests[next]);
-        if (auto info = world().targetInfo()) session_->notify("NAV: " + info->name);
-      }
-    }
-    if (input_.pressed("travel.engage")) {
-      if (session_->travel().active()) session_->travel().cancel(world());
-      else session_->engageTravel();
-    }
-    if (input_.pressed("dock.request")) {  // L: contextual dock / land / launch / undock
-      Docking& d = session_->docking();
-      Landing& ld = session_->landing();
-      if (ld.state() == LandState::Landed) {
-        session_->launch();
-      } else if (!ld.busy()) {
-        switch (d.state()) {
-          case DockState::Undocked: {
-            // Prefer a landing when a site's orbit marker is near; otherwise dock.
-            bool siteNear = false;
-            const DVec3 me = world().frame().toSystem(world().player().state.position).metres;
-            for (const auto& pl : world().planets())
-              for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
-                siteNear = siteNear || length(pl.siteOrbit(si) - me) <= Landing::kRequestRange;
-            if (siteNear) session_->requestLanding();
-            else d.request(world());
-            break;
-          }
-          case DockState::RequestingClearance:
-          case DockState::ApproachAuthorized: d.cancel(); break;
-          case DockState::Docked: session_->undock(); break;
-          default: break;
-        }
-      }
-    }
-    if (input_.pressed("dock.autopilot")) session_->docking().toggleAutopilot();
+    if (session_->player(session_->localPlayer())->pilot)
+      for (const char* name : {"nav.next", "travel.engage", "dock.request", "dock.autopilot"})
+        if (input_.pressed(name)) helmCommand(name, session_->localPlayer());
     if (input_.pressed("debug.forceDock")) session_->docking().forceDock(world());
     if (input_.pressed("ship.scan")) {
       const auto& t = world().target();
       if (t && t->kind == TargetRef::Kind::Asteroid) session_->mining().startScan(t->index, world().simulationTime());
       else session_->notify("Target an asteroid to scan");
     }
+    }
   }
   if (input_.pressed("debug.reloadAssets")) {
     std::vector<std::string> errors;
-    if (!cockpit) {
-      contentErrors_ = {"Reload is only available from the pilot seat"};
+    if (!cockpit || session_->networked()) {
+      contentErrors_ = {"Reload is only available from the pilot seat, and not in a networked game"};
     } else if (loadContent(errors)) {
       log::info("content", "hot reload OK");
       contentErrors_ = errors;  // may contain warnings
@@ -927,6 +910,89 @@ void GameApp::handleAppInput() {
       contentErrors_ = errors;
       contentErrors_.insert(contentErrors_.begin(), "RELOAD FAILED - previous content kept:");
     }
+  }
+}
+
+void GameApp::helmCommand(const std::string& name, PlayerId who) {
+  if (name == "nav.next") {
+    const auto dests = world().navDestinations();
+    if (!dests.empty()) {
+      size_t next = 0;
+      if (const auto& t = world().target())
+        for (size_t i = 0; i < dests.size(); ++i)
+          if (dests[i] == *t) next = (i + 1) % dests.size();
+      world().setTarget(dests[next]);
+      if (auto info = world().targetInfo()) session_->notify("NAV: " + info->name);
+    }
+  }
+  if (name == "travel.engage") {
+    if (session_->travel().active()) session_->travel().cancel(world());
+    else session_->engageTravel();
+  }
+  if (name == "dock.request") {  // L: contextual dock / land / launch / undock
+    Docking& d = session_->docking();
+    Landing& ld = session_->landing();
+    if (ld.state() == LandState::Landed) {
+      session_->launch();
+    } else if (!ld.busy()) {
+      switch (d.state()) {
+        case DockState::Undocked: {
+          // Prefer a landing when a site's orbit marker is near; otherwise dock.
+          bool siteNear = false;
+          const DVec3 me = world().frame().toSystem(world().player().state.position).metres;
+          for (const auto& pl : world().planets())
+            for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
+              siteNear = siteNear || length(pl.siteOrbit(si) - me) <= Landing::kRequestRange;
+          if (siteNear) session_->requestLanding();
+          else d.request(world());
+          break;
+        }
+        case DockState::RequestingClearance:
+        case DockState::ApproachAuthorized: d.cancel(); break;
+        case DockState::Docked: session_->undock(who); break;
+        default: break;
+      }
+    }
+  }
+  if (name == "dock.autopilot") session_->docking().toggleAutopilot();
+  if (who != session_->localPlayer()) {  // they cannot see the host's messages otherwise
+    if (!session_->docking().message().empty()) session_->notifyPlayer(who, session_->docking().message());
+    if (!session_->travel().message().empty()) session_->notifyPlayer(who, session_->travel().message());
+  }
+}
+
+void GameApp::drawCrew(const AssetID& place, bool aboardShip, const Mat4& placeToView, const CameraView& view,
+                       const RenderFrameParams& params, std::vector<MeshDrawItem>& items) {
+  crewTags_.clear();
+  const VkExtent2D ext = renderer_->extent();
+  const float tanHalf = std::tan(params.fovYRadians * 0.5f);
+  const float aspect = float(ext.width) / float(std::max(1u, ext.height));
+  const Quat toEye = view.rotation.conjugate();
+  const InteriorDef* def = session_->interiorOf(session_->localPlayer());
+  int seated = 0;
+  for (size_t i = 0; i < session_->crew().size(); ++i) {
+    const CrewMember& m = session_->crew()[i];
+    if (m.id == session_->localPlayer()) continue;
+    Vec3 feet = m.character.feet;
+    float yaw = m.character.yaw;
+    if (m.location == Location::Cockpit) {  // someone in the seat, seen from inside the ship
+      if (!aboardShip || !def) continue;
+      const auto seat = def->spawns.find("seat");
+      if (seat == def->spawns.end()) continue;
+      feet = seat->second.position + Vec3{float(seated++) * 0.8f, 0, 0.5f};  // in the chair, just aft of where you stand up
+      yaw = radians(seat->second.yawDeg);
+    } else if (m.interior != place) {
+      continue;
+    }
+    const Mat4 model = placeToView * Mat4::translation(feet) * Mat4::rotation(Quat::fromAxisAngle({0, 1, 0}, -yaw));
+    items.push_back({crewMesh_, model});
+    // Their name, above their head, if it is in front of us.
+    const Vec3 inView = placeToView.transformPoint(feet + Vec3{0, 2.05f, 0});
+    const Vec3 eye = toEye.rotate(inView);
+    if (eye.z >= -0.2f) continue;
+    const float x = eye.x / (-eye.z * tanHalf * aspect), y = eye.y / (-eye.z * tanHalf);
+    if (std::fabs(x) > 1.0f || std::fabs(y) > 1.0f) continue;
+    crewTags_.push_back({(x * 0.5f + 0.5f) * float(ext.width), (0.5f - y * 0.5f) * float(ext.height), m.name});
   }
 }
 
@@ -1086,6 +1152,7 @@ void GameApp::buildOverlay(const CameraView& view, const Mat4& viewProj, const T
   } else {
     InteriorHudContext ic{*session_, float(ext.width), float(ext.height), mouseCaptured_, runTime_, look.hud,
                           settings_.uiScale, &theme_, &input_, settings_.showContractTracker, settings_.showHints};
+    ic.crewTags = crewTags_;
     ic.hurtFlash = footView_.hurtFlash();
     ic.hitMark = footView_.hitMark();
     ic.blackout = footView_.blackout();
@@ -1150,6 +1217,21 @@ int GameApp::run() {
                           c.pitch = std::asin(to.y / best);
                         }
                       },
+                      [this] { return int(session_->crew().size()); },
+                      [this] {  // test driver only: look at the other crew member, or at the seat if they are in it
+                        CharacterState& c = session_->character();
+                        const Vec3 eye = c.eye(session_->characterParams());
+                        const InteriorDef* def = session_->activeInterior();
+                        for (const CrewMember& m : session_->crew()) {
+                          if (m.id == session_->localPlayer()) continue;
+                          Vec3 at = m.character.feet;
+                          if (m.location == Location::Cockpit && def && def->spawns.count("seat"))
+                            at = def->spawns.at("seat").position + Vec3{0, 0, 0.5f};
+                          const Vec3 to = at + Vec3{0, 1.2f, 0} - eye;
+                          c.yaw = std::atan2(to.x, -to.z);
+                          c.pitch = std::asin(to.y / std::max(length(to), 0.01f));
+                        }
+                      },
                       [this](const Vec3& goal) {  // test driver only
                         scriptWalker_.emplace(*session_, session_->localPlayer());
                         scriptWalker_->walkTo(goal, 0.7f);
@@ -1164,17 +1246,31 @@ int GameApp::run() {
     if (mouseCaptured_ && !window_->hasFocus()) setMouseCapture(false);
 
     handleAppInput();
-    const bool simPaused = menus_.active();
+    if (hostLink_) {
+      hostLink_->pump();
+      for (const auto& [who, name] : hostLink_->takeHelmCommands()) helmCommand(name, who);
+    }
+    if (clientLink_) {
+      clientLink_->pump();
+      if (clientLink_->lost()) {
+        log::error("net", "{}", clientLink_->failure());
+        session_->notify(clientLink_->failure());
+        quit_ = true;
+      }
+    }
+    const bool simPaused = menus_.active() && !session_->networked();
     const bool cockpit = session_->location() == Location::Cockpit;
     const bool devCam = camera_.isDev();
     const bool freeCam = camera_.mode() == CameraMode::Free;
     if (simPaused) {
       // Menus: the world holds still behind them.
     } else if (cockpit) {
-      controller_.update(input_, float(dt), mouseCaptured_ && !devCam, world().player().state.boostEnergy,
-                         world().player().input);
+      if (!menus_.active())
+        controller_.update(input_, float(dt), mouseCaptured_ && !devCam, world().player().state.boostEnergy,
+                           world().player().input);
+      if (!clientLink_ && !session_->player(session_->localPlayer())->pilot) world().player().input = FlightInput{};
     } else {
-      handleFootInput(float(dt));
+      if (!menus_.active()) handleFootInput(float(dt));
       if (scriptWalker_) scriptWalker_->step();
       if (benchmark_ && benchmark_->lookTurnDegPerSec != 0.0f)
         session_->characterInput().yawDelta += radians(benchmark_->lookTurnDegPerSec) * float(dt);
@@ -1234,7 +1330,11 @@ int GameApp::run() {
     }
     const int steps = simPaused ? 0 : clock_.advance(dt);
     for (int i = 0; i < steps; ++i) {
+      if (hostLink_) hostLink_->preStep();
+      if (clientLink_) clientLink_->preStep();
       const auto delta = session_->fixedUpdate(float(clock_.step()));
+      if (hostLink_) hostLink_->postStep();
+      if (clientLink_) clientLink_->postStep(float(clock_.step()));
       if (delta) {
         camera_.applyRebase(*delta);
         fx_.shift(*delta);
@@ -1632,6 +1732,7 @@ int GameApp::run() {
         const Mat4 shipModel = Mat4::translation(ship.position - view.position) * Mat4::rotation(ship.rotation);
         auto inView = [&](const Vec3& p) { return ship.position + ship.rotation.rotate(p) - view.position; };
         for (const auto& pi : interiorPieces_[sceneId]) items.push_back({pi.mesh, shipModel * pi.model});
+        drawCrew(sceneId, true, shipModel, view, params, items);
         const auto footEvents = session_->takeFootEvents();
         footView_.update(simPaused ? 0.0f : float(dt), footEvents, *session_);
         // The cabin keeps its own lamps and ambient. The sun stays the real one, so it comes in through the
@@ -1703,6 +1804,7 @@ int GameApp::run() {
         glows.clear();
         for (const auto& pi : interiorPieces_[sceneId]) items.push_back({pi.mesh, Mat4::translation(-view.position) * pi.model});
         if (!surface) {
+          drawCrew(sceneId, session_->location() == Location::ShipInterior, Mat4::translation(-view.position), view, params, items);
           const auto footEvents = session_->takeFootEvents();
           playFootSounds(footEvents, view.position, view.rotation);
           footView_.update(simPaused ? 0.0f : float(dt), footEvents, *session_);

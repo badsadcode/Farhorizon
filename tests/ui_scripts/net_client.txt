@@ -1,0 +1,21 @@
+# The other player of a two-window test: joins, leaves the seat and walks while the host flies.
+# Run with: farhorizon --join 127.0.0.1 --name Mara ...
+wait 120
+expect-crew 2
+expect-location cockpit
+key F
+wait 30
+expect-location ship
+walk-to 0.8 2.8 -5.2
+wait 100
+face-crew
+wait 3
+shot client01_pilot.png
+walk-to 0 2.8 3
+wait 300
+face-crew
+wait 3
+shot client02_from_aft.png
+wait 200
+expect-crew 2
+quit

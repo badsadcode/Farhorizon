@@ -208,7 +208,15 @@ class GameSession {
   // Events from the last fixed step(s), after the session has handled them (for audio/HUD).
   std::vector<CombatEvent> takeCombatEvents() { return std::exchange(combatEvents_, {}); }
   // In open space, whether or not anyone is at the helm: leaving the seat does not make pirates go away.
-  bool combatActive() const { return freeFlight(); }
+  bool combatActive() const { return freeFlight() && !networked_; }
+  // Played over a network. Until the host can share them, a networked game has no pirates, mining, landing
+  // or fights on foot. A client's session also simulates only the walking: the host runs everything else.
+  void setNetworked(bool on) { networked_ = on; }
+  bool networked() const { return networked_; }
+  void setNetClient(bool on);
+  bool netClient() const { return netClient_; }
+  void netApplyShipStatus(bool docked, std::uint32_t prop, std::uint32_t bay, float hull, float shield);
+  void netApplyPlace(PlayerId who, Location where, const AssetID& interior, bool pilot);
   // How hard the ship was just hit, 0..1. The app turns this into camera shake.
   float takeShipJolt() { return std::exchange(shipJolt_, 0.0f); }
 
@@ -237,6 +245,8 @@ class GameSession {
   std::int64_t insuranceDeductible() const { return deductible_; }
 
  private:
+  bool networked_ = false;
+  bool netClient_ = false;
   float shipJolt_ = 0;
   // A walkable place with at least one player in it: its own colliders and its own fight.
   struct Instance {

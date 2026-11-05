@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.12.0 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.13.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,19 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(Warnings)
 
 # ---- Vendored header-only third-party code (see docs/DEPENDENCIES.md) ----
+# ENet: UDP networking for co-op (MIT). See docs/DEPENDENCIES.md.
+include(FetchContent)
+FetchContent_Declare(enet
+  GIT_REPOSITORY https://github.com/lsalzman/enet.git
+  GIT_TAG        v1.3.18
+  GIT_SHALLOW    TRUE
+  SYSTEM)
+FetchContent_MakeAvailable(enet)
+target_include_directories(enet SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
+if(WIN32)
+  target_link_libraries(enet PUBLIC ws2_32 winmm)
+endif()
+
 add_library(fh_third_party INTERFACE)
 target_include_directories(fh_third_party SYSTEM INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
@@ -41,6 +54,9 @@ add_library(fh_core STATIC
   game/fx/particles.cpp
   game/fx/light_selector.cpp
   game/foot/foot_combat.cpp
+  game/net/net_protocol.cpp
+  game/net/net_transport.cpp
+  game/net/net_link.cpp
   game/foot/foot_defs.cpp
   game/foot/nav_grid.cpp
   game/content/ship_def.cpp
@@ -76,7 +92,7 @@ add_library(fh_core STATIC
   game/audio_director.cpp
 )
 target_include_directories(fh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fh_core PUBLIC fh_third_party)
+target_link_libraries(fh_core PUBLIC fh_third_party enet)
 fh_set_warnings(fh_core)
 
 if(FH_BUILD_GAME)
@@ -163,6 +179,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_foot_arsenal.cpp
     tests/unit/test_crew.cpp
     tests/unit/test_ship_walk.cpp
+    tests/unit/test_net.cpp
     tests/unit/test_map.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)

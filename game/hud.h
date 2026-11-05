@@ -45,6 +45,10 @@ struct HudContext {
 };
 
 struct InteriorHudContext {
+  struct CrewTag {
+    float x = 0, y = 0;
+    std::string name;
+  };
   const GameSession& session;
   float width = 0, height = 0;
   bool mouseCaptured = false;
@@ -56,6 +60,7 @@ struct InteriorHudContext {
   bool showContractTracker = true;
   bool showHints = true;
   float hurtFlash = 0, hitMark = 0, blackout = 0;  // 0..1, fading
+  std::vector<CrewTag> crewTags;                   // names over other players' heads
 };
 void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c);
 // Cockpit HUD while the ship is in a planet's surface scene (approach, landed, liftoff).

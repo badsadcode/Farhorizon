@@ -194,6 +194,12 @@ void UiScript::step(const UiScriptHost& host) {
     pushButton(mouseX_, mouseY_, true);
   } else if (cmd == "release-mouse") {
     pushButton(mouseX_, mouseY_, false);
+  } else if (cmd == "face-crew") {
+    host.faceCrew();
+  } else if (cmd == "expect-crew") {
+    int want = 0;
+    in >> want;
+    if (host.crewCount() != want) fail(std::format("{} in the crew", host.crewCount()));
   } else if (cmd == "walk-to") {
     Vec3 goal{};
     in >> goal.x >> goal.y >> goal.z;

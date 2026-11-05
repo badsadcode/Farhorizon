@@ -35,6 +35,10 @@ void printUsage() {
       "  --low-spec             low-spec mode: no shadows, AO, reflections or clouds; half-resolution scene\n"
       "  --ui-script <file>     developer: drive the UI with scripted input (game/ui/ui_script.h)\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
+      "  --host                 host a game for others to join (UDP port 27777)\n"
+      "  --join <addr[:port]>   join a game\n"
+      "  --port <n>             use another port, with --host or --join\n"
+      "  --name <name>          your name in a networked game\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
       "  --no-validation        disable validation\n"
       "  --no-vsync             present without vsync\n"
@@ -66,6 +70,8 @@ int main(int argc, char** argv) {
 #ifndef NDEBUG
   o.validation = true;
 #endif
+  bool wantHost = false;
+  std::uint16_t chosenPort = 0;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> const char* {
@@ -95,6 +101,15 @@ int main(int argc, char** argv) {
     else if (a == "--settings") o.settingsPath = next();
     else if (a == "--map") o.mapPath = next();
     else if (a == "--low-spec") o.lowSpec = true;
+    else if (a == "--host") wantHost = true;
+    else if (a == "--port") chosenPort = std::uint16_t(std::atoi(next()));
+    else if (a == "--join") {
+      const std::string where = next();
+      const size_t colon = where.rfind(':');
+      o.joinAddress = where.substr(0, colon);
+      if (colon != std::string::npos) o.joinPort = std::uint16_t(std::atoi(where.c_str() + colon + 1));
+    }
+    else if (a == "--name") o.playerName = next();
     else if (a == "--start-at") o.startAt = next();
     else if (a == "--ship-mesh") o.shipMesh = next();
     else if (a == "--ui-script") o.uiScript = next();
@@ -106,6 +121,8 @@ int main(int argc, char** argv) {
     else { std::fprintf(stderr, "unknown option %s\n", a.c_str()); printUsage(); return 1; }
   }
 
+  if (wantHost && o.joinAddress.empty()) o.hostPort = chosenPort ? chosenPort : fh::net::kDefaultPort;
+  if (chosenPort && o.joinPort == 0) o.joinPort = chosenPort;
   fh::log::setLogFile("farhorizon.log");
   try {
     fh::GameApp app(o);

@@ -1,0 +1,24 @@
+# ADR 0016 — Networking: the host decides
+
+_Status: accepted (0.13.0, roadmap step 4.3)._
+
+## Decision
+* **ENet over UDP**, hidden in `game/net/net_transport`. Join, leave and commands are reliable; controls and world
+  reports go on a channel where only the latest matters.
+* **A hand-written binary format** (`net_protocol`) with bounds checks and a refusal of NaN and infinity, because
+  anything can arrive from a network. Tests feed it every truncation of a real packet and random bytes.
+* **Server-authoritative.** The host runs the one real `GameSession`. A client sends its controls, an absolute look
+  direction and named commands, and the host decides. `interact` is checked against where the host says that
+  player stands, and helm commands are refused from anyone but the pilot.
+* **A client keeps a local `GameSession` in `netClient` mode:** it steps only walking, and everything else is overwritten
+  by reports, 20 a second. Its own body is predicted and corrected only beyond 0.5 m. Others and the ship glide
+  between reports. The ship's position is sent in the system frame, because each machine has its own floating origin.
+* **Listen server first.** The host plays too. Step 4.4 moves this to `farhorizon_server.exe`; `HostLink` needs a
+  session, not a window, so that should carry over.
+* **What isn't shared is switched off** by `setNetworked`, rather than left to drift apart silently: space combat,
+  mining, landing, and entry to places with enemies. Terminals work only for the host.
+
+## Consequences
+* Solo is unaffected: none of this runs without `--host` or `--join`.
+* Client's copy of NPCs and world details is not authoritative. Sharing combat comes with crew stations.
+* No password or encryption yet, so this isn't for the open internet.

@@ -21,6 +21,7 @@ status lives in `STATUS.md`._
    2. Walkable moving ship, multi-deck, in single-player. **Done (0.12.0, ADR 0015):** leave the helm in flight,
       a two-deck Sparrow, real windows. Next is the network test on a LAN.
    3. Network test on a LAN: one flies, another walks the ship. Server-authoritative, ENet.
+      **Done (0.13.0, ADR 0016, `docs/NETWORK_TEST.md`)**, tested with two windows on one PC so far.
    4. `farhorizon_server.exe` with a real GUI (setup, players, logs tab) and no Vulkan requirement.
       Clients are untrusted; password required. Friend's PC hosts; one forwarded UDP port.
    5. Crew stations (helm, guns, engineering, mining) and ship ownership. Solo must always work.
