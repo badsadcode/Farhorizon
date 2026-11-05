@@ -79,5 +79,5 @@
 | 75 | open | net | Other players are a stiff figure with no walking or sitting animation, one colour for everyone, and no sound of their footsteps. |
 | 76 | open | net | A client does not see the travel drive tunnel or engine effects as the host does, and in a passenger seat sees the normal flight HUD with no controls. |
 | 77 | open | net | On a dedicated server nobody can use a terminal, so nobody can trade, and ship expenses are charged to the server's empty crew slot. |
-| 78 | open | net | A client that fails to join, or is removed, just closes, with the reason only in its log. It needs a message on screen. |
-| 79 | open | net | The server window has no paste into text fields and shows no public address, and there is no limit on how fast someone can reconnect to guess a password. |
+| 78 | fixed (0.14) | net | A client that fails to join or is removed now gets a message box with the reason. |
+| 79 | open | net | The server cannot test its own port forwarding or show its public address, and there is no limit on how fast someone can reconnect to guess a password. |

@@ -9,6 +9,7 @@ CMakeUserPresets.json
 imgui.ini
 farhorizon.log
 farhorizon_server.log
+/dist/
 server_config.json
 /screenshots/
 settings.json

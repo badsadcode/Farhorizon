@@ -2,6 +2,15 @@
 
 #include <enet/enet.h>
 
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#else
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
+#include <algorithm>
 #include <map>
 #include <cstdint>
 #include <mutex>
@@ -34,9 +43,36 @@ ENetPacket* makePacket(const Bytes& data, Delivery how) {
   return enet_packet_create(data.data(), data.size(), how == Delivery::Reliable ? ENET_PACKET_FLAG_RELIABLE : 0);
 }
 
-int channelOf(Delivery how) { return how == Delivery::Reliable ? 0 : 1; }
+// ENet keeps a packet only if it accepts it. One being disconnected refuses, and the packet stays ours to free.
+void sendTo(ENetPeer* peer, const Bytes& data, Delivery how) {
+  ENetPacket* packet = makePacket(data, how);
+  if (packet && enet_peer_send(peer, how == Delivery::Reliable ? 0 : 1, packet) != 0) enet_packet_destroy(packet);
+}
 
 }  // namespace
+
+std::vector<std::string> localAddresses() {
+  std::vector<std::string> out;
+  if (!acquireEnet()) return out;  // also starts the sockets library on Windows
+  char name[256] = {};
+  if (gethostname(name, sizeof(name) - 1) == 0) {
+    addrinfo hints{};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    addrinfo* found = nullptr;
+    if (getaddrinfo(name, nullptr, &hints, &found) == 0) {
+      for (const addrinfo* a = found; a; a = a->ai_next) {
+        char ip[64] = {};
+        if (getnameinfo(a->ai_addr, socklen_t(a->ai_addrlen), ip, sizeof(ip), nullptr, 0, NI_NUMERICHOST) != 0) continue;
+        const std::string text = ip;
+        if (text.rfind("127.", 0) != 0 && std::find(out.begin(), out.end(), text) == out.end()) out.push_back(text);
+      }
+      freeaddrinfo(found);
+    }
+  }
+  releaseEnet();
+  return out;
+}
 
 // ---- Server ------------------------------------------------------------------------------------------
 
@@ -86,7 +122,9 @@ std::vector<TransportEvent> NetServer::poll() {
         const std::uint32_t id = impl_->nextPeer++;
         impl_->peers[id] = e.peer;
         e.peer->data = reinterpret_cast<void*>(std::uintptr_t(id));
-        out.push_back({TransportEvent::Type::Connected, id, {}});
+        char ip[64] = "unknown";
+        enet_address_get_host_ip(&e.peer->address, ip, sizeof(ip));
+        out.push_back({TransportEvent::Type::Connected, id, {}, ip});
         break;
       }
       case ENET_EVENT_TYPE_RECEIVE: {
@@ -111,7 +149,7 @@ std::vector<TransportEvent> NetServer::poll() {
 void NetServer::send(std::uint32_t peer, const Bytes& data, Delivery how) {
   auto it = impl_->peers.find(peer);
   if (it == impl_->peers.end()) return;
-  enet_peer_send(it->second, enet_uint8(channelOf(how)), makePacket(data, how));
+  sendTo(it->second, data, how);
 }
 
 void NetServer::kick(std::uint32_t peer) {
@@ -190,7 +228,7 @@ std::vector<TransportEvent> NetClient::poll() {
 
 void NetClient::send(const Bytes& data, Delivery how) {
   if (!impl_->peer || !impl_->connected) return;
-  enet_peer_send(impl_->peer, enet_uint8(channelOf(how)), makePacket(data, how));
+  sendTo(impl_->peer, data, how);
 }
 
 }  // namespace fh::net

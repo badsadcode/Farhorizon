@@ -29,7 +29,7 @@ const OverlayColor kBack{14, 12, 10, 255}, kPanel{28, 24, 19, 255}, kLine{92, 72
 const OverlayColor kDim{142, 124, 96, 255}, kAccent{240, 170, 70, 255}, kAccentDark{84, 58, 26, 255}, kGood{130, 210, 130, 255};
 const OverlayColor kBad{235, 110, 90, 255}, kField{9, 8, 7, 255};
 
-enum class Tab { Setup, Players, Log };
+enum class Tab { Setup, Players, Log, Help };
 enum class Field { None, Name, Port, Password };
 
 struct LogLine {
@@ -46,6 +46,7 @@ struct App {
   std::string status;
   bool statusBad = false;
   bool showPassword = false;
+  std::vector<std::string> addresses;
   // This frame's mouse.
   float mx = 0, my = 0;
   bool clicked = false;
@@ -80,7 +81,7 @@ void drawSetup(App& a, net::DedicatedServer& server, const std::filesystem::path
   textField(a, Field::Name, 28, y, w - 56, "SERVER NAME", a.config.name, !on);
   y += 72;
   textField(a, Field::Port, 28, y, 150, "UDP PORT", a.portText, !on);
-  a.o.textPx(200, y + 30, "Your friends' game connects here. Forward this one UDP port on the router.", kDim, 15);
+  a.o.textPx(200, y + 30, "Your friends connect here. The HELP tab explains the router.", kDim, 15);
   y += 72;
   textField(a, Field::Password, 28, y, 320, "PASSWORD (REQUIRED)", a.config.password, !on, !a.showPassword);
   if (button(a, 362, y + 22, 90, 36, a.showPassword ? "HIDE" : "SHOW")) a.showPassword = !a.showPassword;
@@ -121,7 +122,7 @@ void drawSetup(App& a, net::DedicatedServer& server, const std::filesystem::path
   if (!a.status.empty()) a.o.textPx(28, y, a.status, a.statusBad ? kBad : kGood, 17);
   y += 30;
   a.o.textPx(28, y, "To join, a player runs:", kDim, 15);
-  a.o.textPx(28, y + 22, std::format("farhorizon --join <this PC's address>:{} --password <password> --name <name>", a.portText), kText, 15);
+  a.o.textPx(28, y + 22, std::format("farhorizon --join <your public address>:{} --password <password> --name <name>", a.portText), kText, 15);
   a.o.textPx(28, y + 46, std::format("The world is saved in {}", savePath.string()), kDim, 14);
 }
 
@@ -163,15 +164,45 @@ void drawLog(App& a, float w, float h) {
   }
 }
 
+void drawHelp(App& a) {
+  float y = 96;
+  auto heading = [&](const std::string& text) {
+    a.o.textPx(28, y, text, kAccent, 18);
+    y += 28;
+  };
+  auto line = [&](const std::string& text, OverlayColor c = kText) {
+    a.o.textPx(28, y, text, c, 16);
+    y += 23;
+  };
+  std::string here;
+  for (const std::string& addr : a.addresses) here += (here.empty() ? "" : "  or  ") + addr;
+  if (here.empty()) here = "not found: run ipconfig and look for the IPv4 address";
+  heading("HOW TO LET A FRIEND JOIN OVER THE INTERNET");
+  line("1. On the SETUP tab, type a password and press START SERVER.");
+  line("2. If Windows Firewall asks about this program, allow it.");
+  line("3. Open your router's settings, and find 'port forwarding'. Add one rule:");
+  line(std::format("     protocol UDP,  port {},  to this PC: {}", a.portText, here), kAccent);
+  line("4. Find your public address: search the web for 'what is my IP'.");
+  line("5. Send your friend that address, the port and the password.");
+  y += 14;
+  heading("YOUR FRIEND JOINS WITH");
+  line(std::format("farhorizon --join <your public address>:{} --password <password> --name <name>", a.portText), kAccent);
+  y += 14;
+  heading("IF IT DOESN'T CONNECT");
+  line("Open the LOG tab while your friend tries. If 'connection from' appears, the router works.");
+  line("If nothing appears: check the router rule (UDP, not TCP), the firewall, and the address.");
+  line("Some internet providers don't give you a public address. Ask yours if nothing else helps.");
+}
+
 void drawAll(App& a, net::DedicatedServer& server, const std::filesystem::path& savePath, float w, float h) {
   a.o.clear();
   a.o.rect(0, 0, w, h, kBack);
   a.o.textPx(28, 14, "FARHORIZON SERVER", kAccent, 24, FontFace::Sans);
   const bool on = server.running();
   a.o.textPx(w - 28, 18, on ? (server.simulating() ? "RUNNING" : "RUNNING - WAITING FOR PLAYERS") : "STOPPED", on ? kGood : kDim, 17, FontFace::Mono, TextAlign::Right);
-  const char* names[] = {"SETUP", "PLAYERS", "LOG"};
+  const char* names[] = {"SETUP", "PLAYERS", "LOG", "HELP"};
   float x = 28;
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 4; ++i) {
     const bool sel = int(a.tab) == i;
     if (sel) a.o.rect(x, 74, 120, 3, kAccent);
     a.o.textPx(x + 60, 50, names[i], sel ? kAccent : (hit(a, x, 44, 120, 34) ? kText : kDim), 18, FontFace::Mono, TextAlign::Center);
@@ -181,14 +212,18 @@ void drawAll(App& a, net::DedicatedServer& server, const std::filesystem::path& 
   a.o.rect(28, 77, w - 56, 1, kLine);
   if (a.tab == Tab::Setup) drawSetup(a, server, savePath, w);
   else if (a.tab == Tab::Players) drawPlayers(a, server, w);
-  else drawLog(a, w, h);
+  else if (a.tab == Tab::Log) drawLog(a, w, h);
+  else drawHelp(a);
 }
 
 std::filesystem::path findContent() {
   std::error_code ec;
   if (const char* base = SDL_GetBasePath()) {
     const std::filesystem::path root(base);
-    if (std::filesystem::exists(root / "content" / "asset_manifest.json", ec)) return root / "content";
+    if (std::filesystem::exists(root / "content" / "asset_manifest.json", ec)) {
+      std::filesystem::current_path(root, ec);  // settings and saves belong beside the program
+      return root / "content";
+    }
   }
   return FH_DEFAULT_CONTENT_DIR;
 }
@@ -214,6 +249,7 @@ void saveConfig(const App& a, const std::filesystem::path& path) {
 int main(int argc, char** argv) {
   App a;
   std::filesystem::path contentDir = findContent();
+  a.addresses = net::localAddresses();
   std::filesystem::path configPath = "server_config.json", savePath = "saves/server_world.json", screenshot;
   log::setLogFile("farhorizon_server.log");
   log::setSink([](log::Level level, const char* subsystem, const std::string& message) {
@@ -238,7 +274,7 @@ int main(int argc, char** argv) {
     else if (arg == "--exit-after") exitAfter = std::atof(next());   // testing: seconds until it closes itself
     else if (arg == "--screenshot") screenshot = next();             // testing: a BMP of the window
     else if (arg == "--shot-after") shotAfter = std::atof(next());
-    else if (arg == "--tab") a.tab = Tab(std::clamp(std::atoi(next()), 0, 2));
+    else if (arg == "--tab") a.tab = Tab(std::clamp(std::atoi(next()), 0, 3));
     else {
       std::fprintf(stderr, "unknown option %s\nfarhorizon_server [--start] [--port n] [--password p] [--name s] [--max-players n] [--save file]\n", arg.c_str());
       return 1;
@@ -316,6 +352,13 @@ int main(int argc, char** argv) {
         case SDL_EVENT_KEY_DOWN: {
           std::string* target = a.focus == Field::Name ? &a.config.name : a.focus == Field::Port ? &a.portText : a.focus == Field::Password ? &a.config.password : nullptr;
           if (e.key.key == SDLK_BACKSPACE && target && !target->empty() && !server.running()) target->pop_back();
+          if (e.key.key == SDLK_V && (e.key.mod & SDL_KMOD_CTRL) && target && !server.running()) {
+            if (char* clip = SDL_GetClipboardText()) {
+              for (const char* c = clip; *c && target->size() < 40; ++c)
+                if (*c >= ' ') target->push_back(*c);
+              SDL_free(clip);
+            }
+          }
           if (e.key.key == SDLK_TAB && a.tab == Tab::Setup)
             a.focus = a.focus == Field::Name ? Field::Port : a.focus == Field::Port ? Field::Password : Field::Name;
           break;

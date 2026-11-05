@@ -4,7 +4,7 @@ There are two ways: the server program, which needs nobody at the keyboard, or o
 Joining is by command line for now.
 
 ## With the server program (your friend's PC)
-Run `farhorizon_server.exe`, with the `content` folder next to it. Fill in a password and press **Start server**.
+Build the zip with `python tools/package_server.py` (it lands in `dist/`) and send it. Your friend unzips it, runs `farhorizon_server.exe`, fills in a password and presses **Start server**. The **Help** tab walks through the router.
 
 Forward one **UDP** port on the router to that PC (27777 unless you change it), and allow the program through
 Windows Firewall. Players then join with the PC's public address:

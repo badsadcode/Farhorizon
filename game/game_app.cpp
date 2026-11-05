@@ -3,6 +3,8 @@
 #include "engine/assets/gltf_loader.h"
 #include "game/content/map_def.h"
 
+#include <SDL3/SDL_messagebox.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -120,6 +122,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     const std::uint16_t port = options_.joinPort ? options_.joinPort : net::kDefaultPort;
     const std::string name = options_.playerName.empty() ? std::string("Crew") : options_.playerName;
     if (!clientLink_->start(options_.joinAddress, port, name, options_.password)) throw std::runtime_error(clientLink_->failure());
+    session_->notify(std::format("Connecting to {}...", options_.joinAddress));
   }
   applySettings();
   const bool directStart = options_.hostPort != 0 || !options_.joinAddress.empty() || options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
@@ -1207,7 +1210,8 @@ int GameApp::run() {
       clientLink_->pump();
       if (clientLink_->lost()) {
         log::error("net", "{}", clientLink_->failure());
-        session_->notify(clientLink_->failure());
+        if (options_.uiScript.empty() && !scripted_ && !quit_)  // nobody is there to press OK in a scripted run
+          SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "FARHORIZON", clientLink_->failure().c_str(), nullptr);
         quit_ = true;
       }
     }

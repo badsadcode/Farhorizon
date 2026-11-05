@@ -10,6 +10,9 @@ Roadmap step 4.4: `farhorizon_server.exe`, for leaving running on the machine th
 * **The world keeps going between visits.** It holds still while nobody is connected, is saved when the server
   stops, and picks up again next time. Players' money waits for them by name.
 * The first person aboard gets the helm. The server itself isn't a player and takes no seat.
+* **A zip for whoever hosts:** `python tools/package_server.py` writes it to `dist/`. Unzip and run, with nothing to
+  install. A Help tab walks through the router, and the Log tab shows each connection, which tells you if it worked.
+* **If joining fails, the game says why** in a message box, after 12 seconds at most, instead of just closing.
 * The connection protocol changed, so 0.13 games can't join.
 
 ## 0.13.0 — Someone else aboard (2026-11-05)

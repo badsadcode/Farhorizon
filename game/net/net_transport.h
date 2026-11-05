@@ -13,7 +13,11 @@ struct TransportEvent {
   enum class Type { Connected, Data, Disconnected } type = Type::Data;
   std::uint32_t peer = 0;  // the server's handle for a client; 0 on a client
   Bytes data;
+  std::string address;     // Connected, on a server: where they came from
 };
+
+// This machine's addresses on its local networks, for someone setting up a router.
+std::vector<std::string> localAddresses();
 
 enum class Delivery { Reliable, Latest };  // Latest: may be lost, and old ones are dropped
 

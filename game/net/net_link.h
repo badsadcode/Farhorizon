@@ -71,6 +71,7 @@ class ClientLink {
   GameSession* session_;
   NetClient client_;
   std::string name_, password_;
+  int stepsWaiting_ = 0;
   std::uint32_t yourId_ = 0;
   bool lost_ = false;
   std::string failure_;

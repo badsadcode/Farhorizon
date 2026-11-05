@@ -41,6 +41,7 @@ void HostLink::handle(const TransportEvent& e) {
     static std::random_device entropy;
     const std::uint64_t nonce = (std::uint64_t(entropy()) << 32) | entropy();
     nonces_[e.peer] = nonce;
+    log::info("net", "connection from {}", e.address);
     server_.send(e.peer, encode(ChallengeMsg{nonce}), Delivery::Reliable);
     return;
   }
@@ -209,7 +210,10 @@ void ClientLink::handle(const TransportEvent& e) {
       break;  // the server speaks first
     case TransportEvent::Type::Disconnected:
       lost_ = true;
-      if (failure_.empty()) failure_ = "Lost the connection to the host";
+      if (failure_.empty())
+        failure_ = joined() ? "The connection to the server was lost."
+                            : "Could not reach the server.\n\nCheck the address and the port, that the server is running, "
+                              "and that its router forwards that UDP port to it.";
       break;
     case TransportEvent::Type::Data: {
       const auto type = peekType(e.data.data(), e.data.size());
@@ -245,7 +249,14 @@ void ClientLink::pump() {
 
 void ClientLink::preStep() {
   pump();
-  if (!joined()) return;
+  if (!joined()) {
+    if (!lost_ && ++stepsWaiting_ > 60 * 12) {  // the network library alone would wait half a minute
+      lost_ = true;
+      failure_ = "Could not reach the server.\n\nCheck the address and the port, that the server is running, "
+                 "and that its router forwards that UDP port to it.";
+    }
+    return;
+  }
   const CrewMember* me = session_->player(session_->localPlayer());
   if (!me) return;
   ClientInputMsg in;
