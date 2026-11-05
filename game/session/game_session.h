@@ -106,6 +106,7 @@ class GameSession {
   }
   bool engageTravel();               // to the current target (must be a nav destination)
   bool requestLanding();
+  bool launch(PlayerId who);
   bool launch();  // the local player, who must be the pilot, with the whole crew seated
   // Interior to render while on the surface in the cockpit (landing approach, landed, liftoff).
   const InteriorDef* surfaceScene() const;

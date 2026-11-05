@@ -13,7 +13,7 @@
 
 namespace fh::net {
 
-inline constexpr std::uint16_t kProtocolVersion = 3;
+inline constexpr std::uint16_t kProtocolVersion = 4;
 inline constexpr std::uint16_t kDefaultPort = 27777;
 inline constexpr size_t kMaxNameLength = 24;
 inline constexpr size_t kMaxCommandLength = 64;
@@ -84,6 +84,16 @@ struct SnapshotMsg {
   std::vector<CrewStateMsg> crew;
   std::vector<std::pair<std::string, std::int32_t>> cargo;  // the shared hold
   std::vector<std::int32_t> marketStock;                    // the market where the ship is docked, if any
+  // The travel drive and a landing run on the host, and everyone aboard sees them.
+  std::uint8_t travelState = 0;
+  float travelSpeed = 0, travelTime = 0;
+  double travelRemaining = 0;
+  std::uint8_t landState = 0;
+  std::uint32_t landPlanet = 0, landSite = 0;
+  double landTime = 0;
+  FlightInput pilotControls;  // so the engines look right to someone who isn't flying
+  std::string shipMessage;    // the latest word from the ship's systems or a station
+  std::uint32_t shipMessageSerial = 0;
 };
 
 using Bytes = std::vector<std::uint8_t>;

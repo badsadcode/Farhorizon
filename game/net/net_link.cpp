@@ -18,6 +18,8 @@ constexpr float kSnapDistance = 2.5f;          // further off than this and easi
 constexpr float kIgnoreDistance = 0.04f;       // too small to matter
 constexpr double kShowBehindTicks = 7;         // the world is shown this far in the past, to hide uneven arrival
 constexpr double kMaxExtrapolateTicks = 20;
+
+double docking_messageTime(const GameSession& s) { return s.docking().messageTime(); }
 }  // namespace
 
 // ---- Host --------------------------------------------------------------------------------------------
@@ -201,6 +203,31 @@ SnapshotMsg HostLink::buildSnapshot() {
     c.inputSequence = acknowledged_[m.id];
     s.crew.push_back(std::move(c));
   }
+  const TravelDrive& travel = session_->travel();
+  s.travelState = std::uint8_t(travel.state());
+  s.travelSpeed = travel.speed();
+  s.travelTime = float(travel.stateTime());
+  s.travelRemaining = travel.remaining();
+  const Landing& landing = session_->landing();
+  s.landState = std::uint8_t(landing.state());
+  if (landing.site()) {
+    s.landPlanet = landing.site()->planet;
+    s.landSite = landing.site()->site;
+  }
+  s.landTime = landing.stateTime();
+  s.pilotControls = w.player().input;
+  // Radio and drive messages keep being said after the key press that caused them, so everyone hears the latest.
+  const std::pair<double, const std::string*> said[] = {{docking_messageTime(*session_), &session_->docking().message()},
+                                                        {travel.messageTime(), &travel.message()},
+                                                        {landing.messageTime(), &landing.message()}};
+  for (const auto& [when, text] : said)
+    if (when > shipMessageTime_ && !text->empty()) {
+      shipMessageTime_ = when;
+      shipMessage_ = *text;
+      ++shipMessageSerial_;
+    }
+  s.shipMessage = shipMessage_;
+  s.shipMessageSerial = shipMessageSerial_;
   for (const auto& [id, units] : session_->cargo().contents()) s.cargo.emplace_back(id, units);
   if (Market* market = session_->dockedMarket())
     for (const int stock : market->stocks()) s.marketStock.push_back(stock);
@@ -350,6 +377,13 @@ void ClientLink::apply(const SnapshotMsg& s) {
   report.velocity = s.shipVelocity;
 
   session_->netApplyShipStatus(s.docked, s.dockProp, s.dockBay, s.hull, s.shield);
+  session_->travel().netFollow(TravelState(s.travelState), s.travelSpeed, s.travelRemaining, double(s.travelTime));
+  session_->landing().netFollow(LandState(s.landState), {s.landPlanet, s.landSite}, s.landTime);
+  pilotControls_ = s.pilotControls;
+  if (s.shipMessageSerial != shipMessageSerial_) {
+    shipMessageSerial_ = s.shipMessageSerial;
+    if (!s.shipMessage.empty()) session_->notify(s.shipMessage);
+  }
   {
     std::map<std::string, int> cargo;
     for (const auto& [id, units] : s.cargo) cargo[id] = units;
@@ -474,6 +508,10 @@ void ClientLink::showWorldAsOf(double tick, float dt) {
 }
 
 void ClientLink::postStep(float dt) {
+  session_->landing().netTick(double(dt));
+  // Someone else's hands on the controls: the engines should show it.
+  if (const CrewMember* who = session_->player(session_->localPlayer()); who && !(who->location == Location::Cockpit && who->pilot))
+    session_->world().player().input = pilotControls_;
   if (showTick_ >= 0) showTick_ += double(dt) * 60.0;
   if (!reports_.empty() && showTick_ >= 0) {
     for (const Report& r : reports_)

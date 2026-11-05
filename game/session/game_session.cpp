@@ -273,18 +273,25 @@ bool GameSession::engageTravel() {
 }
 
 bool GameSession::requestLanding() {
-  if (networked_) {
-    notify("Landing with a crew comes later");
-    return false;
-  }
+  for (const CrewMember& m : players_)
+    if (networked_ && m.location != Location::Cockpit) {
+      notify(std::format("Waiting for {}: everyone must be seated for a landing", m.name));
+      return false;
+    }
   if (location() != Location::Cockpit || !freeFlight()) return fail("Cannot begin a landing right now").ok;
   return landing_.request(*world_);
 }
 
-bool GameSession::launch() {
-  if (location() != Location::Cockpit) return fail("Take the pilot seat to launch").ok;
-  if (!players_.front().pilot) return fail("Only the pilot can launch").ok;
-  if (!crewAboard()) return fail("Crew not aboard: everyone must be seated before lift-off").ok;
+bool GameSession::launch() { return launch(localPlayer()); }
+
+bool GameSession::launch(PlayerId who) {
+  const CrewMember* me = player(who);
+  if (!me) return false;
+  if (me->location != Location::Cockpit) return failFor(slotOf(who), "Take the pilot seat to launch").ok;
+  if (!me->pilot) return failFor(slotOf(who), "Only the pilot can launch").ok;
+  for (const CrewMember& m : players_)
+    if (m.location != Location::Cockpit)
+      return failFor(slotOf(who), std::format("Waiting for {}: everyone must be seated before lift-off", m.name)).ok;
   return landing_.launch(*world_);
 }
 
@@ -906,6 +913,7 @@ void GameSession::setDedicated(bool on) {
 }
 
 void GameSession::helmCommand(const std::string& name, PlayerId who) {
+  const double askedAt = players_.front().noticeTime;
   if (name == "nav.next") {
     const auto dests = world().navDestinations();
     if (!dests.empty()) {
@@ -925,7 +933,7 @@ void GameSession::helmCommand(const std::string& name, PlayerId who) {
     Docking& d = docking();
     Landing& ld = landing();
     if (ld.state() == LandState::Landed) {
-      launch();
+      launch(who);
     } else if (!ld.busy()) {
       switch (d.state()) {
         case DockState::Undocked: {
@@ -947,10 +955,9 @@ void GameSession::helmCommand(const std::string& name, PlayerId who) {
     }
   }
   if (name == "dock.autopilot") docking().toggleAutopilot();
-  if (who != localPlayer()) {  // they cannot see the host's messages otherwise
-    if (!docking().message().empty()) notifyPlayer(who, docking().message());
-    if (!travel().message().empty()) notifyPlayer(who, travel().message());
-  }
+  // A refusal said only to the first crew slot wouldn't reach whoever asked.
+  if (who != localPlayer() && players_.front().noticeTime > askedAt && !players_.front().notice.empty())
+    notifyPlayer(who, players_.front().notice);
 }
 
 void GameSession::setNetClient(bool on) {
@@ -994,6 +1001,8 @@ void GameSession::netApplyPlace(PlayerId who, Location where, const AssetID& int
 
 std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   if (netClient_) {
+    world_->player().kinematic = true;
+    world_->player().collisionsEnabled = false;
     world_->fixedUpdate(dt);
     for (auto& [id, in] : instances_) stepInstance(id, in, dt);
     for (CrewMember& m : players_)

@@ -5,6 +5,7 @@
 // The scene swap is hidden by a short fade; we never pretend this is seamless travel.
 // While on the surface the space ship is parked (kinematic, hidden) at the orbit marker, which
 // is also the guaranteed return destination. GPU-free and unit-tested.
+#include <cmath>
 #include <optional>
 #include <string>
 
@@ -47,6 +48,14 @@ class Landing {
   bool landAt(SpaceWorld& world, LandingSiteRef ref);
 
   void preStep(SpaceWorld& world, float dt);
+  // A network client: the host's landing is the real one, and this one only shows what it is doing.
+  void netFollow(LandState state, LandingSiteRef site, double stateTime) {
+    if (state != state_ || std::abs(stateTime - stateTime_) > 0.25) stateTime_ = stateTime;
+    state_ = state;
+    if (state == LandState::None) site_.reset();
+    else site_ = site;
+  }
+  void netTick(double dt) { stateTime_ += dt; }
 
   // Ship pose in the surface scene, relative to the pad pose (feet of the parked ship).
   Transform surfaceOffset() const;

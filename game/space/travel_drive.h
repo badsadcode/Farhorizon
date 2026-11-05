@@ -34,6 +34,15 @@ class TravelDrive {
   // Call before SpaceWorld::fixedUpdate; owns the ship's kinematics while active.
   void preStep(SpaceWorld& world, const TravelDriveParams& p, float dt);
 
+  // A network client: the host's drive is the real one, and this one only shows what it is doing.
+  void netFollow(TravelState state, float speed, double remaining, double stateTime) {
+    state_ = state;
+    speed_ = speed;
+    remaining_ = remaining;
+    stateTime_ = stateTime;
+  }
+  double stateTime() const { return stateTime_; }
+
   // Name of whatever mass-locks the ship right now (empty = free to jump).
   static std::string massLock(const SpaceWorld& world, const TravelDriveParams& p);
 

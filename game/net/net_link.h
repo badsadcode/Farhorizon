@@ -41,6 +41,9 @@ class HostLink {
   std::map<PlayerId, std::uint32_t> noticeSerial_;
   std::map<PlayerId, double> noticeSeen_;
   std::map<PlayerId, std::uint32_t> acknowledged_;
+  double shipMessageTime_ = -1;
+  std::string shipMessage_;
+  std::uint32_t shipMessageSerial_ = 0;
   std::vector<std::pair<PlayerId, std::string>> helmCommands_;
   std::uint32_t tick_ = 0;
   std::string password_;
@@ -106,6 +109,8 @@ class ClientLink {
   std::map<std::uint32_t, PlayerId> locals_;   // host's id -> this machine's id for the same person
   std::map<PlayerId, Remote> remotes_;
   std::uint32_t noticeSerial_ = 0;
+  std::uint32_t shipMessageSerial_ = 0;
+  FlightInput pilotControls_;
   std::deque<Report> reports_;
   double showTick_ = -1;
   std::uint32_t inputSequence_ = 0;

@@ -1949,7 +1949,8 @@ int GameApp::run() {
       params.tunnel.amount = 0.0f;
     } else {
       fx_.buildSprites(view.position, ship.position, particleSprites_);
-      if (!shipBoard) dust_.buildSprites(view.position, player.state.velocity, particleSprites_);  // it would drift through the cabin
+      if (shipBoard) dust_.buildSprites(view.position, player.state.velocity, particleSprites_, &ship.position, 14.0f);  // seen from the windows
+      else dust_.buildSprites(view.position, player.state.velocity, particleSprites_);
     }
     if (renderer_->render(params, items, glows, particleSprites_, overlay_.vertices(), shot)) {
       pendingScreenshot_.reset();

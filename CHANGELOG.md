@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.0 — Everyone sees the view (2026-11-05)
+* **Landing and lift-off work with a crew.** The pilot lands as usual and everyone sees the descent. Everyone must be
+  seated, and the message says who you're waiting for. You can then all get out on the surface.
+* **Everyone sees the travel drive:** the tunnel, the plumes and the readouts, in a seat or at a window.
+* **Dust streaks go past the windows** when walking in a moving ship, so you can see that it's moving, in single player too.
+* **Fixed: confusing old messages.** A landing request answered with an old travel drive message such as "too close".
+  Messages from stations and the ship's systems now reach everyone once, when they're new.
+* The engines look right to anyone who isn't flying.
+* Everyone must update: the connection protocol changed.
+
 ## 0.15.0 — Playing across an ocean (2026-11-05)
 From the first real game between Poland and Canada.
 * **Fixed: rubberbanding when walking.** The game compared your position with the server's as if the network took no time,

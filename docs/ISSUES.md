@@ -73,11 +73,11 @@
 | 69 | open | ships | The Sparrow's two-deck interior is much bigger than its exterior model, and its windows do not line up with the hull. The exterior needs rebuilding to fit. |
 | 70 | open | render | Aboard a ship, placed reflection probes are skipped, so shiny surfaces there only get the live probe. Sun shadows also reach only as far as the cascades cover. |
 | 71 | open | ships | Interior screens and the reactor core are flat bright blocks with no detail, and crates are plain colours. |
-| 72 | open | net | A networked game has no pirates, mining, landing or fights: they are not shared yet, so they are switched off. Terminals offer buying and selling only. |
+| 72 | open | net | A networked game has no pirates, mining or fights: they are not shared yet, so they are switched off. Terminals offer buying and selling only. |
 | 73 | partly fixed (0.14) | net | The server requires a password. Game traffic is not encrypted, the password is stored as readable text in server_config.json, and hosting from the game is command-line only. |
 | 74 | open | net | The first real game (Poland to Canada, 0.14) showed rubberbanding, fixed in 0.15 but measured so far only with simulated delay. Packet loss has not been simulated. |
 | 75 | open | net | Other players are a stiff figure with no walking or sitting animation, one colour for everyone, and no sound of their footsteps. |
-| 76 | open | net | A client does not see the travel drive tunnel or engine effects as the host does, and in a passenger seat sees the normal flight HUD with no controls. |
+| 76 | fixed (0.16) | net | A client now sees the travel drive effects, and a passenger gets a hint line saying who has the helm. |
 | 77 | partly fixed (0.15) | net | Players can trade on a server. Repairs, upgrades and contracts aren't offered to them, and anything the session charges to its first slot goes to the server's empty slot. |
 | 78 | fixed (0.14) | net | A client that fails to join or is removed now gets a message box with the reason. |
 | 79 | open | net | The server cannot test its own port forwarding or show its public address, and there is no limit on how fast someone can reconnect to guess a password. |

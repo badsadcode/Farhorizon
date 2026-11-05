@@ -39,6 +39,11 @@ _Status: accepted (0.13.0, roadmap step 4.3)._
 * **An empty helm belongs to whoever is seated and reaches for it.**
 * `ClientLink::setSimulatedLag` makes the tests and `--net-lag` see a slow network.
 
+## Added in 0.16.0
+* **The drive and landing are followed, not simulated, by clients:** their state, speed and clock come in each report, and
+  effects and scene changes then work as they do for the host. Everyone must be seated for a landing and lift-off.
+* **The newest ship or station message goes out once to everyone,** instead of being resent after each key press.
+
 ## Consequences
 * Solo is unaffected: none of this runs without `--host` or `--join`.
 * Client's copy of NPCs and world details is not authoritative. Sharing combat comes with crew stations.

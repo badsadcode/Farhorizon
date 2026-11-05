@@ -358,7 +358,8 @@ float SpeedDust::visibility(float speed) {
   return smooth(4.0f, 70.0f, speed) * (1.0f - smooth(900.0f, 2200.0f, speed));
 }
 
-void SpeedDust::buildSprites(const Vec3& camera, const Vec3& velocity, std::vector<ParticleSprite>& out) const {
+void SpeedDust::buildSprites(const Vec3& camera, const Vec3& velocity, std::vector<ParticleSprite>& out, const Vec3* keepOutOf,
+                             float keepOutRadius) const {
   const float speed = length(velocity);
   const float vis = visibility(speed);
   if (vis <= 0.001f) return;
@@ -367,6 +368,7 @@ void SpeedDust::buildSprites(const Vec3& camera, const Vec3& velocity, std::vect
   const Vec3 tint{0.62f, 0.72f, 0.92f};
   for (size_t i = 0; i < positions_.size(); ++i) {
     const Vec3 rel = positions_[i] - camera;
+    if (keepOutOf && length(positions_[i] - *keepOutOf) < keepOutRadius) continue;  // not inside the cabin
     const float d = length(rel);
     const float fade = std::clamp((d - 2.0f) / 10.0f, 0.0f, 1.0f) * std::clamp((kHalfBox - d) / (kHalfBox * 0.4f), 0.0f, 1.0f);
     if (fade <= 0.002f) continue;

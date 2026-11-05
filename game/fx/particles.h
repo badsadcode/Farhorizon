@@ -127,7 +127,8 @@ class SpeedDust {
   // How strongly dust shows at this speed, 0..1.
   static float visibility(float speed);
   // Appends sprites; does not clear `out`.
-  void buildSprites(const Vec3& cameraPosition, const Vec3& velocity, std::vector<ParticleSprite>& out) const;
+  void buildSprites(const Vec3& cameraPosition, const Vec3& velocity, std::vector<ParticleSprite>& out, const Vec3* keepOutOf = nullptr,
+                    float keepOutRadius = 0) const;
   const std::vector<Vec3>& positions() const { return positions_; }
 
  private:

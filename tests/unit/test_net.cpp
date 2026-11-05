@@ -43,6 +43,8 @@ std::unique_ptr<GameSession> shipSession() {
   auto def = loadInteriorDef(*m, ship->interior, &errors);
   if (!def) return nullptr;
   s->addInterior(ship->interior, *def);
+  for (const char* id : {"interior.gale_ridge", "interior.kestrel_hangar"})
+    if (auto place = loadInteriorDef(*m, id, &errors)) s->addInterior(id, *place);
   s->setEconomy(*db, 500);
   if (auto market = loadMarketDef(*m, "market.kestrel", s->commodities(), &errors)) s->addMarket("market.kestrel", *market);
   return s;
@@ -704,4 +706,112 @@ TEST(server_someone_joining_a_ship_already_docked_can_undock_it) {
   if (rig.server.session()->docking().state() == DockState::Docked)
     std::fprintf(stderr, "    still docked: %s\n", rig.server.session()->player(rig.server.players().front().id)->notice.c_str());
   CHECK(pumpUntil(rig, v, [&] { return v.session->docking().state() == DockState::Undocked; }, 900));
+}
+
+// ---- The travel drive and landing, seen from a second seat ---------------------------------------------------
+
+namespace {
+bool shipAtSite(GameSession& host) {
+  SpaceWorld& w = host.world();
+  for (const auto& planet : w.planets())
+    if (!planet.def.sites.empty()) {
+      PlayerShip& ship = w.player();
+      ship.state.position = w.frame().toLocal(SystemPosition{planet.siteOrbit(0)});
+      ship.previous = ship.state;
+      return true;
+    }
+  return false;
+}
+}  // namespace
+
+TEST(net_everyone_sees_the_travel_drive) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  GameSession& host = *p->hostSession;
+  // Somewhere clear of everything, aimed at the planet's far landing site.
+  CHECK(shipAtSite(host));
+  host.world().player().state.position = host.world().player().state.position + Vec3{0, 5000000, 0};
+  host.world().player().previous = host.world().player().state;
+  p->step(30);
+  const auto dests = host.world().navDestinations();
+  CHECK(!dests.empty());
+  if (dests.empty()) return;
+  bool engaged = false;
+  for (const TargetRef& t : dests) {
+    host.world().setTarget(t);
+    if (host.engageTravel()) {
+      engaged = true;
+      break;
+    }
+  }
+  CHECK(engaged);
+  CHECK(p->stepUntil([&] { return p->clientSession->travel().active(); }));
+  CHECK(p->stepUntil([&] { return p->clientSession->travel().state() == TravelState::Transit; }, 1200));
+  p->step(60);
+  CHECK(p->clientSession->travel().speed() > 100.0f);
+}
+
+TEST(net_a_crew_lands_goes_outside_and_lifts_off) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  GameSession& host = *p->hostSession;
+  GameSession& client = *p->clientSession;
+  const PlayerId mara = remoteOnHost(host);
+  const PlayerId me = host.localPlayer();
+  CHECK(shipAtSite(host));
+  p->step(10);
+
+  // Nobody lands with someone on their feet.
+  p->client->sendCommand("interact");
+  CHECK(p->stepUntil([&] { return host.player(mara)->location == Location::ShipInterior; }));
+  host.helmCommand("dock.request", me);
+  CHECK(!host.landing().busy());
+  CHECK(host.notice().find("Mara") != std::string::npos);
+  CHECK(host.perform(mara, "takeSeat").ok);
+  p->step(30);
+
+  host.helmCommand("dock.request", me);
+  CHECK(host.landing().busy());
+  CHECK(p->stepUntil([&] { return client.landing().busy(); }));
+  CHECK(p->stepUntil([&] { return client.landing().state() == LandState::SurfaceApproach; }, 900));
+  CHECK(client.surfaceScene() != nullptr);
+  CHECK(p->stepUntil([&] { return host.landing().state() == LandState::Landed; }, 900));
+  CHECK(p->stepUntil([&] { return client.landing().state() == LandState::Landed; }));
+  CHECK(client.parked());
+
+  // Out onto the surface, through the host.
+  CHECK(host.leaveSeat(mara).ok);
+  CHECK(host.perform(mara, "exitShip").ok);
+  CHECK(p->stepUntil([&] { return client.location() == Location::StationInterior; }));
+  CHECK(client.activeInteriorId() == "interior.gale_ridge");
+  CHECK(!host.launch(me));  // she is still out there
+  CHECK(host.notice().find("Mara") != std::string::npos);
+  CHECK(host.perform(mara, "boardShip").ok);
+  CHECK(host.perform(mara, "takeSeat").ok);
+  p->step(30);
+  CHECK(client.location() == Location::Cockpit);
+
+  host.helmCommand("dock.request", me);  // the same key lifts off
+  CHECK(p->stepUntil([&] { return host.landing().state() == LandState::None; }, 1500));
+  CHECK(p->stepUntil([&] { return !client.landing().busy(); }));
+  CHECK(host.freeFlight());
+}
+
+TEST(net_messages_from_the_ship_reach_everyone_and_old_ones_are_not_repeated) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  GameSession& host = *p->hostSession;
+  GameSession& client = *p->clientSession;
+  CHECK(shipAtSite(host));
+  p->step(10);
+  host.helmCommand("travel.engage", host.localPlayer());  // refused: nothing selected, or too close
+  p->step(30);
+  const std::string first = client.notice();
+  CHECK(!first.empty());
+  const double firstAt = client.noticeTime();
+  p->step(120);
+  CHECK(client.noticeTime() == firstAt);  // said once
 }

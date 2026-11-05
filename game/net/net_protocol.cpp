@@ -264,6 +264,17 @@ Bytes encode(const SnapshotMsg& m) {
   }
   w.u8(std::uint8_t(stock));
   for (size_t i = 0; i < stock; ++i) w.raw(m.marketStock[i]);
+  w.u8(m.travelState);
+  w.raw(m.travelSpeed), w.raw(m.travelTime), w.raw(m.travelRemaining);
+  w.u8(m.landState);
+  w.raw(m.landPlanet), w.raw(m.landSite), w.raw(m.landTime);
+  w.raw(m.pilotControls.throttle);
+  w.vec3(m.pilotControls.thrust);
+  w.vec3(m.pilotControls.rotation);
+  w.boolean(m.pilotControls.boost), w.boolean(m.pilotControls.assist);
+  w.u8(std::uint8_t(m.pilotControls.mode));
+  w.text(m.shipMessage, kMaxTextLength);
+  w.raw(m.shipMessageSerial);
   return w.take();
 }
 
@@ -319,6 +330,24 @@ std::optional<SnapshotMsg> decodeSnapshot(const std::uint8_t* data, size_t size)
   if (!r.ok() || stock > kMaxListed) return std::nullopt;
   m.marketStock.resize(stock);
   for (std::int32_t& v : m.marketStock) v = r.raw<std::int32_t>();
+  m.travelState = r.u8();
+  m.travelSpeed = r.number();
+  m.travelTime = r.number();
+  m.travelRemaining = r.numberD();
+  m.landState = r.u8();
+  m.landPlanet = r.raw<std::uint32_t>();
+  m.landSite = r.raw<std::uint32_t>();
+  m.landTime = r.numberD();
+  m.pilotControls.throttle = r.number();
+  m.pilotControls.thrust = r.vec3();
+  m.pilotControls.rotation = r.vec3();
+  m.pilotControls.boost = r.boolean();
+  m.pilotControls.assist = r.boolean();
+  const std::uint8_t mode = r.u8();
+  if (mode > std::uint8_t(SpeedMode::Cruise) || m.travelState > 4 || m.landState > 5) return std::nullopt;
+  m.pilotControls.mode = SpeedMode(mode);
+  m.shipMessage = r.text(kMaxTextLength);
+  m.shipMessageSerial = r.raw<std::uint32_t>();
   return finish(r, m);
 }
 
