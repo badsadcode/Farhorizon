@@ -39,6 +39,9 @@ farhorizon --join 192.168.1.20 --name Mara --password test
 Windows Firewall asks about the game the first time it hosts. Allow it on private networks. Both players need
 the same version of the game.
 
+## Testing a slow connection on one PC
+`--net-lag 150` makes a client behave as if the network had a 150 ms round trip.
+
 ## What to try
 * The host flies with the usual keys. The other player presses F to leave their seat and walks the decks.
 * You should see each other, with names overhead, and the planets should move past the windows for both.

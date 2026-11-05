@@ -143,6 +143,32 @@ TEST(docking_manual_capture_requires_tolerances) {
   CHECK_VEC_NEAR(s.world().player().state.position, s.docking().bayTransform(s.world()).position, 1e-2);
 }
 
+TEST(docking_a_passenger_can_get_up_during_it_but_the_pilot_cannot) {
+  auto f = makeFixture({600, 300, 900});
+  CHECK(f.has_value());
+  if (!f) return;
+  GameSession& s = *f->session;
+  const PlayerId mara = s.addPlayer("Mara");
+  CHECK(!s.player(mara)->pilot);
+  CHECK(s.docking().request(s.world()));
+  CHECK(runUntil(s, 5.0f, [&] { return s.docking().state() == DockState::ApproachAuthorized; }));
+  CHECK(!s.leaveSeat().ok);  // the pilot has a ship to dock
+  CHECK(s.location() == Location::Cockpit);
+  CHECK(s.leaveSeat(mara).ok);
+  CHECK(s.player(mara)->location == Location::ShipInterior);
+  // And the docking carries on around her.
+  CHECK(s.docking().toggleAutopilot());
+  CHECK(runUntil(s, 240.0f, [&] { return s.docking().state() == DockState::Docked; }));
+  CHECK(s.player(mara)->location == Location::ShipInterior);
+  // Walking the ship doesn't hold the clamps. Being outside it does.
+  CHECK(s.perform(mara, "exitShip").ok);
+  CHECK(!s.undock().ok);
+  CHECK(s.notice().find("Mara") != std::string::npos);
+  CHECK(s.perform(mara, "boardShip").ok);
+  CHECK(s.undock().ok);
+  CHECK(s.player(mara)->location == Location::ShipInterior);
+}
+
 // Stage 3 exit criterion: fly -> dock -> leave seat -> exit ship -> return -> launch, 20 times.
 TEST(stage3_dock_walk_launch_loop_20_times) {
   auto f = makeFixture({600, 300, 900});

@@ -11,6 +11,7 @@ namespace fh::net {
 namespace {
 
 constexpr size_t kMaxCrewInSnapshot = 8;
+constexpr size_t kMaxListed = 64;  // kinds of cargo, or of goods in a market
 
 class Writer {
  public:
@@ -174,6 +175,7 @@ std::optional<RefusedMsg> decodeRefused(const std::uint8_t* data, size_t size) {
 
 Bytes encode(const ClientInputMsg& m) {
   Writer w(MessageType::ClientInput);
+  w.raw(m.sequence);
   w.raw(m.move.x), w.raw(m.move.y);
   w.boolean(m.run), w.boolean(m.jump);
   w.raw(m.yaw), w.raw(m.pitch);
@@ -190,6 +192,7 @@ std::optional<ClientInputMsg> decodeClientInput(const std::uint8_t* data, size_t
   Reader r = open(data, size, MessageType::ClientInput, ok);
   if (!ok) return std::nullopt;
   ClientInputMsg m;
+  m.sequence = r.raw<std::uint32_t>();
   m.move.x = std::clamp(r.number(), -1.0f, 1.0f);
   m.move.y = std::clamp(r.number(), -1.0f, 1.0f);
   m.run = r.boolean();
@@ -251,7 +254,16 @@ Bytes encode(const SnapshotMsg& m) {
     w.raw(c.credits);
     w.text(c.notice, kMaxTextLength);
     w.raw(c.noticeSerial);
+    w.raw(c.inputSequence);
   }
+  const size_t cargo = std::min(m.cargo.size(), kMaxListed), stock = std::min(m.marketStock.size(), kMaxListed);
+  w.u8(std::uint8_t(cargo));
+  for (size_t i = 0; i < cargo; ++i) {
+    w.text(m.cargo[i].first, kMaxCommandLength);
+    w.raw(m.cargo[i].second);
+  }
+  w.u8(std::uint8_t(stock));
+  for (size_t i = 0; i < stock; ++i) w.raw(m.marketStock[i]);
   return w.take();
 }
 
@@ -294,7 +306,19 @@ std::optional<SnapshotMsg> decodeSnapshot(const std::uint8_t* data, size_t size)
     c.credits = r.raw<std::int64_t>();
     c.notice = r.text(kMaxTextLength);
     c.noticeSerial = r.raw<std::uint32_t>();
+    c.inputSequence = r.raw<std::uint32_t>();
   }
+  const size_t cargo = r.u8();
+  if (!r.ok() || cargo > kMaxListed) return std::nullopt;
+  m.cargo.resize(cargo);
+  for (auto& [id, units] : m.cargo) {
+    id = r.text(kMaxCommandLength);
+    units = r.raw<std::int32_t>();
+  }
+  const size_t stock = r.u8();
+  if (!r.ok() || stock > kMaxListed) return std::nullopt;
+  m.marketStock.resize(stock);
+  for (std::int32_t& v : m.marketStock) v = r.raw<std::int32_t>();
   return finish(r, m);
 }
 

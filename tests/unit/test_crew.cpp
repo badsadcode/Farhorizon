@@ -100,10 +100,12 @@ TEST(crew_undock_needs_the_pilot_and_everyone_aboard) {
   CHECK(s->leaveSeat(mara).ok);  // walks back into the ship
   CHECK(s->player(mara)->location == Location::ShipInterior);
   CHECK(s->location() == Location::Cockpit);  // you did not move
+  CHECK(s->perform(mara, "exitShip").ok);  // out into the station: now the clamps wait for her
   ActionResult r = s->undock();
   CHECK(!r.ok);
-  CHECK(r.message.find("aboard") != std::string::npos);
+  CHECK(r.message.find("Mara") != std::string::npos);
   CHECK(s->docking().state() == DockState::Docked);
+  CHECK(s->perform(mara, "boardShip").ok);
   CHECK(!s->undock(mara).ok);  // not the pilot (and not even seated)
   CHECK(s->perform(mara, "takeSeat").ok);
   CHECK(!s->player(mara)->pilot);  // a passenger seat

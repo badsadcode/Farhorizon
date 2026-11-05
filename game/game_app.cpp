@@ -123,6 +123,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     const std::uint16_t port = options_.joinPort ? options_.joinPort : net::kDefaultPort;
     const std::string name = options_.playerName.empty() ? std::string("Crew") : options_.playerName;
     if (!clientLink_->start(options_.joinAddress, port, name, options_.password)) throw std::runtime_error(clientLink_->failure());
+    if (options_.netLagMs > 0) clientLink_->setSimulatedLag(options_.netLagMs * 60 / 2000, 2);
     session_->notify(std::format("Connecting to {}...", options_.joinAddress));
   }
   applySettings();

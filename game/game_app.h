@@ -49,6 +49,7 @@ struct AppOptions {
   std::uint16_t joinPort = 0;
   std::string playerName;          // --name
   std::string password;            // --password
+  int netLagMs = 0;                // --net-lag: pretend the network has this round trip, for testing
   std::filesystem::path contentDir;
   std::filesystem::path shaderDir;
   std::string sceneId = "scene.stage2_flight";

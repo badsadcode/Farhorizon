@@ -12,6 +12,7 @@
 #include "engine/assets/asset_manifest.h"
 #include "game/content/interior_def.h"
 #include "game/economy/economy.h"
+#include "game/economy/economy.h"
 #include "game/net/dedicated_server.h"
 #include "game/net/net_link.h"
 #include "game/net/sha256.h"
@@ -43,6 +44,7 @@ std::unique_ptr<GameSession> shipSession() {
   if (!def) return nullptr;
   s->addInterior(ship->interior, *def);
   s->setEconomy(*db, 500);
+  if (auto market = loadMarketDef(*m, "market.kestrel", s->commodities(), &errors)) s->addMarket("market.kestrel", *market);
   return s;
 }
 
@@ -233,6 +235,27 @@ TEST(net_a_client_cannot_steer_from_a_passenger_seat_but_can_from_the_helm) {
   const auto sysHost = host.world().frame().toSystem(host.world().player().state.position).metres;
   const auto sysClient = p->clientSession->world().frame().toSystem(p->clientSession->world().player().state.position).metres;
   CHECK(length(Vec3(sysHost - sysClient)) < 25.0f);
+}
+
+TEST(net_a_passenger_can_get_up_while_the_pilot_docks) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  GameSession& host = *p->hostSession;
+  const PlayerId mara = remoteOnHost(host);
+  // Put the ship near the nearest place to dock, and ask for clearance.
+  SpaceWorld& w = host.world();
+  for (const Prop& prop : w.props())
+    if (prop.def.docking) {
+      w.player().state.position = prop.local + Vec3{600, 300, 900};
+      w.player().previous = w.player().state;
+      break;
+    }
+  CHECK(host.docking().request(w));
+  CHECK(p->stepUntil([&] { return host.docking().state() == DockState::ApproachAuthorized; }));
+  p->client->sendCommand("interact");
+  CHECK(p->stepUntil([&] { return host.player(mara)->location == Location::ShipInterior; }));
+  CHECK(p->stepUntil([&] { return p->clientSession->location() == Location::ShipInterior; }));
 }
 
 TEST(net_a_full_crew_refuses_the_next_person) {
@@ -453,4 +476,232 @@ TEST(server_saves_the_world_and_picks_it_up_again) {
   CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
   CHECK(pumpUntil(rig, v, [&] { return !rig.server.players().empty(); }));
   CHECK(rig.server.session()->player(rig.server.players().front().id)->credits == 4321);
+}
+
+// ---- Undocking through a server ---------------------------------------------------------------------------
+
+TEST(server_a_docked_crew_can_undock_after_a_walk_through_the_station) {
+  ServerRig rig;
+  CHECK(rig.start());
+  Visitor a, b;
+  CHECK(a.link->start("127.0.0.1", rig.port, "Friend", "kestrel"));
+  CHECK(pumpUntil(rig, a, [&] { return a.link->joined(); }));
+  CHECK(b.link->start("127.0.0.1", rig.port, "Tomek", "kestrel"));
+  CHECK(pumpUntil(rig, b, [&] { return b.link->joined(); }));
+  auto stepAll = [&](int n) {
+    for (int i = 0; i < n; ++i) {
+      rig.server.update(kDt);
+      for (Visitor* v : {&a, &b}) {
+        v->link->preStep();
+        v->session->fixedUpdate(kDt);
+        v->link->postStep(kDt);
+      }
+    }
+  };
+  stepAll(30);
+  GameSession& host = *rig.server.session();
+  CHECK(host.docking().forceDock(host.world()));
+  stepAll(60);
+  CHECK(a.session->docking().state() == DockState::Docked);
+
+  const auto players = rig.server.players();
+  CHECK(players.size() == 2);
+  if (players.size() != 2) return;
+  const PlayerId friendId = players[0].id, tomek = players[1].id;
+  CHECK(players[0].pilot);
+
+  // Both get up (each pressing the key), and sit back down in the same order.
+  a.link->sendCommand("interact");
+  b.link->sendCommand("interact");
+  stepAll(60);
+  CHECK(host.player(friendId)->location == Location::ShipInterior);
+  CHECK(host.player(tomek)->location == Location::ShipInterior);
+  CHECK(host.perform(friendId, "takeSeat").ok);
+  CHECK(host.perform(tomek, "takeSeat").ok);
+  stepAll(30);
+  CHECK(host.player(friendId)->pilot);
+  CHECK(a.session->player(a.session->localPlayer())->pilot);
+
+  // The pilot presses the undock key.
+  a.link->sendCommand("dock.request");
+  stepAll(60);
+  if (host.docking().state() == DockState::Docked)
+    std::fprintf(stderr, "    still docked: '%s' / '%s'\n", host.docking().message().c_str(), host.player(friendId)->notice.c_str());
+  CHECK(host.docking().state() != DockState::Docked);
+  stepAll(600);
+  CHECK(host.docking().state() == DockState::Undocked);
+  CHECK(a.session->docking().state() == DockState::Undocked);
+  CHECK(b.session->docking().state() == DockState::Undocked);
+}
+
+// ---- Across an ocean ------------------------------------------------------------------------------------
+
+TEST(net_walking_stays_smooth_over_a_slow_network) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  p->client->setSimulatedLag(5, 2);  // about 170 ms there and back, somewhat uneven
+  const PlayerId mara = remoteOnHost(*p->hostSession);
+  p->client->sendCommand("interact");
+  CHECK(p->stepUntil([&] { return p->clientSession->location() == Location::ShipInterior; }));
+  p->step(60);
+  GameSession& c = *p->clientSession;
+  c.character().yaw = 2.2f;
+  float worstStep = 0, walked = 0;
+  Vec3 last = c.character().feet;
+  // Out of the cockpit, through the galley and on: a walk with turns, at running speed.
+  for (int i = 0; i < 60 * 6; ++i) {
+    c.characterInput().move = {0, 1};
+    c.characterInput().run = true;
+    if (i == 60) c.character().yaw = 3.14f;
+    p->step();
+    const float moved = length(c.character().feet - last);
+    worstStep = std::max(worstStep, moved);
+    walked += moved;
+    last = c.character().feet;
+  }
+  c.characterInput().move = {};
+  p->step(60);
+  std::fprintf(stderr, "    walked %.1f m, largest single step %.3f m (a clean step is %.3f m)\n", walked, worstStep, 5.5f / 60.0f);
+  CHECK(walked > 3.0f);
+  CHECK(worstStep < 0.2f);  // never yanked back
+  CHECK(length(c.character().feet - p->hostSession->player(mara)->character.feet) < 0.25f);  // and they agree
+}
+
+TEST(net_a_ship_seen_over_a_slow_network_moves_evenly) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  p->client->setSimulatedLag(5, 2);
+  GameSession& host = *p->hostSession;
+  host.world().player().input = FlightInput{};
+  p->step(60);
+  SpaceWorld& w = p->clientSession->world();
+  float biggest = 0, total = 0;
+  int counted = 0;
+  DVec3 last = w.frame().toSystem(w.player().state.position).metres;
+  for (int i = 0; i < 300; ++i) {
+    host.world().player().input.throttle = 0.6f;
+    p->step();
+    const DVec3 now = w.frame().toSystem(w.player().state.position).metres;
+    const float moved = float(length(now - last));
+    last = now;
+    if (i > 180) {  // up to speed by now
+      biggest = std::max(biggest, moved);
+      total += moved;
+      ++counted;
+    }
+  }
+  const float mean = total / float(counted);
+  std::fprintf(stderr, "    ship: mean step %.3f m, largest %.3f m\n", mean, biggest);
+  CHECK(mean > 0.1f);
+  CHECK(biggest < mean * 1.8f);
+}
+
+TEST(net_a_passenger_can_take_an_empty_helm) {
+  auto p = connectedPair();
+  CHECK(p != nullptr);
+  if (!p) return;
+  GameSession& host = *p->hostSession;
+  const PlayerId mara = remoteOnHost(host);
+  CHECK(!host.player(mara)->pilot);
+  CHECK(!host.tryTakeHelm(mara));  // the host has it
+  CHECK(host.leaveSeat().ok);
+  p->client->sendCommand("nav.next");
+  CHECK(p->stepUntil([&] { return host.player(mara)->pilot; }));
+}
+
+TEST(server_players_can_trade_at_a_terminal_and_the_money_is_theirs) {
+  ServerRig rig;
+  CHECK(rig.start());
+  Visitor a, b;
+  CHECK(a.link->start("127.0.0.1", rig.port, "Friend", "kestrel"));
+  CHECK(pumpUntil(rig, a, [&] { return a.link->joined(); }));
+  CHECK(b.link->start("127.0.0.1", rig.port, "Tomek", "kestrel"));
+  CHECK(pumpUntil(rig, b, [&] { return b.link->joined(); }));
+  auto stepAll = [&](int n) {
+    for (int i = 0; i < n; ++i) {
+      rig.server.update(kDt);
+      for (Visitor* v : {&a, &b}) {
+        v->link->preStep();
+        v->session->fixedUpdate(kDt);
+        v->link->postStep(kDt);
+      }
+    }
+  };
+  stepAll(10);
+  GameSession& host = *rig.server.session();
+  CHECK(host.docking().forceDock(host.world()));
+  stepAll(30);
+  const auto players = rig.server.players();
+  CHECK(players.size() == 2);
+  if (players.size() != 2) return;
+  const std::int64_t start = host.player(players[0].id)->credits;
+  CHECK(start > 0);  // joiners start with something
+  CHECK(host.player(players[1].id)->credits == start);
+
+  Market* market = host.dockedMarket();
+  CHECK(market != nullptr);
+  if (!market) return;
+  std::string goods;
+  for (const auto& entry : market->def().entries) {
+    const int i = market->entryIndex(entry.commodity);
+    if (entry.sells && market->stock(i) >= 2 && market->buyPrice(host.commodities(), i) * 2 < start) {
+      goods = entry.commodity;
+      break;
+    }
+  }
+  CHECK(!goods.empty());
+  if (goods.empty()) return;
+  const int stockBefore = market->stock(market->entryIndex(goods));
+
+  // Through the client's own session, as the terminal does it.
+  const TradeResult asked = a.session->trade(goods, 2);
+  CHECK(asked.units == 0);  // it only asks
+  stepAll(30);
+  if (host.cargo().units(goods) != 2)
+    std::fprintf(stderr, "    trade of %s: host says '%s'\n", goods.c_str(), host.player(players[0].id)->notice.c_str());
+  CHECK(host.cargo().units(goods) == 2);
+  CHECK(host.player(players[0].id)->credits < start);
+  CHECK(host.player(players[1].id)->credits == start);  // the other wallet is untouched
+  CHECK(market->stock(market->entryIndex(goods)) < stockBefore);
+  // Both clients see the hold, the stock, and each one their own money.
+  CHECK(a.session->cargo().units(goods) == 2);
+  CHECK(b.session->cargo().units(goods) == 2);
+  CHECK(a.session->credits() == host.player(players[0].id)->credits);
+  CHECK(b.session->credits() == start);
+  Market* seen = b.session->dockedMarket();
+  CHECK(seen != nullptr);
+  if (seen) CHECK(seen->stock(seen->entryIndex(goods)) == market->stock(market->entryIndex(goods)));
+  CHECK(a.session->notice().find("Bought") != std::string::npos);
+}
+
+TEST(server_someone_joining_a_ship_already_docked_can_undock_it) {
+  ServerRig rig;
+  CHECK(rig.start());
+  {
+    Visitor first;
+    CHECK(first.link->start("127.0.0.1", rig.port, "Friend", "kestrel"));
+    CHECK(pumpUntil(rig, first, [&] { return first.link->joined(); }));
+    GameSession& host = *rig.server.session();
+    CHECK(host.docking().forceDock(host.world()));
+    pumpUntil(rig, first, [] { return false; }, 30);
+    first.link.reset();
+  }
+  for (int i = 0; i < 300 && !rig.server.players().empty(); ++i) rig.server.update(kDt);
+  // The server is even restarted, so the docked ship comes back from its save.
+  rig.server.stop();
+  CHECK(rig.start());
+  CHECK(rig.server.session()->docking().state() == DockState::Docked);
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Tomek", "kestrel"));
+  CHECK(pumpUntil(rig, v, [&] { return !rig.server.players().empty(); }));
+  pumpUntil(rig, v, [] { return false; }, 30);
+  CHECK(rig.server.players().front().pilot);
+  CHECK(v.session->docking().state() == DockState::Docked);
+  v.link->sendCommand("dock.request");
+  CHECK(pumpUntil(rig, v, [&] { return rig.server.session()->docking().state() != DockState::Docked; }));
+  if (rig.server.session()->docking().state() == DockState::Docked)
+    std::fprintf(stderr, "    still docked: %s\n", rig.server.session()->player(rig.server.players().front().id)->notice.c_str());
+  CHECK(pumpUntil(rig, v, [&] { return v.session->docking().state() == DockState::Undocked; }, 900));
 }

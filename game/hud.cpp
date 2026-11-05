@@ -592,6 +592,15 @@ void drawHud(OverlayBuilder& o, const HudContext& c) {
         break;
       case DockState::Undocking: hint = "Undocking - clearing the pad"; break;
     }
+    if (gs.networked()) {  // more than one person aboard: say who can do what
+      std::string pilot;
+      for (const CrewMember& m : gs.crew())
+        if (m.location == Location::Cockpit && m.pilot) pilot = m.name;
+      const CrewMember* me = gs.player(gs.localPlayer());
+      if (me && !me->pilot)
+        hint = pilot.empty() ? std::format("HELM FREE   {} or the flight controls take it   {} get up", dockKey, key("interact"))
+                             : std::format("PASSENGER   {} has the helm   {} get up", pilot, key("interact"));
+    }
     // Travel drive and landing take precedence over docking hints.
     const TravelDrive& tr = gs.travel();
     const Landing& ld = gs.landing();

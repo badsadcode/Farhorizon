@@ -48,6 +48,7 @@ void MarketPanel::open(const GameSession& session) {
 std::vector<MarketPanel::Tab> MarketPanel::tabs(const GameSession& session) const {
   std::vector<Tab> t;
   if (const_cast<GameSession&>(session).dockedMarket()) t.push_back(Tab::Market);
+  if (session.netClient()) return t;  // repairs, upgrades and contracts aren't shared over a network yet
   if (session.hasService("repair") || session.hasService("upgrades")) t.push_back(Tab::Services);
   if (session.hasService("contracts")) t.push_back(Tab::Contracts);
   return t;
@@ -62,6 +63,7 @@ void MarketPanel::doTrade(GameSession& session, const std::string& commodity, in
     message_ = std::format("{} {} x {} for {}", units > 0 ? "Bought" : "Sold", r.units, name, credits(r.credits));
   else
     message_ = r.message.empty() ? "No trade" : r.message;
+  if (session.netClient()) messageGood_ = true;  // only a question so far
 }
 
 void MarketPanel::show(const ActionResult& r) {
@@ -71,6 +73,14 @@ void MarketPanel::show(const ActionResult& r) {
 }
 
 void MarketPanel::update(Ui& ui, const InputState& in, GameSession& session) {
+  // Over a network the answer to a trade comes back later, as a notice.
+  if (session.netClient() && session.noticeTime() > lastNoticeTime_) {
+    lastNoticeTime_ = session.noticeTime();
+    if (!message_.empty() && !session.notice().empty()) {
+      message_ = session.notice();
+      messageGood_ = message_.rfind("Bought", 0) == 0 || message_.rfind("Sold", 0) == 0;
+    }
+  }
   const auto ts = tabs(session);
   const bool closeKey = !justOpened_ && (in.pressed("ui.close") || in.pressed("ui.market"));
   justOpened_ = false;

@@ -14,7 +14,10 @@ namespace fh::net {
 namespace {
 constexpr int kStepsPerSnapshot = 3;           // 20 reports a second at 60 steps a second
 constexpr float kSecondsPerSnapshot = 3.0f / 60.0f;
-constexpr float kOwnBodyTolerance = 0.5f;      // walking ahead of the host by more than this gets corrected
+constexpr float kSnapDistance = 2.5f;          // further off than this and easing would only look worse
+constexpr float kIgnoreDistance = 0.04f;       // too small to matter
+constexpr double kShowBehindTicks = 7;         // the world is shown this far in the past, to hide uneven arrival
+constexpr double kMaxExtrapolateTicks = 20;
 }  // namespace
 
 // ---- Host --------------------------------------------------------------------------------------------
@@ -105,11 +108,25 @@ void HostLink::handle(const TransportEvent& e) {
       session_->interact(who);  // checked against where the host says they are standing
       if (CrewMember* m = session_->player(who); m && m->marketRequested) {
         m->marketRequested = false;
-        session_->notifyPlayer(who, "Terminals only work for the host so far");
+        server_.send(e.peer, encode(CommandMsg{"open.terminal"}), Delivery::Reliable);
       }
-    } else if (const CrewMember* m = session_->player(who); m && m->location == Location::Cockpit && m->pilot) {
+    } else if (cmd->name.rfind("trade:", 0) == 0) {
+      // trade:<commodity>:<units>. Whoever asks pays, and the market has the final say.
+      const size_t colon = cmd->name.rfind(':');
+      if (colon <= 6) return;
+      const std::string commodity = cmd->name.substr(6, colon - 6);
+      const int units = std::clamp(std::atoi(cmd->name.c_str() + colon + 1), -1000, 1000);
+      if (units == 0) return;
+      const TradeResult r = session_->trade(who, commodity, units);
+      const CommodityDef* def = session_->commodities().find(commodity);
+      const std::string goods = def ? def->name : commodity;
+      session_->notifyPlayer(who, r.units > 0 ? std::format("{} {} x {} for {} cr", units > 0 ? "Bought" : "Sold", r.units, goods, r.credits)
+                                              : (r.message.empty() ? std::string("No trade") : r.message));
+    } else if (session_->tryTakeHelm(who)) {
       helmCommands_.emplace_back(who, cmd->name);
     } else {
+      const CrewMember* m = session_->player(who);
+      log::info("net", "{} asked for '{}' without the helm", m ? m->name : std::string("?"), cmd->name);
       session_->notifyPlayer(who, "Only the pilot can do that");
     }
   }
@@ -124,7 +141,11 @@ void HostLink::preStep() {
   for (auto& [who, in] : inputs_) {
     CrewMember* m = session_->player(who);
     if (!m) continue;
+    acknowledged_[who] = in.sequence;
     if (m->location == Location::Cockpit) {
+      const FlightInput& f = in.flight;
+      // An empty helm is anyone's: touching the controls from a seat takes it.
+      if (!m->pilot && (f.throttle != 0 || length(f.thrust) > 0 || length(f.rotation) > 0.05f)) session_->tryTakeHelm(who);
       if (m->pilot) session_->world().player().input = in.flight;
     } else {
       m->input.move = in.move;
@@ -177,8 +198,12 @@ SnapshotMsg HostLink::buildSnapshot() {
     }
     c.notice = m.notice;
     c.noticeSerial = noticeSerial_[m.id];
+    c.inputSequence = acknowledged_[m.id];
     s.crew.push_back(std::move(c));
   }
+  for (const auto& [id, units] : session_->cargo().contents()) s.cargo.emplace_back(id, units);
+  if (Market* market = session_->dockedMarket())
+    for (const int stock : market->stocks()) s.marketStock.push_back(stock);
   return s;
 }
 
@@ -237,17 +262,55 @@ void ClientLink::handle(const TransportEvent& e) {
         lost_ = true;
       } else if (*type == MessageType::Snapshot) {
         if (const auto s = decodeSnapshot(e.data.data(), e.data.size())) apply(*s);
+      } else if (*type == MessageType::Command) {
+        if (const auto c = decodeCommand(e.data.data(), e.data.size()); c && c->name == "open.terminal")
+          if (CrewMember* me = session_->player(session_->localPlayer())) me->marketRequested = true;
       }
       break;
     }
   }
 }
 
+void ClientLink::setSimulatedLag(int stepsEachWay, int jitterSteps) {
+  lagSteps_ = std::max(0, stepsEachWay);
+  lagJitter_ = std::max(0, jitterSteps);
+}
+
+void ClientLink::send(const Bytes& data, Delivery how) {
+  if (lagSteps_ == 0 && lagJitter_ == 0) {
+    client_.send(data, how);
+    return;
+  }
+  lagSeed_ = lagSeed_ * 1664525u + 1013904223u;
+  const int extra = lagJitter_ ? int((lagSeed_ >> 16) % std::uint32_t(lagJitter_ + 1)) : 0;
+  lastDueOut_ = std::max(lastDueOut_, stepCount_ + lagSteps_ + extra);  // a network may delay, but ENet keeps order
+  delayedOut_.push_back({lastDueOut_, data, how});
+}
+
 void ClientLink::pump() {
-  for (const TransportEvent& e : client_.poll()) handle(e);
+  for (TransportEvent& e : client_.poll()) {
+    if (lagSteps_ == 0 && lagJitter_ == 0) {
+      handle(e);
+      continue;
+    }
+    lagSeed_ = lagSeed_ * 1664525u + 1013904223u;
+    const int extra = lagJitter_ ? int((lagSeed_ >> 16) % std::uint32_t(lagJitter_ + 1)) : 0;
+    lastDueIn_ = std::max(lastDueIn_, stepCount_ + lagSteps_ + extra);
+    delayedIn_.push_back({lastDueIn_, std::move(e)});
+  }
+  while (!delayedIn_.empty() && delayedIn_.front().due <= stepCount_) {
+    const Delayed d = std::move(delayedIn_.front());
+    delayedIn_.pop_front();
+    handle(d.event);
+  }
+  while (!delayedOut_.empty() && delayedOut_.front().due <= stepCount_) {
+    client_.send(delayedOut_.front().data, delayedOut_.front().how);
+    delayedOut_.pop_front();
+  }
 }
 
 void ClientLink::preStep() {
+  ++stepCount_;
   pump();
   if (!joined()) {
     if (!lost_ && ++stepsWaiting_ > 60 * 12) {  // the network library alone would wait half a minute
@@ -257,20 +320,22 @@ void ClientLink::preStep() {
     }
     return;
   }
+  for (const std::string& c : session_->takeNetCommands()) sendCommand(c);
   const CrewMember* me = session_->player(session_->localPlayer());
   if (!me) return;
   ClientInputMsg in;
+  in.sequence = ++inputSequence_;
   in.move = me->input.move;
   in.run = me->input.run;
   in.jump = me->input.jump;
   in.yaw = me->character.yaw + me->input.yawDelta;
   in.pitch = std::clamp(me->character.pitch + me->input.pitchDelta, -1.55f, 1.55f);
   in.flight = session_->world().player().input;
-  client_.send(encode(in), Delivery::Latest);
+  send(encode(in), Delivery::Latest);
 }
 
 void ClientLink::sendCommand(const std::string& name) {
-  client_.send(encode(CommandMsg{name}), Delivery::Reliable);
+  send(encode(CommandMsg{name}), Delivery::Reliable);
 }
 
 void ClientLink::apply(const SnapshotMsg& s) {
@@ -278,21 +343,18 @@ void ClientLink::apply(const SnapshotMsg& s) {
   lastTick_ = s.tick;
   SpaceWorld& w = session_->world();
 
-  // The ship: glide from where we show it now to where the host says it is.
-  if (!haveShip_) {
-    shipFrom_ = s.shipPosition;
-    rotFrom_ = s.shipOrientation;
-    haveShip_ = true;
-  } else {
-    shipFrom_ = w.frame().toSystem(w.player().state.position).metres;
-    rotFrom_ = w.player().state.orientation;
-  }
-  shipTo_ = s.shipPosition;
-  rotTo_ = s.shipOrientation;
-  shipVelocity_ = s.shipVelocity;
-  shipAlpha_ = 0;
+  Report report;
+  report.tick = s.tick;
+  report.ship = s.shipPosition;
+  report.rotation = s.shipOrientation;
+  report.velocity = s.shipVelocity;
 
   session_->netApplyShipStatus(s.docked, s.dockProp, s.dockBay, s.hull, s.shield);
+  {
+    std::map<std::string, int> cargo;
+    for (const auto& [id, units] : s.cargo) cargo[id] = units;
+    session_->netApplyEconomy(std::move(cargo), s.marketStock);
+  }
   if (s.targetKind < 0) {
     w.clearTarget();
   } else {
@@ -316,7 +378,6 @@ void ClientLink::apply(const SnapshotMsg& s) {
       const PlayerId local = session_->addPlayer(c.name);
       if (local == 0) continue;
       locals_[c.id] = local;
-      remotes_[local] = {c.feet, c.yaw, c.pitch};
     }
     const PlayerId local = locals_[c.id];
     const bool self = c.id == yourId_;
@@ -335,40 +396,107 @@ void ClientLink::apply(const SnapshotMsg& s) {
     if (FootPlayer* f = session_->footPlayer(local)) f->health = c.health;
     m->credits = c.credits;
     if (self) {
-      // Our own legs run ahead of the host. Only a real disagreement is corrected.
-      if (loc != Location::Cockpit && length(m->character.feet - c.feet) > kOwnBodyTolerance) {
-        m->character.feet = c.feet;
-        m->character.velocity = {};
+      // Our own legs run ahead of the host. So compare its answer with where we were when we sent the input it
+      // has got to, not with where we are now: otherwise simple walking looks like an error at any real distance.
+      if (moved) {
+        past_.clear();
+        correction_ = {};
+      } else if (loc != Location::Cockpit) {
+        while (!past_.empty() && past_.front().sequence < c.inputSequence) past_.pop_front();
+        if (!past_.empty() && past_.front().sequence == c.inputSequence) {
+          const Vec3 error = c.feet - past_.front().feet;
+          const float size = length(error);
+          if (size > kSnapDistance) {
+            m->character.feet = c.feet;
+            m->character.velocity = {};
+            past_.clear();
+            correction_ = {};
+          } else {
+            correction_ = size > kIgnoreDistance ? error : Vec3{};
+          }
+        }
       }
       if (c.noticeSerial != noticeSerial_) {
         noticeSerial_ = c.noticeSerial;
         if (!c.notice.empty()) session_->notify(c.notice);
       }
     } else {
-      remotes_[local] = {c.feet, c.yaw, c.pitch};
+      report.people[local] = {c.feet, c.yaw, c.pitch};
+      if (moved) remotes_[local] = report.people[local];
     }
+  }
+
+  // Keep it for showing a moment from now. The clock is steered gently, so it never visibly jumps.
+  reports_.push_back(std::move(report));
+  const double wanted = double(s.tick) - kShowBehindTicks;
+  if (showTick_ < 0 || std::fabs(showTick_ - wanted) > 60) showTick_ = wanted;
+  else showTick_ += (wanted - showTick_) * 0.05;
+}
+
+void ClientLink::showWorldAsOf(double tick, float dt) {
+  while (reports_.size() > 2 && double(reports_[1].tick) < tick - 1) reports_.pop_front();
+  if (reports_.empty()) return;
+  size_t from = 0;
+  while (from + 2 < reports_.size() && double(reports_[from + 1].tick) <= tick) ++from;
+  const Report& a = reports_[from];
+  const Report& b = reports_[std::min(from + 1, reports_.size() - 1)];
+  const double span = double(b.tick) - double(a.tick);
+  const double t = span > 0 ? std::clamp((tick - double(a.tick)) / span, 0.0, 1.0) : 0.0;
+
+  SpaceWorld& w = session_->world();
+  PlayerShip& ship = w.player();
+  DVec3 at = a.ship + (b.ship - a.ship) * t;
+  if (tick > double(b.tick)) {  // the reports ran out: carry on as it was going, for a moment
+    const double ahead = std::min(tick - double(b.tick), kMaxExtrapolateTicks) / 60.0;
+    at = b.ship + DVec3(b.velocity) * ahead;
+  }
+  ship.state.position = w.frame().toLocal(SystemPosition{at});
+  ship.state.orientation = nlerp(a.rotation, b.rotation, float(t));
+  ship.state.velocity = b.velocity;  // for the speed readouts; the next step sets the position again
+
+  const float follow = std::min(1.0f, dt * 20.0f);
+  for (auto& [local, shown] : remotes_) {
+    auto pa = a.people.find(local), pb = b.people.find(local);
+    if (pa == a.people.end() || pb == b.people.end()) continue;
+    shown.feet = pa->second.feet + (pb->second.feet - pa->second.feet) * float(t);
+    shown.yaw = pb->second.yaw;
+    shown.pitch = pb->second.pitch;
+  }
+  for (auto& [local, shown] : remotes_) {
+    CrewMember* m = session_->player(local);
+    if (!m) continue;
+    m->character.velocity = {};
+    m->character.feet = m->character.feet + (shown.feet - m->character.feet) * follow;
+    m->character.yaw = shown.yaw;
+    m->character.pitch = shown.pitch;
+    m->input = CharacterInput{};
   }
 }
 
 void ClientLink::postStep(float dt) {
-  SpaceWorld& w = session_->world();
-  if (haveShip_) {
-    shipAlpha_ = std::min(1.0f, shipAlpha_ + dt / kSecondsPerSnapshot);
-    const DVec3 at = shipFrom_ + (shipTo_ - shipFrom_) * double(shipAlpha_);
-    PlayerShip& ship = w.player();
-    ship.state.position = w.frame().toLocal(SystemPosition{at});
-    ship.state.orientation = nlerp(rotFrom_, rotTo_, shipAlpha_);
-    ship.state.velocity = shipVelocity_;  // for the speed readouts; the next report sets the position again
+  if (showTick_ >= 0) showTick_ += double(dt) * 60.0;
+  if (!reports_.empty() && showTick_ >= 0) {
+    for (const Report& r : reports_)
+      for (const auto& [local, person] : r.people)
+        if (!remotes_.count(local)) remotes_[local] = person;
+    showWorldAsOf(showTick_, dt);
   }
-  const float follow = std::min(1.0f, dt * 15.0f);
-  for (auto& [local, r] : remotes_) {
-    CrewMember* m = session_->player(local);
-    if (!m) continue;
-    m->character.velocity = {};
-    m->character.feet = m->character.feet + (r.feet - m->character.feet) * follow;
-    m->character.yaw = r.yaw;
-    m->character.pitch = r.pitch;
-    m->input = CharacterInput{};
+  for (auto it = remotes_.begin(); it != remotes_.end();)
+    it = session_->player(it->first) ? std::next(it) : remotes_.erase(it);
+
+  // Our own body: remember where each input took us, and ease away any disagreement with the host.
+  CrewMember* me = session_->player(session_->localPlayer());
+  if (me && me->location != Location::Cockpit) {
+    const float ease = std::min(1.0f, dt * 6.0f);
+    const Vec3 step = correction_ * ease;
+    correction_ = correction_ - step;
+    me->character.feet = me->character.feet + step;
+    for (Past& p : past_) p.feet = p.feet + step;
+    past_.push_back({inputSequence_, me->character.feet});
+    if (past_.size() > 300) past_.pop_front();
+  } else {
+    past_.clear();
+    correction_ = {};
   }
 }
 

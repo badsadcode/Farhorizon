@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "engine/math/math.h"
@@ -12,10 +13,10 @@
 
 namespace fh::net {
 
-inline constexpr std::uint16_t kProtocolVersion = 2;
+inline constexpr std::uint16_t kProtocolVersion = 3;
 inline constexpr std::uint16_t kDefaultPort = 27777;
 inline constexpr size_t kMaxNameLength = 24;
-inline constexpr size_t kMaxCommandLength = 32;
+inline constexpr size_t kMaxCommandLength = 64;
 inline constexpr size_t kMaxTextLength = 200;
 
 enum class MessageType : std::uint8_t { Hello = 1, Welcome, Refused, ClientInput, Command, Snapshot, Challenge };
@@ -42,6 +43,7 @@ struct RefusedMsg {
 // A player's controls, about once per simulation step. The look direction is absolute: it is theirs to
 // choose, and nothing they send can move them other than by walking.
 struct ClientInputMsg {
+  std::uint32_t sequence = 0;  // counts up, so a report can say which of these it has taken into account
   Vec2 move{};
   bool run = false;
   bool jump = false;
@@ -65,6 +67,7 @@ struct CrewStateMsg {
   std::int64_t credits = 0;
   std::string notice;
   std::uint32_t noticeSerial = 0;  // goes up each time the notice changes
+  std::uint32_t inputSequence = 0; // the last of their controls this position includes
 };
 
 struct SnapshotMsg {
@@ -79,6 +82,8 @@ struct SnapshotMsg {
   std::int32_t targetKind = -1;  // -1: no target
   std::uint32_t targetIndex = 0, targetSub = 0;
   std::vector<CrewStateMsg> crew;
+  std::vector<std::pair<std::string, std::int32_t>> cargo;  // the shared hold
+  std::vector<std::int32_t> marketStock;                    // the market where the ship is docked, if any
 };
 
 using Bytes = std::vector<std::uint8_t>;

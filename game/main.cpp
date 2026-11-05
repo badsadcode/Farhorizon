@@ -112,6 +112,7 @@ int main(int argc, char** argv) {
     }
     else if (a == "--name") o.playerName = next();
     else if (a == "--password") o.password = next();
+    else if (a == "--net-lag") o.netLagMs = std::atoi(next());
     else if (a == "--start-at") o.startAt = next();
     else if (a == "--ship-mesh") o.shipMesh = next();
     else if (a == "--ui-script") o.uiScript = next();

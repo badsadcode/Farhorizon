@@ -71,6 +71,7 @@ PlayerId GameSession::addPlayer(const std::string& name) {
   m.name = name.empty() ? std::format("Crew {}", m.id) : name;
   m.location = Location::Cockpit;
   m.pilot = pilotSlot() < 0;  // the helm, if nobody has it
+  if (networked_) m.credits = startingCredits_;  // someone new to this ship brings what anyone starts with
   if (auto w = crewWallets_.find(m.name); w != crewWallets_.end()) m.credits = w->second;  // welcome back
   players_.push_back(m);
   FootPlayer f;
@@ -98,7 +99,7 @@ std::map<std::string, std::int64_t> GameSession::allCrewWallets() const {
 }
 
 bool GameSession::crewAboard() const {
-  return std::all_of(players_.begin(), players_.end(), [](const CrewMember& m) { return m.location == Location::Cockpit; });
+  return std::all_of(players_.begin(), players_.end(), [](const CrewMember& m) { return m.location != Location::StationInterior; });
 }
 
 void GameSession::notifyPlayer(PlayerId who, const std::string& text) {
@@ -121,7 +122,11 @@ ActionResult GameSession::undock(PlayerId by) {
   if (s < 0) return {false, "No such player"};
   if (players_[size_t(s)].location != Location::Cockpit || !players_[size_t(s)].pilot)
     return failFor(s, "Only the pilot can undock");
-  if (!crewAboard()) return failFor(s, "Crew not aboard: everyone must be seated before the clamps let go");
+  for (const CrewMember& m : players_)
+    if (m.location == Location::StationInterior) {
+      log::info("crew", "undock refused: {} is outside the ship", m.name);
+      return failFor(s, std::format("Waiting for {}: they are outside the ship", m.name));
+    }
   if (!docking_.undock(*world_)) return failFor(s, docking_.message());
   return {true, docking_.message()};
 }
@@ -287,10 +292,12 @@ ActionResult GameSession::leaveSeat(PlayerId who) {
   const int s = slotOf(who);
   if (s < 0) return {false, "No such player"};
   if (players_[size_t(s)].location != Location::Cockpit) return failFor(s, "You are not in a seat");
-  // Docking and landing need someone at the helm. Otherwise the ship looks after itself: it brakes in
-  // open space, and the travel drive holds its course.
-  if (!parked() && (docking_.state() != DockState::Undocked || landing_.busy()))
-    return failFor(s, "Not during docking or landing");
+  // Docking needs its pilot, but a passenger is free to get up. Everyone stays seated for a landing, which
+  // happens in a scene of its own. Otherwise the ship looks after itself: it brakes in open space, and the
+  // travel drive holds its course.
+  if (!parked() && landing_.busy()) return failFor(s, "Not during a landing");
+  if (players_[size_t(s)].pilot && !parked() && docking_.state() != DockState::Undocked)
+    return failFor(s, "Not during docking: you have the helm");
   if (shipInterior_.empty()) return failFor(s, "This ship has no walkable interior");
   const bool wasFlying = !parked() && players_[size_t(s)].pilot;
   const bool flying = !parked();
@@ -645,6 +652,7 @@ ActionResult GameSession::interact(PlayerId who) {
 void GameSession::setEconomy(CommodityDb db, std::int64_t credits) {
   commodities_ = std::move(db);
   players_.front().credits = credits;
+  startingCredits_ = credits;
   cargo_ = CargoHold(&commodities_, world_->player().def.cargoCapacityTons);
   mining_.setParams(world_->player().def.mining);
 }
@@ -851,7 +859,28 @@ Market* GameSession::dockedMarket() {
   return &it->second;
 }
 
+void GameSession::netApplyEconomy(std::map<std::string, int> cargo, const std::vector<std::int32_t>& marketStock) {
+  cargo_.setContents(std::move(cargo));
+  if (Market* m = dockedMarket(); m && !marketStock.empty() && marketStock.size() == m->stocks().size())
+    m->restore(std::vector<int>(marketStock.begin(), marketStock.end()), m->lastTick(), m->carry());
+}
+
+bool GameSession::tryTakeHelm(PlayerId who) {
+  CrewMember* m = player(who);
+  if (!m || m->location != Location::Cockpit) return false;
+  if (m->pilot) return true;
+  if (pilotSlot() >= 0) return false;
+  m->pilot = true;
+  notifyPlayer(who, "You have the helm");
+  log::info("crew", "{} took the empty helm", m->name);
+  return true;
+}
+
 TradeResult GameSession::trade(PlayerId who, const std::string& commodity, int units) {
+  if (netClient_) {  // the host's market decides, and the result arrives as a notice
+    netCommands_.push_back(std::format("trade:{}:{}", commodity, units));
+    return {0, 0, "Asking the station..."};
+  }
   CrewMember* buyer = player(who);
   if (!buyer) return {0, 0, "No such player"};
   Market* m = dockedMarket();

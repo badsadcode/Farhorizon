@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.15.0 — Playing across an ocean (2026-11-05)
+From the first real game between Poland and Canada.
+* **Fixed: rubberbanding when walking.** The game compared your position with the server's as if the network took no time,
+  so at transatlantic delay ordinary walking looked like an error and got pulled back. It now compares with where you
+  were when you sent those controls, and eases away real differences.
+* **The ship and other players move evenly.** They're shown a tenth of a second behind, to hide uneven arrival.
+* **Fixed: undocking was refused while anyone was walking the ship.** The clamps now wait only for someone outside it, and
+  the message says who.
+* **Fixed: a seated passenger could never take an empty helm.** Pressing a helm key or touching the flight controls takes it.
+  The cockpit's hint line says who has the helm.
+* **Terminals work on a server.** Everyone can buy and sell, with their own money and the ship's shared hold. Repairs,
+  upgrades and contracts still aren't available when connected.
+* New players on a server start with the same money as a new game. They used to start with nothing.
+* **Fixed: a passenger could not leave their seat while the pilot docked.** Only the pilot has to stay.
+* Everyone must update: the connection protocol changed. `--net-lag <ms>` pretends the network is that slow, for testing.
+
 ## 0.14.0 — A server of its own (2026-11-05)
 Roadmap step 4.4: `farhorizon_server.exe`, for leaving running on the machine that hosts the game.
 * **A proper window, not a console.** Setup (name, port, password, players), Players (who is on, where they are, and a

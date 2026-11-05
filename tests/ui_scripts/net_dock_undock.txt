@@ -1,0 +1,27 @@
+# A pilot docks through a server with the autopilot, gets up, sits down again and undocks, using the real keys.
+# Needs a server: farhorizon_server --start --port 27893 --password kestrel
+# Run with: farhorizon --join 127.0.0.1:27893 --password kestrel --name Pilot ...
+wait 120
+expect-crew 1
+expect-location cockpit
+key L
+wait 200
+key K
+wait 3000
+wait 3000
+expect-docked
+shot dock01_docked.png
+key F
+wait 60
+expect-location ship
+shot dock02_up.png
+key F
+wait 60
+expect-location cockpit
+shot dock03_seated.png
+key L
+wait 120
+shot dock04_after_l.png
+wait 400
+shot dock05_later.png
+quit

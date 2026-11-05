@@ -222,6 +222,11 @@ class GameSession {
   bool netClient() const { return netClient_; }
   void netApplyShipStatus(bool docked, std::uint32_t prop, std::uint32_t bay, float hull, float shield);
   void netApplyPlace(PlayerId who, Location where, const AssetID& interior, bool pilot);
+  void netApplyEconomy(std::map<std::string, int> cargo, const std::vector<std::int32_t>& marketStock);
+  // What a network client wants the host to do, gathered by the session for its link to send.
+  std::vector<std::string> takeNetCommands() { return std::exchange(netCommands_, {}); }
+  // True if they have the helm, taking it first if they are seated and nobody else has it.
+  bool tryTakeHelm(PlayerId who);
   // How hard the ship was just hit, 0..1. The app turns this into camera shake.
   float takeShipJolt() { return std::exchange(shipJolt_, 0.0f); }
 
@@ -250,6 +255,8 @@ class GameSession {
   std::int64_t insuranceDeductible() const { return deductible_; }
 
  private:
+  std::vector<std::string> netCommands_;
+  std::int64_t startingCredits_ = 0;
   bool dedicated_ = false;
   bool networked_ = false;
   bool netClient_ = false;

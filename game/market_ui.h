@@ -40,6 +40,7 @@ class MarketPanel {
   Tab tab_ = Tab::Market;
   std::string message_;
   bool messageGood_ = true;
+  double lastNoticeTime_ = -100;
 };
 
 }  // namespace fh
