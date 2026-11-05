@@ -4,7 +4,10 @@
 #include <cmath>
 #include <format>
 
+#include <random>
+
 #include "engine/core/log.h"
+#include "game/net/sha256.h"
 
 namespace fh::net {
 
@@ -17,14 +20,32 @@ constexpr float kOwnBodyTolerance = 0.5f;      // walking ahead of the host by m
 // ---- Host --------------------------------------------------------------------------------------------
 
 bool HostLink::start(std::uint16_t port) {
-  if (!server_.start(port, GameSession::kMaxPlayers - 1)) return false;
+  // One more than the limit, so that the person over it can be told why rather than left timing out.
+  if (!server_.start(port, maxPlayers_ + 1)) return false;
   session_->setNetworked(true);
   log::info("net", "hosting on UDP port {}", port);
   return true;
 }
 
+void HostLink::kick(PlayerId who, const std::string& reason) {
+  for (const auto& [peer, id] : players_)
+    if (id == who) {
+      server_.send(peer, encode(RefusedMsg{reason}), Delivery::Reliable);
+      server_.kick(peer);
+      return;
+    }
+}
+
 void HostLink::handle(const TransportEvent& e) {
+  if (e.type == TransportEvent::Type::Connected) {
+    static std::random_device entropy;
+    const std::uint64_t nonce = (std::uint64_t(entropy()) << 32) | entropy();
+    nonces_[e.peer] = nonce;
+    server_.send(e.peer, encode(ChallengeMsg{nonce}), Delivery::Reliable);
+    return;
+  }
   if (e.type == TransportEvent::Type::Disconnected) {
+    nonces_.erase(e.peer);
     auto it = players_.find(e.peer);
     if (it == players_.end()) return;
     const CrewMember* m = session_->player(it->second);
@@ -50,8 +71,18 @@ void HostLink::handle(const TransportEvent& e) {
       server_.kick(e.peer);
     };
     if (hello->protocol != kProtocolVersion) return refuse("Your version of the game does not match the host's");
+    auto nonce = nonces_.find(e.peer);
+    if (nonce == nonces_.end()) return;
+    const Digest expected = passwordProof(nonce->second, password_);
+    nonces_.erase(nonce);  // one try per connection
+    if (!password_.empty() && hello->proof != expected) {
+      log::warn("net", "someone tried to join as '{}' with the wrong password", hello->name);
+      return refuse("Wrong password");
+    }
+    if (clients() >= maxPlayers_) return refuse("The ship's crew is full");
     const PlayerId id = session_->addPlayer(hello->name);
     if (id == 0) return refuse("The ship's crew is full");
+    log::info("net", "{} joined", session_->player(id)->name);
     players_[e.peer] = id;
     inputs_[id] = ClientInputMsg{};
     server_.send(e.peer, encode(WelcomeMsg{id}), Delivery::Reliable);
@@ -127,6 +158,7 @@ SnapshotMsg HostLink::buildSnapshot() {
     s.targetSub = t->sub;
   }
   for (const CrewMember& m : session_->crew()) {
+    if (session_->dedicated() && m.id == session_->localPlayer()) continue;  // a server is nobody
     CrewStateMsg c;
     c.id = m.id;
     c.name = m.name;
@@ -157,8 +189,9 @@ void HostLink::postStep() {
 
 // ---- Client ------------------------------------------------------------------------------------------
 
-bool ClientLink::start(const std::string& address, std::uint16_t port, const std::string& name) {
+bool ClientLink::start(const std::string& address, std::uint16_t port, const std::string& name, const std::string& password) {
   name_ = name;
+  password_ = password;
   session_->setNetworked(true);
   session_->setNetClient(true);
   if (!client_.connect(address, port)) {
@@ -173,8 +206,7 @@ bool ClientLink::start(const std::string& address, std::uint16_t port, const std
 void ClientLink::handle(const TransportEvent& e) {
   switch (e.type) {
     case TransportEvent::Type::Connected:
-      client_.send(encode(HelloMsg{kProtocolVersion, name_}), Delivery::Reliable);
-      break;
+      break;  // the server speaks first
     case TransportEvent::Type::Disconnected:
       lost_ = true;
       if (failure_.empty()) failure_ = "Lost the connection to the host";
@@ -182,7 +214,14 @@ void ClientLink::handle(const TransportEvent& e) {
     case TransportEvent::Type::Data: {
       const auto type = peekType(e.data.data(), e.data.size());
       if (!type) return;
-      if (*type == MessageType::Welcome) {
+      if (*type == MessageType::Challenge) {
+        if (const auto c = decodeChallenge(e.data.data(), e.data.size())) {
+          HelloMsg hello;
+          hello.name = name_;
+          hello.proof = passwordProof(c->nonce, password_);
+          client_.send(encode(hello), Delivery::Reliable);
+        }
+      } else if (*type == MessageType::Welcome) {
         if (const auto w = decodeWelcome(e.data.data(), e.data.size())) {
           yourId_ = w->yourId;
           locals_[yourId_] = session_->localPlayer();

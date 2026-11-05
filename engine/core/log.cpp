@@ -9,6 +9,7 @@ namespace {
 std::mutex g_mutex;
 Level g_minLevel = Level::Info;
 FILE* g_file = nullptr;
+std::function<void(Level, const char*, const std::string&)> g_sink;
 std::atomic<int> g_warnings{0};
 std::atomic<int> g_errors{0};
 const auto g_start = std::chrono::steady_clock::now();
@@ -38,6 +39,12 @@ void write(Level level, const char* subsystem, const std::string& message) {
     std::fprintf(g_file, "[%9.3f] %s [%s] %s\n", t, levelName(level), subsystem, message.c_str());
     std::fflush(g_file);
   }
+  if (g_sink) g_sink(level, subsystem, message);
+}
+
+void setSink(std::function<void(Level, const char*, const std::string&)> sink) {
+  std::lock_guard lock(g_mutex);
+  g_sink = std::move(sink);
 }
 
 void setMinLevel(Level level) { g_minLevel = level; }

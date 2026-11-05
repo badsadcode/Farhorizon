@@ -1,6 +1,8 @@
 // Networking: the message format, and a host and client talking over real UDP on this machine.
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <functional>
 #include <string>
@@ -10,7 +12,9 @@
 #include "engine/assets/asset_manifest.h"
 #include "game/content/interior_def.h"
 #include "game/economy/economy.h"
+#include "game/net/dedicated_server.h"
 #include "game/net/net_link.h"
+#include "game/net/sha256.h"
 #include "game/net/net_protocol.h"
 #include "game/session/game_session.h"
 #include "game/session/world_builder.h"
@@ -18,6 +22,7 @@
 
 using namespace fh;
 using namespace fh::net;
+namespace net = fh::net;
 
 namespace {
 
@@ -261,4 +266,191 @@ TEST(net_a_full_crew_refuses_the_next_person) {
   }
   CHECK(!extra.joined());
   CHECK(host->crew().size() == 4);
+}
+
+// ---- The password ------------------------------------------------------------------------------------
+
+namespace {
+std::string hex(const Digest& d) {
+  std::string out;
+  for (const std::uint8_t b : d) out += std::format("{:02x}", b);
+  return out;
+}
+}  // namespace
+
+TEST(net_sha256_matches_the_published_values) {
+  CHECK(hex(sha256("")) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+  CHECK(hex(sha256("abc")) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  CHECK(hex(sha256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")) ==
+        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+}
+
+TEST(net_a_proof_depends_on_the_password_and_the_connection) {
+  CHECK(passwordProof(1, "kestrel") == passwordProof(1, "kestrel"));
+  CHECK(passwordProof(1, "kestrel") != passwordProof(1, "kestrel2"));
+  CHECK(passwordProof(1, "kestrel") != passwordProof(2, "kestrel"));
+}
+
+// ---- A server with nobody at its keyboard ---------------------------------------------------------------
+
+namespace {
+
+struct ServerRig {
+  std::filesystem::path save;
+  std::uint16_t port = nextPort++;
+  net::DedicatedServer server{FH_TEST_CONTENT_DIR};
+  ServerConfig config;
+
+  ServerRig() {
+    save = std::filesystem::temp_directory_path() / std::format("fh_server_test_{}.json", port);
+    std::error_code ec;
+    std::filesystem::remove(save, ec);
+    config.port = port;
+    config.password = "kestrel";
+  }
+  ~ServerRig() {
+    server.stop();
+    std::error_code ec;
+    std::filesystem::remove(save, ec);
+  }
+  bool start() {
+    std::string why;
+    const bool ok = server.start(config, save, &why);
+    if (!ok) std::fprintf(stderr, "    server: %s\n", why.c_str());
+    return ok;
+  }
+};
+
+struct Visitor {
+  std::unique_ptr<GameSession> session = shipSession();
+  std::unique_ptr<ClientLink> link = std::make_unique<ClientLink>(*session);
+};
+
+bool pumpUntil(ServerRig& rig, Visitor& v, const std::function<bool()>& done, int rounds = 800) {
+  for (int i = 0; i < rounds; ++i) {
+    if (done()) return true;
+    rig.server.update(kDt);
+    v.link->preStep();
+    v.session->fixedUpdate(kDt);
+    v.link->postStep(kDt);
+  }
+  return done();
+}
+
+}  // namespace
+
+TEST(server_will_not_start_without_a_password) {
+  ServerRig rig;
+  rig.config.password.clear();
+  std::string why;
+  CHECK(!rig.server.start(rig.config, rig.save, &why));
+  CHECK(why.find("password") != std::string::npos);
+  CHECK(!rig.server.running());
+}
+
+TEST(server_refuses_a_wrong_password_and_says_so) {
+  ServerRig rig;
+  CHECK(rig.start());
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Mallory", "guess"));
+  CHECK(pumpUntil(rig, v, [&] { return v.link->lost(); }));
+  CHECK(!v.link->joined());
+  CHECK(v.link->failure() == "Wrong password");
+  CHECK(rig.server.players().empty());
+}
+
+TEST(server_lets_the_right_password_in_and_the_first_aboard_gets_the_helm) {
+  ServerRig rig;
+  CHECK(rig.start());
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
+  CHECK(pumpUntil(rig, v, [&] { return v.link->joined(); }));
+  CHECK(pumpUntil(rig, v, [&] { return !rig.server.players().empty(); }));
+  const auto players = rig.server.players();
+  CHECK(players.size() == 1);
+  if (players.empty()) return;
+  CHECK(players[0].name == "Mara");
+  CHECK(players[0].pilot);
+  CHECK(players[0].where == "At the helm");
+  // The server itself is nobody: the client's crew list has only Mara in it.
+  pumpUntil(rig, v, [] { return false; }, 30);
+  CHECK(v.session->crew().size() == 1);
+  CHECK(v.session->player(v.session->localPlayer())->pilot);
+
+  // She flies from the far end.
+  const Vec3 before = rig.server.session()->world().player().state.position;
+  for (int i = 0; i < 180; ++i) {
+    v.session->world().player().input.throttle = 1.0f;
+    rig.server.update(kDt);
+    v.link->preStep();
+    v.session->fixedUpdate(kDt);
+    v.link->postStep(kDt);
+  }
+  CHECK(length(rig.server.session()->world().player().state.position - before) > 5.0f);
+}
+
+TEST(server_world_holds_still_when_nobody_is_there) {
+  ServerRig rig;
+  CHECK(rig.start());
+  const double t0 = rig.server.worldTime();
+  for (int i = 0; i < 120; ++i) rig.server.update(kDt);
+  CHECK(rig.server.worldTime() == t0);
+  CHECK(!rig.server.simulating());
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
+  CHECK(pumpUntil(rig, v, [&] { return v.link->joined(); }));
+  for (int i = 0; i < 120; ++i) pumpUntil(rig, v, [] { return false; }, 1);
+  CHECK(rig.server.worldTime() > t0);
+}
+
+TEST(server_can_remove_someone_and_they_are_told) {
+  ServerRig rig;
+  CHECK(rig.start());
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
+  CHECK(pumpUntil(rig, v, [&] { return !rig.server.players().empty(); }));
+  rig.server.kick(rig.server.players().front().id);
+  CHECK(pumpUntil(rig, v, [&] { return v.link->lost(); }));
+  CHECK(v.link->failure().find("removed") != std::string::npos);
+  CHECK(pumpUntil(rig, v, [&] { return rig.server.players().empty(); }));
+}
+
+TEST(server_keeps_a_full_crew_to_its_limit) {
+  ServerRig rig;
+  rig.config.maxPlayers = 1;
+  CHECK(rig.start());
+  Visitor a, b;
+  CHECK(a.link->start("127.0.0.1", rig.port, "First", "kestrel"));
+  CHECK(pumpUntil(rig, a, [&] { return a.link->joined(); }));
+  CHECK(b.link->start("127.0.0.1", rig.port, "Second", "kestrel"));
+  CHECK(pumpUntil(rig, b, [&] { return b.link->lost(); }));
+  CHECK(b.link->failure().find("full") != std::string::npos);
+  CHECK(rig.server.players().size() == 1);
+}
+
+TEST(server_saves_the_world_and_picks_it_up_again) {
+  ServerRig rig;
+  CHECK(rig.start());
+  {
+    Visitor v;
+    CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
+    CHECK(pumpUntil(rig, v, [&] { return v.link->joined(); }));
+    pumpUntil(rig, v, [] { return false; }, 120);
+    rig.server.session()->player(rig.server.players().front().id)->credits = 4321;
+    pumpUntil(rig, v, [] { return false; }, 10);
+    v.link.reset();
+  }
+  for (int i = 0; i < 200 && !rig.server.players().empty(); ++i) rig.server.update(kDt);
+  CHECK(rig.server.players().empty());
+  const double time = rig.server.worldTime();
+  CHECK(time > 0);
+  rig.server.stop();
+  CHECK(std::filesystem::exists(rig.save));
+  CHECK(rig.start());
+  CHECK(std::fabs(rig.server.worldTime() - time) < 0.1);
+  // Mara's money waited for her.
+  Visitor v;
+  CHECK(v.link->start("127.0.0.1", rig.port, "Mara", "kestrel"));
+  CHECK(pumpUntil(rig, v, [&] { return !rig.server.players().empty(); }));
+  CHECK(rig.server.session()->player(rig.server.players().front().id)->credits == 4321);
 }

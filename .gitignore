@@ -8,6 +8,8 @@ CMakeUserPresets.json
 /saves/
 imgui.ini
 farhorizon.log
+farhorizon_server.log
+server_config.json
 /screenshots/
 settings.json
 tools/blender/farhorizon_editor.zip

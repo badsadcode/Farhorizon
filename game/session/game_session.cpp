@@ -65,7 +65,7 @@ FootPlayer* GameSession::footPlayer(PlayerId id) {
 }
 
 PlayerId GameSession::addPlayer(const std::string& name) {
-  if (int(players_.size()) >= kMaxPlayers) return 0;
+  if (int(players_.size()) >= kMaxPlayers + (dedicated_ ? 1 : 0)) return 0;
   CrewMember m;
   m.id = nextPlayerId_++;
   m.name = name.empty() ? std::format("Crew {}", m.id) : name;
@@ -864,6 +864,64 @@ TradeResult GameSession::trade(PlayerId who, const std::string& commodity, int u
     log::info("economy", "{}{} {} x {} for {} cr (balance {})", who == localPlayer() ? "" : buyer->name + " ",
               units > 0 ? "bought" : "sold", r.units, commodity, r.credits, buyer->credits);
   return r;
+}
+
+void GameSession::setDedicated(bool on) {
+  dedicated_ = on;
+  if (!on) return;
+  networked_ = true;
+  CrewMember& nobody = players_.front();
+  nobody.name = "Server";
+  nobody.location = Location::Cockpit;
+  nobody.pilot = false;
+}
+
+void GameSession::helmCommand(const std::string& name, PlayerId who) {
+  if (name == "nav.next") {
+    const auto dests = world().navDestinations();
+    if (!dests.empty()) {
+      size_t next = 0;
+      if (const auto& t = world().target())
+        for (size_t i = 0; i < dests.size(); ++i)
+          if (dests[i] == *t) next = (i + 1) % dests.size();
+      world().setTarget(dests[next]);
+      if (auto info = world().targetInfo()) notifyPlayer(who, "NAV: " + info->name);
+    }
+  }
+  if (name == "travel.engage") {
+    if (travel().active()) travel().cancel(world());
+    else engageTravel();
+  }
+  if (name == "dock.request") {  // L: contextual dock / land / launch / undock
+    Docking& d = docking();
+    Landing& ld = landing();
+    if (ld.state() == LandState::Landed) {
+      launch();
+    } else if (!ld.busy()) {
+      switch (d.state()) {
+        case DockState::Undocked: {
+          // Prefer a landing when a site's orbit marker is near; otherwise dock.
+          bool siteNear = false;
+          const DVec3 me = world().frame().toSystem(world().player().state.position).metres;
+          for (const auto& pl : world().planets())
+            for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
+              siteNear = siteNear || length(pl.siteOrbit(si) - me) <= Landing::kRequestRange;
+          if (siteNear) requestLanding();
+          else d.request(world());
+          break;
+        }
+        case DockState::RequestingClearance:
+        case DockState::ApproachAuthorized: d.cancel(); break;
+        case DockState::Docked: undock(who); break;
+        default: break;
+      }
+    }
+  }
+  if (name == "dock.autopilot") docking().toggleAutopilot();
+  if (who != localPlayer()) {  // they cannot see the host's messages otherwise
+    if (!docking().message().empty()) notifyPlayer(who, docking().message());
+    if (!travel().message().empty()) notifyPlayer(who, travel().message());
+  }
 }
 
 void GameSession::setNetClient(bool on) {

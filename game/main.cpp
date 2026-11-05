@@ -39,6 +39,7 @@ void printUsage() {
       "  --join <addr[:port]>   join a game\n"
       "  --port <n>             use another port, with --host or --join\n"
       "  --name <name>          your name in a networked game\n"
+      "  --password <word>      the password, with --host or --join\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
       "  --no-validation        disable validation\n"
       "  --no-vsync             present without vsync\n"
@@ -110,6 +111,7 @@ int main(int argc, char** argv) {
       if (colon != std::string::npos) o.joinPort = std::uint16_t(std::atoi(where.c_str() + colon + 1));
     }
     else if (a == "--name") o.playerName = next();
+    else if (a == "--password") o.password = next();
     else if (a == "--start-at") o.startAt = next();
     else if (a == "--ship-mesh") o.shipMesh = next();
     else if (a == "--ui-script") o.uiScript = next();

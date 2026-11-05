@@ -1,28 +1,42 @@
 # Trying co-op
 
-For now this runs from a command line. A menu and a separate server program come with roadmap step 4.4.
+There are two ways: the server program, which needs nobody at the keyboard, or one player hosting from the game.
+Joining is by command line for now.
+
+## With the server program (your friend's PC)
+Run `farhorizon_server.exe`, with the `content` folder next to it. Fill in a password and press **Start server**.
+
+Forward one **UDP** port on the router to that PC (27777 unless you change it), and allow the program through
+Windows Firewall. Players then join with the PC's public address:
+
+```
+farhorizon --join 203.0.113.7 --password yourword --name Mara
+```
+
+The first person aboard gets the helm. The world holds still while nobody is connected and is saved in
+`saves/server_world.json` when the server stops. To start a new world, stop the server and delete that file.
+
+There is no encryption of the game itself. The password is never sent as readable text, but it is stored as
+readable text in `server_config.json` on the server. Use a password you don't use for anything else.
 
 ## On one PC
 Open two terminals in the folder with `farhorizon.exe`. Give the second its own settings file:
 
 ```
-farhorizon --host --name Tomek
-farhorizon --join 127.0.0.1 --name Mara --settings settings2.json
+farhorizon --host --name Tomek --password test
+farhorizon --join 127.0.0.1 --name Mara --password test --settings settings2.json
 ```
 
 ## On a home network
 The host's address is shown by `ipconfig` as the IPv4 address, for example `192.168.1.20`.
 
 ```
-farhorizon --host --name Tomek
-farhorizon --join 192.168.1.20 --name Mara
+farhorizon --host --name Tomek --password test
+farhorizon --join 192.168.1.20 --name Mara --password test
 ```
 
 Windows Firewall asks about the game the first time it hosts. Allow it on private networks. Both players need
 the same version of the game.
-
-## Over the internet
-Not ready yet: there is no password. Please wait for step 4.4 before opening a port on a router.
 
 ## What to try
 * The host flies with the usual keys. The other player presses F to leave their seat and walks the decks.

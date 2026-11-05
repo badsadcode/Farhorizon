@@ -48,6 +48,7 @@ struct AppOptions {
   std::string joinAddress;         // non-empty: join a game (--join address[:port])
   std::uint16_t joinPort = 0;
   std::string playerName;          // --name
+  std::string password;            // --password
   std::filesystem::path contentDir;
   std::filesystem::path shaderDir;
   std::string sceneId = "scene.stage2_flight";
@@ -182,7 +183,6 @@ class GameApp {
   std::unique_ptr<net::ClientLink> clientLink_;
   std::uint32_t crewMesh_ = 0;
   std::vector<InteriorHudContext::CrewTag> crewTags_;
-  void helmCommand(const std::string& name, PlayerId who);
   void drawCrew(const AssetID& place, bool aboardShip, const Mat4& placeToView, const CameraView& view,
                 const RenderFrameParams& params, std::vector<MeshDrawItem>& items);
   AssetID lampSelectorScene_;

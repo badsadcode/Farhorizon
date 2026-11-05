@@ -214,6 +214,11 @@ class GameSession {
   void setNetworked(bool on) { networked_ = on; }
   bool networked() const { return networked_; }
   void setNetClient(bool on);
+  // A server with nobody at its keyboard: the first crew slot exists but is nobody, and holds no seat.
+  void setDedicated(bool on);
+  bool dedicated() const { return dedicated_; }
+  // What a pilot can ask of the ship: "nav.next", "travel.engage", "dock.request", "dock.autopilot".
+  void helmCommand(const std::string& name, PlayerId who);
   bool netClient() const { return netClient_; }
   void netApplyShipStatus(bool docked, std::uint32_t prop, std::uint32_t bay, float hull, float shield);
   void netApplyPlace(PlayerId who, Location where, const AssetID& interior, bool pilot);
@@ -245,6 +250,7 @@ class GameSession {
   std::int64_t insuranceDeductible() const { return deductible_; }
 
  private:
+  bool dedicated_ = false;
   bool networked_ = false;
   bool netClient_ = false;
   float shipJolt_ = 0;

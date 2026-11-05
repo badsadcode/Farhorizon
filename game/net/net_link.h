@@ -17,6 +17,9 @@ class HostLink {
  public:
   explicit HostLink(GameSession& session) : session_(&session) {}
   bool start(std::uint16_t port);
+  void setPassword(const std::string& password) { password_ = password; }  // empty: anyone may join
+  void setMaxPlayers(int n) { maxPlayers_ = n; }                           // not counting a host at the keyboard
+  void kick(PlayerId who, const std::string& reason);
   // Each simulation step: first takes what clients sent, then, after the step, tells them what happened.
   void preStep();
   void postStep();
@@ -38,12 +41,15 @@ class HostLink {
   std::map<PlayerId, double> noticeSeen_;
   std::vector<std::pair<PlayerId, std::string>> helmCommands_;
   std::uint32_t tick_ = 0;
+  std::string password_;
+  int maxPlayers_ = GameSession::kMaxPlayers - 1;
+  std::map<std::uint32_t, std::uint64_t> nonces_;  // by transport peer, until they have said hello
 };
 
 class ClientLink {
  public:
   explicit ClientLink(GameSession& session) : session_(&session) {}
-  bool start(const std::string& address, std::uint16_t port, const std::string& name);
+  bool start(const std::string& address, std::uint16_t port, const std::string& name, const std::string& password = {});
   void preStep();             // sends our controls
   void postStep(float dt);    // moves everything towards what the host last said
   void pump();
@@ -64,7 +70,7 @@ class ClientLink {
 
   GameSession* session_;
   NetClient client_;
-  std::string name_;
+  std::string name_, password_;
   std::uint32_t yourId_ = 0;
   bool lost_ = false;
   std::string failure_;

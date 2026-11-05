@@ -2,6 +2,7 @@
 // Minimal thread-safe logger. Every message carries a subsystem tag so failures
 // have context (asset ID, scene, state) instead of being swallowed.
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <format>
 #include <utility>
@@ -14,6 +15,8 @@ void write(Level level, const char* subsystem, const std::string& message);
 void setMinLevel(Level level);
 // Optional mirror of all log lines into a file (e.g. farhorizon.log). Empty path disables.
 void setLogFile(const std::string& path);
+// Also hand every line to a function, such as a window's log tab. Called from whichever thread logged it.
+void setSink(std::function<void(Level, const char* subsystem, const std::string& message)> sink);
 // Number of Warn/Error messages emitted so far (shown on the developer overlay).
 int warningCount();
 int errorCount();

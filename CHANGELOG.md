@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.0 — A server of its own (2026-11-05)
+Roadmap step 4.4: `farhorizon_server.exe`, for leaving running on the machine that hosts the game.
+* **A proper window, not a console.** Setup (name, port, password, players), Players (who is on, where they are, and a
+  Remove button) and Log. Start, stop and save are buttons. Settings are remembered.
+* **It needs no Vulkan and no real graphics card.** It imports no Vulkan, and draws with SDL's 2D renderer.
+* **A password is required.** The server won't start without one. It never crosses the network as readable text:
+  each connection proves it knows the password using a number picked for that connection. Players use `--password`.
+* **The world keeps going between visits.** It holds still while nobody is connected, is saved when the server
+  stops, and picks up again next time. Players' money waits for them by name.
+* The first person aboard gets the helm. The server itself isn't a player and takes no seat.
+* The connection protocol changed, so 0.13 games can't join.
+
 ## 0.13.0 — Someone else aboard (2026-11-05)
 Roadmap step 4.3: the first networked test. One person flies while another walks the ship, on two computers.
 * **Host with `--host`, join with `--join <address>`, and pick a name with `--name`.** It uses UDP port 27777,

@@ -174,7 +174,7 @@ dialog button { background: none; border: 1px solid var(--seam); color: var(--am
 <section class="strip" aria-label="Project status">
   <div class="wrap">
     <dl>
-      <div><dt>Current build</dt><dd>0.13.0</dd></div>
+      <div><dt>Current build</dt><dd>0.14.0</dd></div>
       <div><dt>Ship</dt><dd>Sparrow</dd></div>
       <div><dt>Location</dt><dd>Cinder Reach</dd></div>
       <div><dt>Log entries</dt><dd>13</dd></div>
@@ -183,6 +183,20 @@ dialog button { background: none; border: 1px solid var(--seam); color: var(--am
 </section>
 
 <main class="wrap log">
+
+  <article class="entry" id="log-19">
+    <div class="rail"><span class="num">LOG 19</span><span class="build">build 0.14.0</span><time datetime="2026-11-05">5 Nov 2026</time></div>
+    <div>
+      <h2>A window, not a wall of text</h2>
+      <p>This one was a specific request: a server you set up in a proper window, not a console spitting out logs. So now there's <code>farhorizon_server.exe</code>. You give it a name, a port and a password, press Start, and a Players tab shows who's aboard and what they're doing, with a button to remove them. The log has a tab of its own, out of the way.</p>
+      <p>It doesn't need the graphics the game needs, so it should run on a modest machine in a corner. The world holds still while nobody's connected and saves when the server stops. Your money waits for you, by name.</p>
+      <p>A password is required, and it never crosses the network as readable text. There's still no menu for joining, and nobody on a server can trade yet, since terminals only worked for a host at the keyboard. It has also only run on one PC so far. A friend's computer across the internet is the next real test.</p>
+      <div class="shots two">
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log19_setup.png" alt="The FARHORIZON server window on its Setup tab, with fields for name, port, password and players."></button><figcaption>Setting up. No console in sight.</figcaption></figure>
+        <figure><button class="shot" type="button"><img loading="lazy" src="images/log19_players.png" alt="The Players tab, with Tomek at the helm and Mara walking the ship."></button><figcaption>Two game windows connected, one flying and one walking.</figcaption></figure>
+      </div>
+    </div>
+  </article>
 
   <article class="entry" id="log-18">
     <div class="rail"><span class="num">LOG 18</span><span class="build">build 0.13.0</span><time datetime="2026-11-05">5 Nov 2026</time></div>

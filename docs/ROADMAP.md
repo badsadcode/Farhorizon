@@ -24,6 +24,7 @@ status lives in `STATUS.md`._
       **Done (0.13.0, ADR 0016, `docs/NETWORK_TEST.md`)**, tested with two windows on one PC so far.
    4. `farhorizon_server.exe` with a real GUI (setup, players, logs tab) and no Vulkan requirement.
       Clients are untrusted; password required. Friend's PC hosts; one forwarded UDP port.
+      **Done (0.14.0).** Still to come: a join screen in the game's menu.
    5. Crew stations (helm, guns, engineering, mining) and ship ownership. Solo must always work.
 5. **Explorable planets.** Cube-sphere, streamed chunks, real landing, generated places to discover.
    Port suitable algorithms from the owner's Thornwake project (noise, mountains, canyons, biomes;

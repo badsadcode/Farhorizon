@@ -18,6 +18,17 @@ _Status: accepted (0.13.0, roadmap step 4.3)._
 * **What isn't shared is switched off** by `setNetworked`, rather than left to drift apart silently: space combat,
   mining, landing, and entry to places with enemies. Terminals work only for the host.
 
+## Added in 0.14.0 (step 4.4)
+* **`DedicatedServer` runs a session with no window** (`game/net/dedicated_server`), and `farhorizon_server.exe` is a thin
+  window over it, drawn by the same overlay geometry through SDL_Renderer, so no Vulkan is imported. Tests drive
+  `DedicatedServer` directly.
+* **The session's first crew slot stays, as nobody** (`setDedicated`). Everything that means "this machine's player"
+  kept working, at the cost of shared ship expenses still being charged to that slot.
+* **Passwords use a challenge:** the server sends a one-time number, and the client sends SHA-256 of it mixed with the
+  password. This stops reading the password from the traffic or replaying it. It doesn't stop someone guessing
+  offline from captured traffic, and the game traffic itself isn't encrypted, so a password should be unique.
+* **Helm commands moved into `GameSession`,** since a server has no app to run them.
+
 ## Consequences
 * Solo is unaffected: none of this runs without `--host` or `--join`.
 * Client's copy of NPCs and world details is not authoritative. Sharing combat comes with crew stations.

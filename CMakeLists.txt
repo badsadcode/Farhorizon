@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.13.0 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.14.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,6 +57,8 @@ add_library(fh_core STATIC
   game/net/net_protocol.cpp
   game/net/net_transport.cpp
   game/net/net_link.cpp
+  game/net/sha256.cpp
+  game/net/dedicated_server.cpp
   game/foot/foot_defs.cpp
   game/foot/nav_grid.cpp
   game/content/ship_def.cpp
@@ -149,6 +151,14 @@ if(FH_BUILD_GAME)
 endif()
 
 # ---- Tools (GPU-free) ----
+if(FH_BUILD_GAME)
+  # The server's window uses SDL's own 2D renderer, so it needs no Vulkan on the machine that runs it.
+  add_executable(farhorizon_server WIN32 game/server_main.cpp)
+  target_link_libraries(farhorizon_server PRIVATE fh_core SDL3::SDL3)
+  target_compile_definitions(farhorizon_server PRIVATE FH_DEFAULT_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content")
+  fh_set_warnings(farhorizon_server)
+endif()
+
 add_executable(content_validator tools/content_validator/main.cpp)
 target_link_libraries(content_validator PRIVATE fh_core)
 fh_set_warnings(content_validator)

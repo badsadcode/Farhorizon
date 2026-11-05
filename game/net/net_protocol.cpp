@@ -103,15 +103,31 @@ std::optional<T> finish(const Reader& r, T value) {
 }  // namespace
 
 std::optional<MessageType> peekType(const std::uint8_t* data, size_t size) {
-  if (size == 0 || data[0] < std::uint8_t(MessageType::Hello) || data[0] > std::uint8_t(MessageType::Snapshot))
+  if (size == 0 || data[0] < std::uint8_t(MessageType::Hello) || data[0] > std::uint8_t(MessageType::Challenge))
     return std::nullopt;
   return MessageType(data[0]);
+}
+
+Bytes encode(const ChallengeMsg& m) {
+  Writer w(MessageType::Challenge);
+  w.raw(m.nonce);
+  return w.take();
+}
+
+std::optional<ChallengeMsg> decodeChallenge(const std::uint8_t* data, size_t size) {
+  bool ok = false;
+  Reader r = open(data, size, MessageType::Challenge, ok);
+  if (!ok) return std::nullopt;
+  ChallengeMsg m;
+  m.nonce = r.raw<std::uint64_t>();
+  return finish(r, m);
 }
 
 Bytes encode(const HelloMsg& m) {
   Writer w(MessageType::Hello);
   w.raw(m.protocol);
   w.text(m.name, kMaxNameLength);
+  for (const std::uint8_t b : m.proof) w.u8(b);
   return w.take();
 }
 
@@ -122,6 +138,7 @@ std::optional<HelloMsg> decodeHello(const std::uint8_t* data, size_t size) {
   HelloMsg m;
   m.protocol = r.raw<std::uint16_t>();
   m.name = r.text(kMaxNameLength);
+  for (std::uint8_t& b : m.proof) b = r.u8();
   return finish(r, m);
 }
 

@@ -111,6 +111,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
   if (!options_.playerName.empty()) session_->player(session_->localPlayer())->name = options_.playerName;
   if (options_.hostPort != 0) {
     hostLink_ = std::make_unique<net::HostLink>(*session_);
+    hostLink_->setPassword(options_.password);
     if (!hostLink_->start(options_.hostPort)) throw std::runtime_error("could not open the network port");
     session_->notify(std::format("Hosting on port {}", options_.hostPort));
   }
@@ -118,7 +119,7 @@ GameApp::GameApp(AppOptions options) : options_(std::move(options)) {
     clientLink_ = std::make_unique<net::ClientLink>(*session_);
     const std::uint16_t port = options_.joinPort ? options_.joinPort : net::kDefaultPort;
     const std::string name = options_.playerName.empty() ? std::string("Crew") : options_.playerName;
-    if (!clientLink_->start(options_.joinAddress, port, name)) throw std::runtime_error(clientLink_->failure());
+    if (!clientLink_->start(options_.joinAddress, port, name, options_.password)) throw std::runtime_error(clientLink_->failure());
   }
   applySettings();
   const bool directStart = options_.hostPort != 0 || !options_.joinAddress.empty() || options_.startDocked || options_.startLanded || !options_.startIn.empty() ||
@@ -889,7 +890,7 @@ void GameApp::handleAppInput() {
     if (input_.pressed("debug.autofly")) controller_.setAutofly(!controller_.autofly(), 0.4f, {0.0f, 0.08f, 0.0f});
     if (session_->player(session_->localPlayer())->pilot)
       for (const char* name : {"nav.next", "travel.engage", "dock.request", "dock.autopilot"})
-        if (input_.pressed(name)) helmCommand(name, session_->localPlayer());
+        if (input_.pressed(name)) session_->helmCommand(name, session_->localPlayer());
     if (input_.pressed("debug.forceDock")) session_->docking().forceDock(world());
     if (input_.pressed("ship.scan")) {
       const auto& t = world().target();
@@ -910,54 +911,6 @@ void GameApp::handleAppInput() {
       contentErrors_ = errors;
       contentErrors_.insert(contentErrors_.begin(), "RELOAD FAILED - previous content kept:");
     }
-  }
-}
-
-void GameApp::helmCommand(const std::string& name, PlayerId who) {
-  if (name == "nav.next") {
-    const auto dests = world().navDestinations();
-    if (!dests.empty()) {
-      size_t next = 0;
-      if (const auto& t = world().target())
-        for (size_t i = 0; i < dests.size(); ++i)
-          if (dests[i] == *t) next = (i + 1) % dests.size();
-      world().setTarget(dests[next]);
-      if (auto info = world().targetInfo()) session_->notify("NAV: " + info->name);
-    }
-  }
-  if (name == "travel.engage") {
-    if (session_->travel().active()) session_->travel().cancel(world());
-    else session_->engageTravel();
-  }
-  if (name == "dock.request") {  // L: contextual dock / land / launch / undock
-    Docking& d = session_->docking();
-    Landing& ld = session_->landing();
-    if (ld.state() == LandState::Landed) {
-      session_->launch();
-    } else if (!ld.busy()) {
-      switch (d.state()) {
-        case DockState::Undocked: {
-          // Prefer a landing when a site's orbit marker is near; otherwise dock.
-          bool siteNear = false;
-          const DVec3 me = world().frame().toSystem(world().player().state.position).metres;
-          for (const auto& pl : world().planets())
-            for (std::uint32_t si = 0; si < pl.def.sites.size(); ++si)
-              siteNear = siteNear || length(pl.siteOrbit(si) - me) <= Landing::kRequestRange;
-          if (siteNear) session_->requestLanding();
-          else d.request(world());
-          break;
-        }
-        case DockState::RequestingClearance:
-        case DockState::ApproachAuthorized: d.cancel(); break;
-        case DockState::Docked: session_->undock(who); break;
-        default: break;
-      }
-    }
-  }
-  if (name == "dock.autopilot") session_->docking().toggleAutopilot();
-  if (who != session_->localPlayer()) {  // they cannot see the host's messages otherwise
-    if (!session_->docking().message().empty()) session_->notifyPlayer(who, session_->docking().message());
-    if (!session_->travel().message().empty()) session_->notifyPlayer(who, session_->travel().message());
   }
 }
 
@@ -1248,7 +1201,7 @@ int GameApp::run() {
     handleAppInput();
     if (hostLink_) {
       hostLink_->pump();
-      for (const auto& [who, name] : hostLink_->takeHelmCommands()) helmCommand(name, who);
+      for (const auto& [who, name] : hostLink_->takeHelmCommands()) session_->helmCommand(name, who);
     }
     if (clientLink_) {
       clientLink_->pump();

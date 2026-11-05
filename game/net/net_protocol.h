@@ -1,6 +1,7 @@
 #pragma once
 // What goes over the wire. Plain byte packing with bounds checks: anything can arrive from a network, so a
 // short or nonsense packet must only ever make decoding fail. GPU-free and unit-tested.
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -11,17 +12,23 @@
 
 namespace fh::net {
 
-inline constexpr std::uint16_t kProtocolVersion = 1;
+inline constexpr std::uint16_t kProtocolVersion = 2;
 inline constexpr std::uint16_t kDefaultPort = 27777;
 inline constexpr size_t kMaxNameLength = 24;
 inline constexpr size_t kMaxCommandLength = 32;
 inline constexpr size_t kMaxTextLength = 200;
 
-enum class MessageType : std::uint8_t { Hello = 1, Welcome, Refused, ClientInput, Command, Snapshot };
+enum class MessageType : std::uint8_t { Hello = 1, Welcome, Refused, ClientInput, Command, Snapshot, Challenge };
+
+// The first thing a server says: a number used once, for the client to mix its password with.
+struct ChallengeMsg {
+  std::uint64_t nonce = 0;
+};
 
 struct HelloMsg {
   std::uint16_t protocol = kProtocolVersion;
   std::string name;
+  std::array<std::uint8_t, 32> proof{};
 };
 
 struct WelcomeMsg {
@@ -76,6 +83,7 @@ struct SnapshotMsg {
 
 using Bytes = std::vector<std::uint8_t>;
 
+Bytes encode(const ChallengeMsg& m);
 Bytes encode(const HelloMsg& m);
 Bytes encode(const WelcomeMsg& m);
 Bytes encode(const RefusedMsg& m);
@@ -84,6 +92,7 @@ Bytes encode(const CommandMsg& m);
 Bytes encode(const SnapshotMsg& m);
 
 std::optional<MessageType> peekType(const std::uint8_t* data, size_t size);
+std::optional<ChallengeMsg> decodeChallenge(const std::uint8_t* data, size_t size);
 std::optional<HelloMsg> decodeHello(const std::uint8_t* data, size_t size);
 std::optional<WelcomeMsg> decodeWelcome(const std::uint8_t* data, size_t size);
 std::optional<RefusedMsg> decodeRefused(const std::uint8_t* data, size_t size);
