@@ -164,6 +164,71 @@
       "file": "audio/alarm.wav",
       "bus": "effects",
       "gain": 0.45
+    },
+    "flechette_shot": {
+      "file": "audio/flechette_shot.wav",
+      "bus": "effects",
+      "gain": 0.8
+    },
+    "flechette_reload": {
+      "file": "audio/flechette_reload.wav",
+      "bus": "effects",
+      "gain": 0.55
+    },
+    "arc_start": {
+      "file": "audio/arc_start.wav",
+      "bus": "effects",
+      "gain": 0.5
+    },
+    "arc_loop": {
+      "file": "audio/arc_loop.wav",
+      "bus": "effects",
+      "gain": 0.45
+    },
+    "arc_reload": {
+      "file": "audio/arc_reload.wav",
+      "bus": "effects",
+      "gain": 0.5
+    },
+    "arc_hit": {
+      "file": "audio/arc_hit.wav",
+      "bus": "effects",
+      "gain": 0.35
+    },
+    "spitter_wake": {
+      "file": "audio/spitter_wake.wav",
+      "bus": "effects",
+      "gain": 0.6
+    },
+    "spitter_spit": {
+      "file": "audio/spitter_spit.wav",
+      "bus": "effects",
+      "gain": 0.6
+    },
+    "spitter_die": {
+      "file": "audio/spitter_die.wav",
+      "bus": "effects",
+      "gain": 0.65
+    },
+    "glob_hit": {
+      "file": "audio/glob_hit.wav",
+      "bus": "effects",
+      "gain": 0.55
+    },
+    "brute_roar": {
+      "file": "audio/brute_roar.wav",
+      "bus": "effects",
+      "gain": 0.8
+    },
+    "brute_hit": {
+      "file": "audio/brute_hit.wav",
+      "bus": "effects",
+      "gain": 0.65
+    },
+    "brute_die": {
+      "file": "audio/brute_die.wav",
+      "bus": "effects",
+      "gain": 0.8
     }
   },
   "events": {
@@ -189,7 +254,19 @@
     "player_hurt": "player_hurt",
     "pickup": "pickup",
     "explosion": "explosion",
-    "alarm": "alarm"
+    "alarm": "alarm",
+    "flechette_shot": "flechette_shot",
+    "flechette_reload": "flechette_reload",
+    "arc_start": "arc_start",
+    "arc_reload": "arc_reload",
+    "arc_hit": "arc_hit",
+    "spitter_wake": "spitter_wake",
+    "spitter_spit": "spitter_spit",
+    "spitter_die": "spitter_die",
+    "glob_hit": "glob_hit",
+    "brute_roar": "brute_roar",
+    "brute_hit": "brute_hit",
+    "brute_die": "brute_die"
   },
   "locations": {
     "space": {

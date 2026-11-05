@@ -22,6 +22,7 @@
 #include <set>
 
 #include "game/foot/foot_combat.h"
+#include "game/foot/nav_grid.h"
 #include "game/world/space_world.h"
 
 namespace fh {
@@ -85,6 +86,21 @@ class GameSession {
   std::vector<FootPlayer>& footPlayers() { return footPlayers_; }
   void setFootTrigger(bool on) { footPlayers_.front().trigger = on; }
   void requestFootReload() { footPlayers_.front().reloadRequest = true; }
+  void setFootNoisy(bool on) { footPlayers_.front().noisy = on; }
+  void selectFootWeapon(int index) { footPlayers_.front().switchRequest = index; }
+  void cycleFootWeapon(int direction);  // next/previous owned weapon
+  // Weapons, enemy types and loot tables (content outlives the session); null = built-in defaults.
+  void setFootContent(const FootContent* content);
+  const NavGrid* activeNav() const;
+  // Things dropped by killed enemies, still lying in the current map. Walk over one to take it.
+  struct FootDrop {
+    std::string key;    // "<scene>#drop<marker>"
+    std::string table;  // loot table id
+    Vec3 position{};
+  };
+  const std::vector<FootDrop>& footDrops() const { return drops_; }
+  const std::map<std::string, Vec3>& dropPositions() const { return dropPositions_; }
+  void setDropPositions(std::map<std::string, Vec3> d) { dropPositions_ = std::move(d); }
   std::vector<FootEvent> takeFootEvents() { return std::exchange(footEvents_, {}); }
   // Enemies killed and loot taken stay that way, in saves too. Keys are "<scene>#<marker>".
   bool markerCleared(int marker) const;
@@ -92,6 +108,7 @@ class GameSession {
   void setClearedMarkers(std::set<std::string> keys) { clearedMarkers_ = std::move(keys); }
 
   const Interactable* focusedInteractable() const;
+  std::string promptFor(const Interactable& it) const;  // loot shows its table's prompt
   ActionResult interact();            // uses the focused interactable
   ActionResult perform(const std::string& action);
   ActionResult leaveSeat();           // cockpit -> ship interior (docked only)
@@ -171,7 +188,13 @@ class GameSession {
   void beginFoot(const InteriorDef& def);
   void stepFoot(float dt);
   ActionResult takeLoot(int marker);
+  void refitFoot();       // somewhere safe: patched up, magazines full, at least the starting ammo
+  void rebuildDrops();
+  void pickUpDrops();
   FootCombat foot_;
+  std::map<AssetID, std::unique_ptr<NavGrid>> navs_;
+  std::vector<FootDrop> drops_;
+  std::map<std::string, Vec3> dropPositions_;
   std::vector<FootPlayer> footPlayers_{FootPlayer{}};
   std::vector<FootEvent> footEvents_;
   std::set<std::string> clearedMarkers_;

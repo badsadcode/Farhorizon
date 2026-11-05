@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-04 · Stage 7 (polish) in progress: UI and lighting done, awaiting the owner's playtest. Order ahead: `docs/ROADMAP.md`._
+_Last updated: 2026-11-05 · Roadmap step 3 (points of interest, FPS): three weapons, three enemy types, pathfinding and loot tables (0.10). Order ahead: `docs/ROADMAP.md`._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -104,7 +104,12 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 ## Atmosphere
 | Item | State | Notes |
 |---|---|---|
-| Fighting on foot | ✅ | Rivet driver, crawler, loot, suit lamp, health; built for a list of players. Simple chasing, no pathfinding |
+| Fighting on foot | ✅ | built for a list of players; suit lamp, health, knock-outs |
+| On-foot weapons | ✅ | rivet driver (auto), flechette caster (pellets), arc cutter (beam); per-weapon magazines, ammo types, switching (1/2/3, wheel); content files |
+| On-foot enemies | ✅ | crawler (melee), spitter (ranged, dodgeable globs), brute (charge, knockback, stun); content files |
+| Enemy pathfinding | ✅ | per-map navigation grid (multi-level, headroom per agent), A* + string pulling; unit-tested incl. the derelict |
+| Loot tables and drops | ✅ | deterministic per map/marker; tool caches unlock weapons; enemy drops persist in saves (v5) |
+| Feel of the new fights | ⬜ | balance tuned by tests and a scripted run only, not yet played by a human |
 | Point lights + fog + flicker | ✅ | 16 lights/frame, all shadowed, per-interior fog, failing lamps |
 | "Used Future" look | ✅ | default; amber/phosphor CRT HUD |
 | Audio | 🟡 | mixer, device, data-driven director with original synthesised placeholders. Nobody has listened yet. |

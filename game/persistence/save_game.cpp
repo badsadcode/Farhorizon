@@ -40,8 +40,10 @@ std::string serializeSave(const SaveGame& s) {
                  {"upgrades", s.upgrades},
                  {"clearedMarkers", s.clearedMarkers},
                  {"footHealth", s.footHealth},
-                 {"footMagazine", s.footMagazine},
-                 {"footReserve", s.footReserve},
+                 {"footWeapons", s.footWeapons},
+                 {"footWeapon", s.footWeapon},
+                 {"footMagazines", s.footMagazines},
+                 {"footAmmo", s.footAmmo},
                  {"defeats", s.defeats}};
   json contracts = json::array();
   for (const auto& c : s.contracts)
@@ -57,6 +59,9 @@ std::string serializeSave(const SaveGame& s) {
   json asteroids = json::array();
   for (const auto& a : s.asteroids) asteroids.push_back({{"field", a.field}, {"index", a.index}, {"yield", a.yield}});
   j["asteroids"] = asteroids;
+  json drops = json::object();
+  for (const auto& [key, pos] : s.footDrops) drops[key] = vec(pos);
+  j["footDrops"] = drops;
   return j.dump(2);
 }
 
@@ -89,6 +94,19 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     j["player"]["footReserve"] = 36;
     j["schemaVersion"] = 4;
   }
+  if (j.value("schemaVersion", -1) == 4 && j.contains("player") && j["player"].is_object()) {
+    // v4 had one gun: the rivet driver, its magazine and its rivets.
+    json& p = j["player"];
+    const int mag = p.value("footMagazine", 12), res = p.value("footReserve", 36);
+    p.erase("footMagazine");
+    p.erase("footReserve");
+    p["footWeapons"] = json::array({"weapon.rivet_driver"});
+    p["footWeapon"] = "weapon.rivet_driver";
+    p["footMagazines"] = {{"weapon.rivet_driver", mag}};
+    p["footAmmo"] = {{"ammo.rivets", res}};
+    j["footDrops"] = json::object();
+    j["schemaVersion"] = 5;
+  }
   if (j.value("schemaVersion", -1) != SaveGame::kSchemaVersion)
     return fail("unsupported save version " + std::to_string(version) + " (this build reads version " +
                 std::to_string(SaveGame::kSchemaVersion) + ")");
@@ -118,8 +136,17 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     s.upgrades = p.at("upgrades").get<std::vector<std::string>>();
     s.clearedMarkers = p.at("clearedMarkers").get<std::vector<std::string>>();
     s.footHealth = p.at("footHealth").get<float>();
-    s.footMagazine = p.at("footMagazine").get<int>();
-    s.footReserve = p.at("footReserve").get<int>();
+    s.footWeapons = p.at("footWeapons").get<std::vector<std::string>>();
+    s.footWeapon = p.at("footWeapon").get<std::string>();
+    s.footMagazines = p.at("footMagazines").get<std::map<std::string, int>>();
+    s.footAmmo = p.at("footAmmo").get<std::map<std::string, int>>();
+    s.footDrops.clear();
+    for (const auto& [key, v] : j.at("footDrops").items())
+      s.footDrops[key] = {v.at(0).get<double>(), v.at(1).get<double>(), v.at(2).get<double>()};
+    for (const auto& [id, n] : s.footMagazines)
+      if (n < 0) return fail("save file has a negative magazine for '" + id + "'");
+    for (const auto& [id, n] : s.footAmmo)
+      if (n < 0) return fail("save file has negative ammo '" + id + "'");
     s.defeats = p.at("defeats").get<int>();
     const json& cj = j.at("contracts");
     for (const auto& c : cj.at("active")) {
@@ -239,8 +266,21 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
   s.upgrades = session.ownedUpgrades();
   s.clearedMarkers.assign(session.clearedMarkers().begin(), session.clearedMarkers().end());
   s.footHealth = session.footPlayers().front().health;
-  s.footMagazine = session.footPlayers().front().magazine;
-  s.footReserve = session.footPlayers().front().reserve;
+  {
+    const FootPlayer& me = session.footPlayers().front();
+    const FootContent& fc = session.foot().content();
+    s.footWeapons.clear();
+    s.footMagazines.clear();
+    s.footAmmo.clear();
+    for (size_t w = 0; w < fc.weapons.size() && w < me.owned.size(); ++w)
+      if (me.owned[w]) {
+        s.footWeapons.push_back(fc.weapons[w].id);
+        s.footMagazines[fc.weapons[w].id] = me.magazines[w];
+      }
+    s.footWeapon = fc.weapons[size_t(std::clamp(me.weapon, 0, int(fc.weapons.size()) - 1))].id;
+    for (size_t a = 0; a < fc.ammo.size() && a < me.ammo.size(); ++a) s.footAmmo[fc.ammo[a].id] = me.ammo[a];
+    for (const auto& [key, pos] : session.dropPositions()) s.footDrops[key] = DVec3(pos);
+  }
   s.defeats = session.defeats();
   for (const Contract& c : session.contracts().active())
     s.contracts.push_back({c.key, c.templateId, contractKindName(c.kind), c.title, c.description, c.issuer,
@@ -258,6 +298,11 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
 
 bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
   session.setClearedMarkers({s.clearedMarkers.begin(), s.clearedMarkers.end()});  // before anything is entered
+  {
+    std::map<std::string, Vec3> drops;
+    for (const auto& [key, pos] : s.footDrops) drops[key] = Vec3(pos);
+    session.setDropPositions(std::move(drops));
+  }
   auto fail = [&](const std::string& m) {
     if (error) *error = m;
     return false;
@@ -358,8 +403,31 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
   }
   FootPlayer& me = session.footPlayers().front();
   me.health = s.footHealth;
-  me.magazine = s.footMagazine;
-  me.reserve = s.footReserve;
+  {  // Loadout by id: weapons or ammo that no longer exist in content are dropped.
+    const FootContent& fc = session.foot().content();
+    session.foot().outfit(me);
+    me.health = s.footHealth;
+    std::fill(me.owned.begin(), me.owned.end(), 0);
+    std::fill(me.magazines.begin(), me.magazines.end(), 0);
+    std::fill(me.ammo.begin(), me.ammo.end(), 0);
+    for (const auto& id : s.footWeapons)
+      if (const int w = fc.weaponIndex(id); w >= 0) {
+        me.owned[size_t(w)] = 1;
+        const auto m = s.footMagazines.find(id);
+        me.magazines[size_t(w)] = std::clamp(m == s.footMagazines.end() ? 0 : m->second, 0, fc.weapons[size_t(w)].magazine);
+      }
+    for (const auto& [id, n] : s.footAmmo)
+      if (const int a = fc.ammoIndex(id); a >= 0) me.ammo[size_t(a)] = std::clamp(n, 0, fc.ammo[size_t(a)].maxReserve);
+    me.weapon = fc.weaponIndex(s.footWeapon);
+    if (me.weapon < 0 || !me.owned[size_t(me.weapon)]) {
+      me.weapon = 0;
+      for (size_t w = 0; w < me.owned.size(); ++w)
+        if (me.owned[w]) {
+          me.weapon = int(w);
+          break;
+        }
+    }
+  }
   return true;
 }
 

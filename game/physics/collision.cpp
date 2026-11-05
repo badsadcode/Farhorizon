@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace fh {
 
@@ -93,6 +94,11 @@ void TriangleCollider::build(const std::vector<MeshVertex>& vertices, const std:
     const Triangle t{vertices[indices[i]].position, vertices[indices[i + 1]].position, vertices[indices[i + 2]].position};
     if (length(cross(t.b - t.a, t.c - t.a)) < 1e-7f) continue;  // degenerate
     const auto id = std::uint32_t(triangles_.size());
+    if (triangles_.empty()) bounds_ = {t.a, t.a};
+    for (const Vec3& v : {t.a, t.b, t.c}) {
+      bounds_.min = {std::min(bounds_.min.x, v.x), std::min(bounds_.min.y, v.y), std::min(bounds_.min.z, v.z)};
+      bounds_.max = {std::max(bounds_.max.x, v.x), std::max(bounds_.max.y, v.y), std::max(bounds_.max.z, v.z)};
+    }
     triangles_.push_back(t);
     int lo[3], hi[3];
     for (int k = 0; k < 3; ++k) {
@@ -141,33 +147,65 @@ bool TriangleCollider::sphereVsTriangle(std::uint32_t triangle, const Vec3& cent
 }
 
 bool TriangleCollider::raycast(const Vec3& origin, const Vec3& direction, float maxDistance, float& outDistance) const {
+  if (triangles_.empty()) return false;
+  // Walk the grid cells the ray passes through, in order (3D DDA), testing each triangle once.
+  // Triangles span cells, so a hit found in one cell may lie further on: keep going until the next
+  // cell starts beyond the best hit.
+  thread_local std::vector<std::uint32_t> stamp;
+  thread_local std::uint32_t epoch = 0;
+  if (stamp.size() < triangles_.size()) stamp.assign(triangles_.size(), 0);
+  if (++epoch == 0) {
+    std::fill(stamp.begin(), stamp.end(), 0);
+    epoch = 1;
+  }
   float best = maxDistance;
   bool found = false;
-  std::vector<std::uint32_t> near;
-  std::unordered_set<std::uint32_t> tested;
-  // Walk along the ray a cell at a time, stopping once the best hit is behind us.
-  for (float along = 0; along <= best + cellSize_; along += cellSize_) {
-    near.clear();
-    nearby(origin + direction * along, cellSize_, near);
-    for (const std::uint32_t index : near) {
-      if (!tested.insert(index).second) continue;
-      const Triangle& tri = triangles_[index];
-      const Vec3 e1 = tri.b - tri.a, e2 = tri.c - tri.a;
-      const Vec3 p = cross(direction, e2);
-      const float det = dot(e1, p);
-      if (std::fabs(det) < 1e-9f) continue;
-      const Vec3 to = origin - tri.a;
-      const float u = dot(to, p) / det;
-      if (u < 0 || u > 1) continue;
-      const Vec3 q = cross(to, e1);
-      const float v = dot(direction, q) / det;
-      if (v < 0 || u + v > 1) continue;
-      const float t = dot(e2, q) / det;
-      if (t >= 0 && t <= best) {
-        best = t;
-        found = true;
+  int cell[3], step[3];
+  float tMax[3], tDelta[3];
+  for (int k = 0; k < 3; ++k) {
+    const float o = origin[k] / cellSize_;
+    cell[k] = int(std::floor(o));
+    const float d = direction[k];
+    if (std::fabs(d) < 1e-12f) {
+      step[k] = 0;
+      tMax[k] = tDelta[k] = std::numeric_limits<float>::max();
+    } else {
+      step[k] = d > 0 ? 1 : -1;
+      const float boundary = d > 0 ? float(cell[k] + 1) : float(cell[k]);
+      tMax[k] = (boundary - o) * cellSize_ / d;
+      tDelta[k] = cellSize_ / std::fabs(d);
+    }
+  }
+  float tEnter = 0;
+  for (int guard = 0; guard < 100000 && tEnter <= best; ++guard) {
+    const auto it = cells_.find(cellKey(cell[0], cell[1], cell[2]));
+    if (it != cells_.end()) {
+      for (const std::uint32_t index : it->second) {
+        if (stamp[index] == epoch) continue;
+        stamp[index] = epoch;
+        const Triangle& tri = triangles_[index];
+        const Vec3 e1 = tri.b - tri.a, e2 = tri.c - tri.a;
+        const Vec3 p = cross(direction, e2);
+        const float det = dot(e1, p);
+        if (std::fabs(det) < 1e-9f) continue;
+        const Vec3 to = origin - tri.a;
+        const float u = dot(to, p) / det;
+        if (u < 0 || u > 1) continue;
+        const Vec3 q = cross(to, e1);
+        const float v = dot(direction, q) / det;
+        if (v < 0 || u + v > 1) continue;
+        const float t = dot(e2, q) / det;
+        if (t >= 0 && t <= best) {
+          best = t;
+          found = true;
+        }
       }
     }
+    const int k = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2);
+    if (tMax[k] == std::numeric_limits<float>::max()) break;
+    tEnter = tMax[k];
+    cell[k] += step[k];
+    tMax[k] += tDelta[k];
   }
   if (found) outDistance = best;
   return found;

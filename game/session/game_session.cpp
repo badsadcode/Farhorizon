@@ -19,6 +19,7 @@ const char* locationName(Location l) {
 
 GameSession::GameSession(std::unique_ptr<SpaceWorld> world) : world_(std::move(world)) {
   baseShip_ = world_->player().def;
+  for (FootPlayer& p : footPlayers_) foot_.outfit(p);  // built-in loadout until setFootContent()
   world_->setShipDescriber([this](std::uint32_t id) { return combat_.describe(*world_, id); });
   lastCollisions_ = world_->player().collisions;
   // Locations for contracts: every dockable station and landing site.
@@ -157,6 +158,44 @@ bool GameSession::markerCleared(int marker) const {
   return clearedMarkers_.count(activeInteriorId_ + "#" + std::to_string(marker)) > 0;
 }
 
+void GameSession::setFootContent(const FootContent* content) {
+  foot_.configure(content);
+  for (FootPlayer& p : footPlayers_) foot_.outfit(p);
+}
+
+const NavGrid* GameSession::activeNav() const {
+  auto it = navs_.find(activeInteriorId_);
+  return it == navs_.end() ? nullptr : it->second.get();
+}
+
+void GameSession::cycleFootWeapon(int direction) {
+  FootPlayer& me = footPlayers_.front();
+  const int n = int(me.owned.size());
+  if (n == 0) return;
+  for (int k = 1; k <= n; ++k) {
+    const int w = ((me.weapon + direction * k) % n + n) % n;
+    if (me.owned[size_t(w)]) {
+      if (w != me.weapon) me.switchRequest = w;
+      return;
+    }
+  }
+}
+
+void GameSession::refitFoot() {
+  for (FootPlayer& p : footPlayers_) {
+    if (p.magazines.size() != foot_.content().weapons.size()) {
+      foot_.outfit(p);
+      continue;
+    }
+    p.health = 100;
+    p.reloadLeft = p.switchLeft = 0;
+    for (size_t w = 0; w < p.owned.size(); ++w)
+      if (p.owned[w]) p.magazines[w] = foot_.content().weapons[w].magazine;
+    for (const auto& [id, n] : foot_.content().startAmmo)
+      if (const int a = foot_.content().ammoIndex(id); a >= 0) p.ammo[size_t(a)] = std::max(p.ammo[size_t(a)], n);
+  }
+}
+
 void GameSession::beginFoot(const InteriorDef& def) {
   std::vector<FootSpawn> spawns;
   bool hostile = false;
@@ -164,18 +203,56 @@ void GameSession::beginFoot(const InteriorDef& def) {
     const InteriorMarker& m = def.markers[size_t(i)];
     if (m.type != "enemy_spawn") continue;
     hostile = true;
-    if (!markerCleared(i)) spawns.push_back({i, m.position, m.yawDeg});
+    if (!markerCleared(i)) spawns.push_back({i, m.position, m.yawDeg, m.kind});
   }
   footArmed_ = hostile;
   foot_.begin(spawns);
   footEvents_.clear();
-  if (!hostile) {
-    // Back somewhere safe: patched up, and the locker refills the gun.
-    for (FootPlayer& p : footPlayers_) {
-      p = FootPlayer{};
-      p.magazine = foot_.gun().magazine;
-      p.reserve = foot_.gun().startReserve;
+  if (hostile && def.meshCollider && !navs_.count(activeInteriorId_)) {
+    // Where enemies can walk: baked once per map, the first time it is entered.
+    auto nav = std::make_unique<NavGrid>();
+    if (nav->build(*def.meshCollider))
+      log::info("foot", "nav grid for '{}': {} cells, {} links", activeInteriorId_, nav->nodeCount(), nav->edgeCount());
+    navs_[activeInteriorId_] = std::move(nav);
+  }
+  rebuildDrops();
+  if (!hostile) refitFoot();  // back somewhere safe: patched up, and the locker refills the guns
+}
+
+void GameSession::rebuildDrops() {
+  drops_.clear();
+  const std::string prefix = activeInteriorId_ + "#drop";
+  for (const auto& [key, pos] : dropPositions_) {
+    if (key.rfind(prefix, 0) != 0 || clearedMarkers_.count(key)) continue;
+    const InteriorDef* def = activeInterior();
+    const int marker = std::atoi(key.c_str() + prefix.size());
+    std::string table;
+    if (def && marker >= 0 && marker < int(def->markers.size())) {
+      const int e = foot_.content().enemyIndex(def->markers[size_t(marker)].kind.empty() ? "crawler" : def->markers[size_t(marker)].kind);
+      if (e >= 0) table = foot_.content().enemies[size_t(e)].dropTable;
     }
+    if (!table.empty()) drops_.push_back({key, table, pos});
+  }
+}
+
+void GameSession::pickUpDrops() {
+  FootPlayer& me = footPlayers_.front();
+  for (size_t i = 0; i < drops_.size();) {
+    const FootDrop& d = drops_[i];
+    const Vec3 rel = d.position - character_.feet;
+    const LootTable* table = foot_.content().lootTable(d.table);
+    if (!table || length(Vec3{rel.x, 0, rel.z}) > 1.1f || std::fabs(rel.y) > 1.2f) {
+      ++i;
+      continue;
+    }
+    int credits = 0;
+    const std::string what = foot_.apply(me, rollLoot(*table, lootSeed(d.key + "#roll")), &credits);
+    credits_ += credits;
+    clearedMarkers_.insert(d.key);
+    dropPositions_.erase(d.key);
+    footEvents_.push_back({FootEvent::Type::Pickup, d.position});
+    notify("Picked up: " + what);
+    drops_.erase(drops_.begin() + std::ptrdiff_t(i));
   }
 }
 
@@ -187,11 +264,26 @@ void GameSession::stepFoot(float dt) {
   me.feet = character_.feet;
   me.eye = character_.eye(characterParams_);
   me.look = character_.lookDirection();
-  foot_.update(dt, footPlayers_, colliders_, def->meshCollider.get());
+  foot_.update(dt, footPlayers_, colliders_, def->meshCollider.get(), activeNav());
+  if (length(me.knock) > 0) {  // a charge sends you flying
+    character_.velocity += me.knock;
+    me.knock = {};
+  }
   for (const FootEvent& e : foot_.takeEvents()) {
     footEvents_.push_back(e);
-    if (e.type == FootEvent::Type::EnemyDied)
-      clearedMarkers_.insert(activeInteriorId_ + "#" + std::to_string(foot_.enemies()[size_t(e.enemy)].markerIndex));
+    if (e.type == FootEvent::Type::EnemyDied) {
+      const FootEnemy& dead = foot_.enemies()[size_t(e.enemy)];
+      const std::string key = activeInteriorId_ + "#" + std::to_string(dead.markerIndex);
+      clearedMarkers_.insert(key);
+      // A drop or not is decided by the map and marker, so a reload cannot reroll it.
+      const FootEnemyDef& d = foot_.enemyDef(dead);
+      const std::string dropKey = activeInteriorId_ + "#drop" + std::to_string(dead.markerIndex);
+      const float roll = float(lootSeed(dropKey) >> 40) / float(1u << 24);
+      if (!d.dropTable.empty() && roll < d.dropChance && foot_.content().lootTable(d.dropTable)) {
+        dropPositions_[dropKey] = dead.body.feet + Vec3{0, 0.02f, 0};
+        drops_.push_back({dropKey, d.dropTable, dropPositions_[dropKey]});
+      }
+    }
     if (e.type == FootEvent::Type::PlayerDown) {
       // For now you wake at the way in, hurt, and they lose interest. Nothing is taken from you.
       const auto spawn = def->spawns.count("start") ? def->spawns.find("start") : def->spawns.find("fromShip");
@@ -206,6 +298,7 @@ void GameSession::stepFoot(float dt) {
       notify("You black out. Your suit drags you back to the way in.");
     }
   }
+  pickUpDrops();
 }
 
 ActionResult GameSession::takeLoot(int marker) {
@@ -213,24 +306,37 @@ ActionResult GameSession::takeLoot(int marker) {
   if (!def || marker < 0 || marker >= int(def->markers.size())) return fail("Nothing to take");
   if (markerCleared(marker)) return fail("Already taken");
   const InteriorMarker& m = def->markers[size_t(marker)];
+  const LootTable* table = foot_.content().lootTable(m.kind.empty() ? "salvage" : m.kind);
+  if (!table) table = foot_.content().lootTable("salvage");
+  if (!table) return fail("Nothing useful");
   FootPlayer& me = footPlayers_.front();
-  std::string message;
-  if (m.kind == "medical") {
-    me.health = std::min(100.0f, me.health + 40.0f);
-    message = "Medical kit: patched up";
-  } else {
-    credits_ += 150;
-    me.reserve += 12;
-    message = "Salvage: 150 cr and 12 rivets";
-  }
-  clearedMarkers_.insert(activeInteriorId_ + "#" + std::to_string(marker));
+  const std::string key = activeInteriorId_ + "#" + std::to_string(marker);
+  const LootRoll roll = rollLoot(*table, lootSeed(key));
+  int credits = 0;
+  const std::string what = foot_.apply(me, roll, &credits);
+  credits_ += credits;
+  clearedMarkers_.insert(key);
   footEvents_.push_back({FootEvent::Type::Pickup, m.position});
+  if (!roll.weapon.empty()) footEvents_.push_back({FootEvent::Type::Unlocked, m.position, {}, 0, -1, me.switchRequest});
+  const std::string message = table->mesh == "medical" ? "Medical kit: " + what : "Took: " + what;
   notify(message);
   return {true, message};
 }
 
 ActionResult GameSession::enterMap(const AssetID& id) {
   return enterInterior(id, "start", Location::StationInterior);
+}
+
+std::string GameSession::promptFor(const Interactable& it) const {
+  if (it.action.rfind("loot:", 0) == 0)
+    if (const InteriorDef* def = activeInterior()) {
+      const int marker = std::atoi(it.action.c_str() + 5);
+      if (marker >= 0 && marker < int(def->markers.size())) {
+        const std::string& kind = def->markers[size_t(marker)].kind;
+        if (const LootTable* t = foot_.content().lootTable(kind.empty() ? "salvage" : kind)) return t->prompt;
+      }
+    }
+  return it.prompt;
 }
 
 const Interactable* GameSession::focusedInteractable() const {

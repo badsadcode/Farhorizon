@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0 — More guns, more things in the dark (2026-11-05)
+* **Two new weapons, found in tool caches.**
+  * The **flechette caster** throws a cone of nine darts. It is brutal up close and kicks hard.
+  * The **arc cutter** is a short beam that burns for as long as you hold the trigger and drains its cell.
+  * The rivet driver is still your starting gun. Keys **1 2 3** or the mouse wheel switch weapons. Each gun has its own magazine and
+    its own ammunition (rivets, flechettes, cell charge), shown on the HUD.
+* **Two new enemies.**
+  * The **spitter** keeps its distance, rears up and lobs a slow glowing glob. Step aside and it misses.
+    Get close and it backs away.
+  * The **brute** is slow and armoured. It lowers its head, then charges in a straight line and sends you
+    flying. Dodge the charge and it stands stunned for a moment, taking double damage.
+* **Enemies find their way to you now.** Each map bakes a walkable grid the first time you enter it
+  (stairs, ramps and catwalks included), and enemies follow paths around walls, through doors and up to
+  where you are instead of scraping along a wall and giving up. They also hear you running.
+* **Loot comes from loot tables:** salvage, medical kits, ammunition boxes and tool caches, each rolled once per map and
+  marker, so reloading cannot reroll it. Killed enemies sometimes drop ammunition or a medical patch. Walk over a drop
+  to take it. Drops stay where they fell, in saves too.
+* **Weapons, enemy types and loot are content files** (`content/foot/`), checked by the content validator. In
+  your own maps set an Enemy Spawn's `fh_kind` to `crawler`, `spitter` or `brute`, and a Loot entity's to
+  `salvage`, `medical`, `ammo`, `cache_flechette` or `cache_arc`.
+* **A test range** (`content/maps/test_range.glb`, built by `tools/blender/build_test_range.py`) has all three
+  enemy types and both caches. Play it with `--map content/maps/test_range.glb`.
+* New models (two guns, spitter, brute, cache, ammunition box) and 13 new sounds, all generated from scratch by
+  the scripts in `tools/`.
+* Map raycasts are much faster (grid traversal instead of sampling), which the navigation bake needed.
+* Saves move to version 5; version 4 saves still load (your rivet driver, magazine and rivets carry over).
+
 ## 0.9.0 — Something is still moving back there (2026-11-04)
 * **You can fight on foot.** In a map with enemies placed in it you carry a rivet driver: a fitter's tool, 12
   rivets to a magazine. Left mouse fires, R reloads, and an empty gun reloads itself.

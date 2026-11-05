@@ -41,6 +41,8 @@ add_library(fh_core STATIC
   game/fx/particles.cpp
   game/fx/light_selector.cpp
   game/foot/foot_combat.cpp
+  game/foot/foot_defs.cpp
+  game/foot/nav_grid.cpp
   game/content/ship_def.cpp
   game/content/scene_def.cpp
   game/content/visual_profile.cpp
@@ -156,6 +158,8 @@ if(FH_BUILD_TESTS)
     tests/unit/test_ui.cpp
     tests/unit/test_fx.cpp
     tests/unit/test_foot.cpp
+    tests/unit/test_nav.cpp
+    tests/unit/test_foot_arsenal.cpp
     tests/unit/test_map.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)

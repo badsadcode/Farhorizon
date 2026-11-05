@@ -112,6 +112,7 @@ class GameApp {
   int activeLook_ = 0;
   double lookShownUntil_ = 0;
   std::unique_ptr<ProgressionContent> progression_;  // outlives session_ (declared first)
+  std::unique_ptr<FootContent> footContent_;          // likewise
   std::unique_ptr<GameSession> session_;
   // Stage 6 presentation state.
   bool miningMode_ = false;        // weapon selector: false = guns, true = mining laser

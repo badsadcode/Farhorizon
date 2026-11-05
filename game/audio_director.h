@@ -19,6 +19,7 @@ struct AudioState {
   float engineDemand = 0; // 0..1 (cockpit, flying)
   float speedFraction = 0;
   bool beamActive = false;
+  bool arcActive = false;     // on foot: the arc cutter is firing
   bool inCockpit = true;
   bool engineActive = false;  // engine rumble audible (flying, travelling, landing)
 };
@@ -61,7 +62,7 @@ class AudioDirector {
   std::vector<VoiceId> beds_;
   double nextRandom_ = 5.0;
   double clock_ = 0;
-  VoiceId engine_ = kNoVoice, laser_ = kNoVoice;
+  VoiceId engine_ = kNoVoice, laser_ = kNoVoice, arc_ = kNoVoice;
   std::uint32_t rng_ = 0x1234567u;
   float baseGain_[4] = {0.8f, 0.9f, 0.7f, 0.6f};  // ambience, effects, engine, ui (from audio.json)
   float volume_[4] = {1, 1, 1, 1};

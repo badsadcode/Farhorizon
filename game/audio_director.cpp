@@ -173,6 +173,20 @@ void AudioDirector::update(const AudioState& st, float dt) {
       mixer_.setPitch(engine_, 0.75f + 0.25f * st.engineDemand + 0.15f * st.speedFraction);
     }
   }
+  auto arc = sounds_.find("arc_loop");
+  if (arc != sounds_.end()) {
+    if (st.arcActive && arc_ == kNoVoice) {
+      PlayParams p;
+      p.loop = true;
+      p.bus = arc->second.bus;
+      p.gain = arc->second.gain;
+      p.fadeIn = 0.05f;
+      arc_ = mixer_.play(arc->second.id, p);
+    } else if (!st.arcActive && arc_ != kNoVoice) {
+      mixer_.stop(arc_, 0.1f);
+      arc_ = kNoVoice;
+    }
+  }
   auto laser = sounds_.find("laser_loop");
   if (laser != sounds_.end()) {
     if (st.beamActive && laser_ == kNoVoice) {

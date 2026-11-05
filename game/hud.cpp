@@ -673,8 +673,26 @@ void footHud(Pen& p, OverlayBuilder& o, const InteriorHudContext& c) {
   o.rect(x, y, w, h, kMeterBack);
   o.rect(x, y, w * fraction, h, fraction < 0.3f ? kWarn : kPrimary);
   p.text(x, y - p.lineH(small) - p.s(2), "HEALTH", kDim, small);
-  const std::string rivets = me.reloading() ? std::string("RELOADING") : std::format("RIVETS  {} / {}", me.magazine, me.reserve);
-  p.text(x + w, y + h + p.s(4), rivets, me.magazine == 0 && !me.reloading() ? kWarn : kPrimary, small, TextAlign::Right);
+  // Weapon in hand and its ammo, then the owned weapons with their keys (the one in hand bright).
+  const FootCombat& f = s.foot();
+  const FootWeaponDef& gun = f.weapon(me);
+  const int mag = f.magazine(me), res = f.reserve(me);
+  const int ammo = f.content().ammoIndex(gun.ammo);
+  const std::string ammoName = ammo >= 0 ? f.content().ammo[size_t(ammo)].name : std::string();
+  std::string status;
+  if (me.switching()) status = gun.name;
+  else if (me.reloading()) status = "RELOADING";
+  else status = std::format("{}  {} / {}", ammoName, mag, res);
+  p.text(x + w, y + h + p.s(4), status, mag == 0 && !me.reloading() && !me.switching() ? kWarn : kPrimary, small,
+         TextAlign::Right);
+  float strip = y - p.lineH(small) * 2.4f;
+  for (int i = int(me.owned.size()) - 1; i >= 0; --i) {
+    if (!me.owned[size_t(i)]) continue;
+    const bool held = i == me.weapon;
+    const std::string label = std::format("{}  {}", i + 1, f.content().weapons[size_t(i)].name);
+    p.text(x + w, strip, label, held ? kPrimary : kDim, small, TextAlign::Right);
+    strip -= p.lineH(small) * 1.1f;
+  }
   // Hurt: the edges of the screen flare red. Knocked out: the screen comes back from black.
   if (c.hurtFlash > 0) {
     for (int band = 0; band < 8; ++band) {  // layered bands, so it fades towards the middle
@@ -702,7 +720,7 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
   if (s.footArmed()) footHud(p, o, c);
   if (const Interactable* it = s.focusedInteractable()) {
     o.circle(cx, cy, p.s(10), lineW, kNav, 16);
-    p.pill(cx, cy + p.s(24), "[" + keyName(c.bindings, "interact") + "]  " + it->prompt, kNav, p.body());
+    p.pill(cx, cy + p.s(24), "[" + keyName(c.bindings, "interact") + "]  " + s.promptFor(*it), kNav, p.body());
   }
   if (def) {
     const std::string where = def->kind == "surface" ? "SURFACE" : locationName(s.location());

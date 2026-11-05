@@ -1,0 +1,67 @@
+# The test range (--map content/maps/test_range.glb): take the two tool caches and the ammunition, then
+# fight with each weapon. A showcase and smoke test for 0.10; it takes screenshots rather than asserting
+# how the fight goes. Run from an empty folder.
+wait 30
+expect-screen none
+expect-enemies 5
+shot range01_armoury.png
+# The rack is within reach of the start: take all three things on it.
+key F
+wait 15
+key F
+wait 15
+key F
+wait 30
+shot range02_caches.png
+# The arc cutter came last into your hands; switch through all three.
+key 1
+wait 30
+key 2
+wait 30
+shot range03_flechette.png
+# Round the rack and forward to the crates. The flechette caster wakes them; finish them with whatever is
+# in hand.
+hold 70 A
+hold 240 W
+aim-at-enemy
+press-mouse
+wait 3
+shot range04_flechette_fire.png
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+release-mouse
+key 3
+wait 30
+aim-at-enemy
+press-mouse
+wait 10
+shot range05_arc.png
+aim-at-enemy
+wait 30
+aim-at-enemy
+wait 30
+aim-at-enemy
+wait 30
+release-mouse
+shot range06_after_crawlers.png
+# The spitters heard all that and come through the doorway. Hold still and watch the globs.
+wait 200
+shot range07_spitters.png
+key 1
+aim-at-enemy
+press-mouse
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+aim-at-enemy
+wait 40
+release-mouse
+wait 30
+shot range08_later.png
+quit

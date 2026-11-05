@@ -54,8 +54,8 @@ Each one shows as an icon with its name. They can be moved, rotated, duplicated 
 | **Terminal** | A station services terminal |
 | **Pilot Seat**, **Airlock** | For ship interiors |
 | **Reflection Probe** | Makes shiny surfaces in a room reflect that room. See [Shiny surfaces](#shiny-surfaces) |
-| **Enemy Spawn** | A crawler sleeps here, facing the way the entity faces. Any map with one gives the player a gun |
-| **Loot** | A pickup. Set `fh_kind` to `medical` for a medical kit. Anything else is salvage |
+| **Enemy Spawn** | An enemy sleeps here, facing the way the entity faces. Set `fh_kind` to `crawler` (default), `spitter` or `brute` (the types in `content/foot/enemies.json`). Any map with one gives the player their guns |
+| **Loot** | A pickup. `fh_kind` names a loot table from `content/foot/loot.json`: `salvage` (default), `medical`, `ammo`, `cache_flechette`, `cache_arc`. The validator rejects unknown names |
 
 **Prompt** is what the player sees, and **Reach** is how close they must be.
 

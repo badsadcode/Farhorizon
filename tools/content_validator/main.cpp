@@ -18,6 +18,7 @@
 #include "game/combat/weapon_def.h"
 #include "game/missions/contracts.h"
 #include "game/progression/upgrades.h"
+#include "game/foot/foot_defs.h"
 
 int main(int argc, char** argv) {
   if (argc == 3 && std::string(argv[1]) == "--map") {  // the Blender add-on checks its export here
@@ -80,7 +81,20 @@ int main(int argc, char** argv) {
       } else if (entry.type == "interior") {
         fh::loadInteriorDef(*manifest, id, &errors);
       } else if (entry.type == "map") {
-        fh::loadInteriorDef(*manifest, id, &errors);
+        // Markers must name enemy types and loot tables that exist.
+        if (auto def = fh::loadInteriorDef(*manifest, id, &errors)) {
+          std::vector<std::string> ignore;
+          if (auto foot = fh::loadFootContent(*manifest, &ignore))
+            for (const auto& m : def->markers) {
+              const std::string kind = m.kind.empty() ? (m.type == "loot" ? "salvage" : "crawler") : m.kind;
+              if (m.type == "enemy_spawn" && foot->enemyIndex(kind) < 0)
+                errors.push_back("map '" + id + "': enemy spawn '" + m.name + "' names unknown enemy '" + kind + "'");
+              if (m.type == "loot" && !foot->lootTable(kind))
+                errors.push_back("map '" + id + "': loot '" + m.name + "' names unknown loot table '" + kind + "'");
+            }
+        }
+      } else if (entry.type == "foot_weapons") {
+        fh::loadFootContent(*manifest, &errors);  // all three foot files, cross-checked
       } else if (entry.type == "visuals") {
         fh::loadVisualProfiles(*manifest, id, &errors);
       } else if (entry.type == "benchmark") {

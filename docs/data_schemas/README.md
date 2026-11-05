@@ -21,6 +21,7 @@ build/content_validator content
 | Audio | `content/audio/audio.json` | [audio.md](audio.md) |
 | Maps from Blender | `content/maps/*.glb` | [../BLENDER_GUIDE.md](../BLENDER_GUIDE.md) |
 | UI theme | `content/ui/theme.json` | [ui_theme.md](ui_theme.md) |
+| On-foot weapons, enemies, loot | `content/foot/` | [foot.md](foot.md) |
 | Weapons, upgrades, contracts | `content/combat/`, `content/economy/upgrades.json`, `content/missions/` | [combat.md](combat.md) |
 
 Conventions: metres, seconds, tons, degrees in data (radians only in code), linear RGB for

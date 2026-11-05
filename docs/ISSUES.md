@@ -59,7 +59,13 @@
 | 55 | open | render | Emissive surfaces are approximated by point lights, so light has no true panel shape, and a light offset from a flat panel can look slightly off up close. Nothing is emitted in reflections beyond the surface itself. |
 | 56 | fixed (0.8.3) | render | Lights were chosen nearest-first per frame, so a room with more than 8 popped as you walked. Now 16 slots, chosen by contribution, with hysteresis and fades (`LightSelector`). |
 | 58 | open | render | In the test derelict the corridor floor is much darker with lamp shadows on than off, though a plain test hall with 12 lamps lights its floor properly with them on. Not understood yet. The owner's map hides it with its big emissive panels. |
-| 59 | open | foot | Crawlers go straight at you and slide along walls. There is no pathfinding, so a long detour loses them. Maps need a navigation mesh once they get more complicated. |
-| 60 | open | foot | Weapons, enemy stats and loot amounts are constants in code, not content files. There is one of each so far. |
+| 59 | fixed (0.10) | foot | Enemies follow paths from a navigation grid baked per map (ADR 0013). |
+| 60 | fixed (0.10) | foot | Weapons, enemy types and loot tables are content files (`content/foot/`). |
 | 61 | open | foot | Crawlers walk through each other, and the gun can cast a sun shadow. Lamps ignore it. |
 | 57 | open | render | Every lamp's shadow cube is redrawn each frame, 96 faces at most. Cheap on today's small maps, about 1.5 ms a frame on an RTX 3080. A big map will need static lamps' cubes cached. |
+| 62 | open | foot | Enemies still walk through each other, and the navigation grid does not know about them, so a pack in a doorway jostles. |
+| 63 | open | foot | The navigation grid treats every surface with headroom as floor, including tops of crates and pipes. It is walkable in principle, but enemies cannot jump, so a path may ask for a step they slide off. |
+| 64 | open | foot | Spitter globs do not lead their target, by design, so a player walking in a straight line is easy to hit and one who strafes almost never is. Tune with playtests. |
+| 65 | open | foot | The brute is one sphere for hits; there are no weak spots or armour plates yet. |
+| 66 | open | foot | The test range uses plain untextured materials; it is a test map, not a showcase. |
+| 67 | open | foot | The new UI scripts run slowly on the software renderer CI uses, so `test_range.txt` is a manual showcase and is not run in CI. |

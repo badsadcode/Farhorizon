@@ -39,6 +39,7 @@ class TriangleCollider {
   void build(const std::vector<MeshVertex>& vertices, const std::vector<std::uint32_t>& indices, float cellSize = 2.0f);
   bool empty() const { return triangles_.empty(); }
   std::size_t triangleCount() const { return triangles_.size(); }
+  const Aabb& bounds() const { return bounds_; }  // of every triangle (valid when not empty)
   // Triangles that might touch the sphere, each once.
   void nearby(const Vec3& centre, float radius, std::vector<std::uint32_t>& out) const;
   bool sphereVsTriangle(std::uint32_t triangle, const Vec3& centre, float radius, Contact& out) const;
@@ -53,6 +54,7 @@ class TriangleCollider {
   std::vector<Triangle> triangles_;
   std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> cells_;
   float cellSize_ = 2.0f;
+  Aabb bounds_{};
 };
 
 // Rotates an axis-aligned box by a multiple of 90 degrees about +Y (interior pieces).

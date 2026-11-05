@@ -354,6 +354,116 @@ def pickup():
     return normalize(latch + tone * 0.35 * np.exp(-tt * 8), 0.6)
 
 
+def flechette_shot():
+    # A heavy pneumatic slam with a hiss of darts leaving together.
+    tt = t(0.55)
+    slam = np.sin(2 * np.pi * (70 * np.exp(-tt * 9) + 35) * tt) * np.exp(-tt * 10)
+    hiss = highpass(rng.standard_normal(len(tt)), 1800) * np.exp(-tt * 18) * 0.9
+    crack = lowpass_fast(rng.standard_normal(len(tt)), 3000) * np.exp(-tt * 60)
+    return normalize(slam + hiss + crack, 0.85)
+
+
+def flechette_reload():
+    tt = t(0.9)
+    out = np.zeros(len(tt))
+    for at, f in ((0.05, 900), (0.35, 600), (0.62, 1200)):  # drum click, rattle, lock
+        i = int(at * SR)
+        seg = t(0.12)
+        click = (np.sin(2 * np.pi * f * seg) + 0.6 * rng.standard_normal(len(seg))) * np.exp(-seg * 50)
+        out[i:i + len(seg)] += click[:len(out) - i]
+    return normalize(out, 0.6)
+
+
+def arc_start():
+    # Capacitor whine climbing into a crack as the arc strikes.
+    tt = t(0.35)
+    f = 300 + 2500 * (tt / 0.35) ** 2
+    whine = np.sin(2 * np.pi * np.cumsum(f) / SR) * 0.4
+    crack = highpass(rng.standard_normal(len(tt)), 2000) * (tt > 0.27) * np.exp(-(tt - 0.27) * 40)
+    return normalize(whine * env(len(tt), 0.02, 0.05) + crack, 0.6)
+
+
+def arc_loop():
+    # Buzzing, crackling arc: mains-like hum, a fizzing top end and random snaps. Loops.
+    tt = t(3.0)
+    hum = np.sign(np.sin(2 * np.pi * 110 * tt)) * 0.25 + np.sin(2 * np.pi * 220 * tt + 0.4) * 0.2
+    fizz = highpass(rng.standard_normal(len(tt)), 3500) * (0.5 + 0.5 * np.sin(2 * np.pi * 7 * tt) ** 2) * 0.5
+    snaps = highpass((rng.random(len(tt)) < 0.004) * rng.uniform(-1, 1, len(tt)), 1500) * 3
+    return normalize(loopable(lowpass_fast(hum, 2500) + fizz + snaps), 0.5)
+
+
+def arc_reload():
+    tt = t(1.1)
+    clunk = np.sin(2 * np.pi * 95 * tt) * np.exp(-tt * 14)
+    f = 200 + 1600 * np.clip((tt - 0.3) / 0.7, 0, 1)
+    charge = np.sin(2 * np.pi * np.cumsum(f) / SR) * (tt > 0.3) * 0.3
+    return normalize(clunk + charge * env(len(tt), 0.0, 0.1), 0.6)
+
+
+def arc_hit():
+    tt = t(0.18)
+    return normalize(highpass(rng.standard_normal(len(tt)), 2500) * np.exp(-tt * 30), 0.5)
+
+
+def spitter_wake():
+    # A wet, rising rattle from somewhere in the dark.
+    tt = t(0.9)
+    f = 140 + 200 * tt
+    rattle = np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.5 + 0.5 * np.sign(np.sin(2 * np.pi * 26 * tt)))
+    wet = lowpass_fast(rng.standard_normal(len(tt)), 900) * 0.6
+    return normalize((rattle * 0.6 + wet) * env(len(tt), 0.05, 0.3), 0.6)
+
+
+def spitter_spit():
+    tt = t(0.4)
+    gulp = np.sin(2 * np.pi * (220 * np.exp(-tt * 6) + 80) * tt) * np.exp(-tt * 9)
+    splat = lowpass_fast(rng.standard_normal(len(tt)), 1400) * np.exp(-tt * 14) * 0.8
+    return normalize(gulp + splat, 0.65)
+
+
+def spitter_die():
+    tt = t(1.2)
+    f = 260 * np.exp(-tt * 1.6) + 60
+    gurgle = np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.6 + 0.4 * np.sin(2 * np.pi * 18 * tt))
+    burst = lowpass_fast(rng.standard_normal(len(tt)), 700) * np.exp(-tt * 5)
+    return normalize((gurgle * 0.6 + burst) * env(len(tt), 0.01, 0.4), 0.7)
+
+
+def glob_hit():
+    tt = t(0.45)
+    sizzle = highpass(rng.standard_normal(len(tt)), 2200) * np.exp(-tt * 6) * 0.6
+    splat = lowpass_fast(rng.standard_normal(len(tt)), 600) * np.exp(-tt * 25)
+    return normalize(sizzle + splat, 0.6)
+
+
+def brute_roar():
+    # A low, grinding bellow: detuned saws through a growl filter.
+    tt = t(1.6)
+    f = 55 + 15 * np.sin(2 * np.pi * 1.5 * tt)
+    saw = sum(((tt * f * k) % 1.0 - 0.5) / k for k in (1, 1.01, 2.02))
+    growl = lowpass_fast(saw, 600) * (0.7 + 0.3 * np.sin(2 * np.pi * 31 * tt))
+    rasp = lowpass_fast(highpass(rng.standard_normal(len(tt)), 300), 1500) * 0.35
+    return normalize((growl + rasp) * env(len(tt), 0.12, 0.5), 0.85)
+
+
+def brute_hit():
+    tt = t(0.35)
+    thud = np.sin(2 * np.pi * 75 * tt) * np.exp(-tt * 18)
+    plate = sum(a * np.sin(2 * np.pi * f * tt) * np.exp(-tt * d) for f, a, d in ((340, 0.4, 20), (810, 0.2, 30)))
+    return normalize(thud + plate, 0.75)
+
+
+def brute_die():
+    tt = t(2.2)
+    f = 70 * np.exp(-tt * 0.8) + 25
+    groan = lowpass_fast(np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.3 * rng.standard_normal(len(tt)), 400)
+    fall = np.zeros(len(tt))
+    i = int(1.4 * SR)
+    seg = t(0.8)
+    fall[i:i + len(seg)] = (np.sin(2 * np.pi * 48 * seg) * np.exp(-seg * 7))[:len(fall) - i]
+    return normalize(groan * env(len(tt), 0.05, 0.6) + fall * 1.2, 0.85)
+
+
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -389,6 +499,10 @@ def main(out):
     write(out / "crawler_die.wav", crawler_die())
     write(out / "player_hurt.wav", player_hurt())
     write(out / "pickup.wav", pickup())
+    # 0.10 (appended so earlier files keep their random streams).
+    for name in ("flechette_shot", "flechette_reload", "arc_start", "arc_loop", "arc_reload", "arc_hit", "spitter_wake",
+                 "spitter_spit", "spitter_die", "glob_hit", "brute_roar", "brute_hit", "brute_die"):
+        write(out / (name + ".wav"), globals()[name]())
 
 
 if __name__ == "__main__":

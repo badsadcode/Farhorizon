@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "_comment": "On-foot weapons and ammo (docs/data_schemas/foot.md). Damage: per hit (auto), per pellet (pellets), per second (beam).",
+  "ammo": [
+    { "id": "ammo.rivets",     "name": "RIVETS",      "maxReserve": 180 },
+    { "id": "ammo.flechettes", "name": "FLECHETTES",  "maxReserve": 48 },
+    { "id": "ammo.cells",      "name": "CELL CHARGE", "maxReserve": 400 }
+  ],
+  "weapons": [
+    {
+      "id": "weapon.rivet_driver", "name": "RIVET DRIVER", "mode": "auto", "ammo": "ammo.rivets",
+      "damage": 18, "fireInterval": 0.24, "reloadSeconds": 1.6, "magazine": 12, "range": 60, "noiseRadius": 22,
+      "knockback": 0.6,
+      "mesh": "mesh.foot.rivet_driver", "muzzle": [0, 0.085, -0.33], "tracerColor": [7.0, 4.6, 1.8],
+      "sounds": { "fire": "rivet_shot", "reload": "rivet_reload", "dry": "rivet_dry", "hit": "rivet_hit" }
+    },
+    {
+      "id": "weapon.flechette_caster", "name": "FLECHETTE CASTER", "mode": "pellets", "ammo": "ammo.flechettes",
+      "damage": 8, "pellets": 9, "spreadDeg": 6.5, "fireInterval": 0.85, "reloadSeconds": 2.2, "magazine": 6,
+      "range": 28, "noiseRadius": 30, "knockback": 3.5,
+      "mesh": "mesh.foot.flechette_caster", "muzzle": [0, 0.08, -0.40], "tracerColor": [5.0, 4.8, 4.2],
+      "sounds": { "fire": "flechette_shot", "reload": "flechette_reload", "dry": "rivet_dry", "hit": "rivet_hit" }
+    },
+    {
+      "id": "weapon.arc_cutter", "name": "ARC CUTTER", "mode": "beam", "ammo": "ammo.cells",
+      "damage": 58, "ammoPerSecond": 18, "reloadSeconds": 2.6, "magazine": 100, "range": 7.5, "noiseRadius": 10,
+      "knockback": 0,
+      "mesh": "mesh.foot.arc_cutter", "muzzle": [0, 0.07, -0.36], "tracerColor": [2.2, 3.8, 7.5],
+      "sounds": { "fire": "arc_start", "reload": "arc_reload", "dry": "rivet_dry", "hit": "arc_hit" }
+    }
+  ],
+  "start": {
+    "weapons": ["weapon.rivet_driver"],
+    "ammo": { "ammo.rivets": 36 }
+  }
+}

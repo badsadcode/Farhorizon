@@ -12,7 +12,7 @@ expect-magazine-below 12
 key R
 wait 110
 shot foot02_corridor.png
-# Down the corridor and through the door.
+# Down the corridor and through the door. Enemies now path round the crates, so keep re-aiming.
 hold 620 W
 wait 5
 aim-at-enemy
@@ -23,32 +23,58 @@ aim-at-enemy
 wait 20
 shot foot04_firing.png
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
 shot foot05_fight.png
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
 aim-at-enemy
-wait 40
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
+aim-at-enemy
+wait 20
 release-mouse
 wait 20
 expect-enemies 0

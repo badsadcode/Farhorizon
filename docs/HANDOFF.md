@@ -28,9 +28,9 @@ milestone. How to add one is in the comment at the top of its styles.
 ## Next steps
 **See `docs/ROADMAP.md` for the agreed order.** UI (0.7.0, ADR 0010) and lighting (0.7.1, ADR 0011) are
 done in code and waiting for the owner's playtest. Feedback may send work back there. Next is
-**points of interest**: The Ash Wren can be flown to, explored and fought through (0.9.0, `game/foot/`). Next is what the owner says after playing it, then more weapons and enemies. The Blender editor
+**points of interest**: The Ash Wren can be flown to, explored and fought through (0.9.0, `game/foot/`). 0.10 added two weapons, two enemy types, pathfinding and loot tables as content (ADR 0013); try them with `--map content/maps/test_range.glb`. Next is what the owner says after playing them. The owner also wants to **rename the game** (another game is called Far Horizon); the new name is still undecided. The Blender editor
 itself is done (0.8.0, ADR 0012, `docs/BLENDER_GUIDE.md`). Rebuild the sample with
-`blender -b --factory-startup --python tools/blender/build_sample_derelict.py`.
+`blender -b --factory-startup --python tools/blender/build_sample_derelict.py` (and the test range with `tools/blender/build_test_range.py`). Without Blender installed, `pip install bpy` gives a Python with the same API (`python tools/blender/build_test_range.py`).
 
 The owner's constraint: **all content original.** Atmosphere inspired by 70s/80s lonely
 "used future" sci-fi, but never copy assets, names or designs from existing works.

@@ -12,7 +12,8 @@ status lives in `STATUS.md`._
    * A scale reference (1.8 m player, doorway) and an artist guide: `docs/BLENDER_GUIDE.md`.
 3. **Points of interest and FPS gameplay.** Docking with a derelict and exploring it works (0.8.2). A first
    fight works too (0.9.0): a gun, one enemy, loot, and a simulation that already takes a list of players.
-   Still to do: more weapons and enemies, real pathfinding, and loot tables as content files.
+   More weapons and enemies, real pathfinding and loot tables as content files are done (0.10, ADR 0013).
+   Next: the owner's playtest of the new fights; enemies avoiding each other; weak spots and armour.
 4. **Co-op, 1-4 players.**
    1. Multi-player simulation: separate players from the world; separate ship reference frames;
       tested headless with simulated players.

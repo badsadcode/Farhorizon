@@ -52,7 +52,7 @@ FootPlayer playerAt(Vec3 feet, Vec3 look = {0, 0, -1}) {
 
 // Aims from the eye at the middle of the first enemy.
 void aimAt(FootPlayer& p, const FootEnemy& e, const FootCombat& f) {
-  p.look = normalize(e.body.feet + Vec3{0, f.crawler().hitCentreHeight, 0} - p.eye);
+  p.look = normalize(e.body.feet + Vec3{0, f.content().enemies[0].hitCentreHeight, 0} - p.eye);
 }
 
 int countEvents(const std::vector<FootEvent>& events, FootEvent::Type t) {
@@ -90,20 +90,21 @@ TEST(foot_gun_fires_at_its_rate_and_empties_into_a_reload) {
   CHECK(shots >= 4 && shots <= 5);  // about one every 0.24 s
   for (int i = 0; i < 60 * 3; ++i) f.update(kDt, players, {}, &c);
   CHECK(players[0].reloading());  // twelve gone, and it reloads by itself
-  CHECK(players[0].magazine == 0);
+  CHECK(f.magazine(players[0]) == 0);
   players[0].trigger = false;
   for (int i = 0; i < 60 * 2; ++i) f.update(kDt, players, {}, &c);
   CHECK(!players[0].reloading());
-  CHECK(players[0].magazine == f.gun().magazine);
-  CHECK(players[0].reserve == f.gun().startReserve - f.gun().magazine);
+  CHECK(f.magazine(players[0]) == f.content().weapons[0].magazine);
+  CHECK(f.reserve(players[0]) == f.content().startAmmo.at("ammo.rivets") - f.content().weapons[0].magazine);
 }
 
 TEST(foot_gun_with_nothing_left_clicks) {
   FootCombat f;
   f.begin({});
   std::vector<FootPlayer> players{playerAt({0, 0, 0})};
-  players[0].magazine = 0;
-  players[0].reserve = 0;
+  f.outfit(players[0]);
+  players[0].magazines[0] = 0;
+  players[0].ammo[0] = 0;
   players[0].trigger = true;
   f.update(kDt, players, {}, nullptr);
   const auto events = f.takeEvents();
@@ -118,7 +119,7 @@ TEST(foot_reload_is_only_taken_when_it_would_do_something) {
   players[0].reloadRequest = true;
   f.update(kDt, players, {}, nullptr);
   CHECK(!players[0].reloading());  // already full
-  players[0].magazine = 3;
+  players[0].magazines[0] = 3;
   players[0].reloadRequest = true;
   f.update(kDt, players, {}, nullptr);
   CHECK(players[0].reloading());
@@ -132,7 +133,7 @@ TEST(foot_shots_stop_at_walls_and_kill_what_they_reach) {
   aimAt(players[0], f.enemies()[0], f);
   players[0].trigger = true;
   f.update(kDt, players, {}, &walled);
-  CHECK(f.enemies()[0].health == f.crawler().health);  // the wall took it
+  CHECK(f.enemies()[0].health == f.content().enemies[0].health);  // the wall took it
 
   FootCombat open;
   open.begin({{0, {0, 0, -8}, 0}});
@@ -218,8 +219,8 @@ TEST(foot_two_players_each_have_their_own_gun) {
   std::vector<FootPlayer> players{playerAt({0, 0, 0}), playerAt({2, 0, 0})};
   players[1].trigger = true;
   f.update(kDt, players, {}, nullptr);
-  CHECK(players[0].magazine == f.gun().magazine);
-  CHECK(players[1].magazine == f.gun().magazine - 1);
+  CHECK(f.magazine(players[0]) == f.content().weapons[0].magazine);
+  CHECK(f.magazine(players[1]) == f.content().weapons[0].magazine - 1);
   const auto events = f.takeEvents();
   CHECK(events.size() >= 1);
   CHECK(events[0].player == 1);
@@ -235,7 +236,7 @@ TEST(foot_return_home_restores_the_living_and_leaves_the_dead) {
   f.returnHome();
   CHECK(f.enemies()[0].state == CrawlerState::Dead);
   CHECK(f.enemies()[1].state == CrawlerState::Asleep);
-  CHECK(f.enemies()[1].health == f.crawler().health);
+  CHECK(f.enemies()[1].health == f.content().enemies[0].health);
   CHECK(length(f.enemies()[1].body.feet - Vec3{5, 0, -3}) < 0.01f);
 }
 
@@ -311,10 +312,10 @@ TEST(derelict_fight_loot_stays_taken_and_pays_once) {
   CHECK(salvage >= 0);
   const std::string action = "loot:" + std::to_string(salvage);
   const auto credits = s->credits();
-  const int reserve = s->footPlayers().front().reserve;
+  const int reserve = s->foot().reserve(s->footPlayers().front());
   CHECK(s->perform(action).ok);
   CHECK(s->credits() == credits + 150);
-  CHECK(s->footPlayers().front().reserve == reserve + 12);
+  CHECK(s->foot().reserve(s->footPlayers().front()) == reserve + 12);
   CHECK(!s->perform(action).ok);
   CHECK(s->credits() == credits + 150);
 
@@ -378,7 +379,7 @@ TEST(derelict_the_dead_stay_dead_when_you_come_back_and_in_saves) {
   CHECK(parsed.has_value());
   if (parsed) {
     CHECK(parsed->clearedMarkers.size() == 1);
-    CHECK(parsed->footMagazine < 12);
+    CHECK(parsed->footMagazines.at("weapon.rivet_driver") < 12);
   }
 }
 
@@ -394,12 +395,12 @@ TEST(derelict_a_safe_place_refills_you) {
   s->addInterior("map.safe", std::move(safe->def));
   s->enterMap("map.test");
   s->footPlayers().front().health = 20;
-  s->footPlayers().front().magazine = 1;
-  s->footPlayers().front().reserve = 0;
+  s->footPlayers().front().magazines[0] = 1;
+  s->footPlayers().front().ammo[0] = 0;
   CHECK(s->enterMap("map.safe").ok);
   CHECK(!s->footArmed());
   CHECK(s->foot().aliveCount() == 0);
   CHECK(s->footPlayers().front().health == 100.0f);
-  CHECK(s->footPlayers().front().magazine == s->foot().gun().magazine);
-  CHECK(s->footPlayers().front().reserve == s->foot().gun().startReserve);
+  CHECK(s->foot().magazine(s->footPlayers().front()) == s->foot().content().weapons[0].magazine);
+  CHECK(s->foot().reserve(s->footPlayers().front()) == s->foot().content().startAmmo.at("ammo.rivets"));
 }

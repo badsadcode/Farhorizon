@@ -495,6 +495,10 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     if (!m) return false;
     npcMeshes.emplace(nid, std::move(*m));
   }
+  // 0.10: on-foot weapons, enemy types and loot tables.
+  auto footContent = loadFootContent(*manifest, &errors);
+  if (!footContent) return false;
+  auto newFootContent = std::make_unique<FootContent>(std::move(*footContent));
   for (auto& w : errors) log::warn("content", "{}", w);  // only non-fatal warnings remain here
 
   // ---- Commit. Hot reload and save loading share one path: snapshot -> rebuild -> apply. ----
@@ -539,17 +543,26 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
     t.meshFix = m.meshFix;
     if (def.collisionRadius <= 0) t.radius = m.data.boundsRadius() * def.meshScale;
   });
-  auto footMesh = [&](const char* id, std::uint32_t& handle) {
+  newSession->setFootContent(newFootContent.get());
+  auto footMesh = [&](const std::string& id, std::uint32_t& handle) {
     auto m = loadMesh(id, {}, "fighting on foot", 1.0f, {0, 0, 0}, false, false);
     if (!m) return false;
     handle = renderer_->uploadMesh(m->data);
     return true;
   };
-  if (!footMesh("mesh.foot.rivet_driver", footMeshes_.gun) || !footMesh("mesh.foot.crawler_body", footMeshes_.crawlerBody) ||
-      !footMesh("mesh.foot.crawler_dead", footMeshes_.crawlerDead) ||
-      !footMesh("mesh.foot.crawler_leg", footMeshes_.crawlerLeg) || !footMesh("mesh.foot.loot_salvage", footMeshes_.lootSalvage) ||
-      !footMesh("mesh.foot.loot_medical", footMeshes_.lootMedical))
-    return false;
+  footMeshes_ = FootMeshes{};
+  for (const FootWeaponDef& w : newFootContent->weapons) {
+    std::uint32_t h = 0;
+    if (!footMesh(w.mesh, h)) return false;
+    footMeshes_.guns.push_back(h);
+  }
+  for (const char* visual : {"crawler", "spitter", "brute"}) {
+    FootEnemyMeshes& m = footMeshes_.enemies[visual];
+    const std::string base = std::string("mesh.foot.") + visual;
+    if (!footMesh(base + "_body", m.body) || !footMesh(base + "_dead", m.dead) || !footMesh(base + "_leg", m.leg)) return false;
+  }
+  for (const char* loot : {"salvage", "medical", "cache", "ammo"})
+    if (!footMesh(std::string("mesh.foot.loot_") + loot, footMeshes_.loot[loot])) return false;
   interiorPieces_.clear();
   for (auto& [iid, def] : interiors) {
     std::map<std::string, std::uint32_t> handles;
@@ -595,6 +608,7 @@ bool GameApp::loadContent(std::vector<std::string>& errors) {
   scene_ = std::move(*scene);
   session_ = std::move(newSession);   // the old session dies before the old content below
   progression_ = std::move(newProgression);
+  footContent_ = std::move(newFootContent);
   lastDockState_ = session_->docking().state();
   if (firstLoad) {
     camera_.configureDev(scene_.camera.fovDeg, scene_.camera.orbitDistance, scene_.camera.yawDeg,
@@ -769,6 +783,7 @@ void GameApp::updateAudio(float dt, float engineDemand, float speedFraction) {
     st.speedFraction = 0.4f + ld.heat();
   }
   st.beamActive = session_->mining().beamActive();
+  st.arcActive = session_->footArmed() && session_->footPlayers().front().beamActive;
   audio_.update(st, dt);
 }
 
@@ -916,22 +931,41 @@ void GameApp::handleAppInput() {
 }
 
 void GameApp::playFootSounds(const std::vector<FootEvent>& events, const Vec3& listener, const Quat& facing) {
+  const FootCombat& f = session_->foot();
+  auto weaponOf = [&](const FootEvent& e) -> const FootWeaponDef& {
+    return f.content().weapons[size_t(std::clamp(e.weapon, 0, int(f.content().weapons.size()) - 1))];
+  };
+  auto enemyOf = [&](const FootEvent& e) -> const FootEnemyDef* {
+    return e.enemy >= 0 && e.enemy < int(f.enemies().size()) ? &f.enemyDef(f.enemies()[size_t(e.enemy)]) : nullptr;
+  };
+  int shots = 0;
   for (const FootEvent& e : events) {
     const Vec3 rel = e.position - listener;
     const float dist = length(rel);
     const float pan = dist > 0.5f ? std::clamp(dot(rel / dist, facing.right()) * 0.8f, -0.8f, 0.8f) : 0.0f;
     const float near = std::clamp(1.0f - dist / 28.0f, 0.05f, 1.0f);
+    const FootEnemyDef* enemy = enemyOf(e);
     switch (e.type) {
-      case FootEvent::Type::Shot: audio_.event("rivet_shot", 1.0f, 0.96f + 0.08f * float(frameCount_ % 5) / 4.0f); break;
-      case FootEvent::Type::Dry: audio_.event("rivet_dry"); break;
-      case FootEvent::Type::ReloadStart: audio_.event("rivet_reload"); break;
-      case FootEvent::Type::HitWall: audio_.event("rivet_hit", near * 0.8f, 1.0f, pan); break;
-      case FootEvent::Type::HitEnemy: audio_.event("crawler_hit", 1.0f, 1.0f, pan); break;
-      case FootEvent::Type::EnemyWoke: audio_.event("crawler_wake", near, 1.0f, pan); break;
-      case FootEvent::Type::EnemyLunged: audio_.event("crawler_wake", near, 1.3f, pan); break;
-      case FootEvent::Type::EnemyDied: audio_.event("crawler_die", near, 1.0f, pan); break;
-      case FootEvent::Type::PlayerHurt: audio_.event("player_hurt"); break;
+      case FootEvent::Type::Shot:
+        if (++shots == 1)  // a cone of pellets is one bang
+          audio_.event(weaponOf(e).soundFire, 1.0f, 0.96f + 0.08f * float(frameCount_ % 5) / 4.0f);
+        break;
+      case FootEvent::Type::BeamStart: audio_.event(weaponOf(e).soundFire); break;
+      case FootEvent::Type::Dry: audio_.event(weaponOf(e).soundDry); break;
+      case FootEvent::Type::ReloadStart: audio_.event(weaponOf(e).soundReload); break;
+      case FootEvent::Type::WeaponSwitched: audio_.event("rivet_reload", 0.5f, 1.4f); break;
+      case FootEvent::Type::HitWall: audio_.event(weaponOf(e).soundHit, near * 0.8f, 1.0f, pan); break;
+      case FootEvent::Type::HitEnemy: if (enemy) audio_.event(enemy->soundHit, 1.0f, 1.0f, pan); break;
+      case FootEvent::Type::EnemyWoke: if (enemy) audio_.event(enemy->soundWake, near, 1.0f, pan); break;
+      case FootEvent::Type::EnemyLunged: if (enemy) audio_.event(enemy->soundAttack, near, 1.3f, pan); break;
+      case FootEvent::Type::EnemyFired: audio_.event("spitter_spit", near, 1.0f, pan); break;
+      case FootEvent::Type::ProjectileHit: audio_.event("glob_hit", near, 1.0f, pan); break;
+      case FootEvent::Type::EnemyCharged: if (enemy) audio_.event(enemy->soundAttack, std::min(1.0f, near * 1.4f), 0.8f, pan); break;
+      case FootEvent::Type::EnemyStunned: audio_.event("impact", near, 0.7f, pan); break;
+      case FootEvent::Type::EnemyDied: if (enemy) audio_.event(enemy->soundDie, near, 1.0f, pan); break;
+      case FootEvent::Type::PlayerHurt: if (e.player == 0) audio_.event("player_hurt"); break;
       case FootEvent::Type::Pickup: audio_.event("pickup"); break;
+      case FootEvent::Type::Unlocked: audio_.event("pickup", 1.0f, 0.8f); break;
       default: break;
     }
   }
@@ -946,6 +980,14 @@ void GameApp::handleFootInput(float /*dt*/) {
   ci.run = input_.down("foot.run");
   if (input_.pressed("foot.jump")) ci.jump = true;
   if (input_.pressed("foot.reload")) session_->requestFootReload();
+  // Running is loud: enemies nearby hear where you are, through walls.
+  session_->setFootNoisy(ci.run && (ci.move.x != 0 || ci.move.y != 0));
+  if (session_->footArmed()) {
+    for (int k = 0; k < 3; ++k)
+      if (input_.pressed(std::format("foot.weapon{}", k + 1))) session_->selectFootWeapon(k);
+    if (input_.wheel() > 0.5f) session_->cycleFootWeapon(-1);
+    if (input_.wheel() < -0.5f) session_->cycleFootWeapon(1);
+  }
   if (input_.pressed("foot.lamp") && session_->footArmed()) {
     footView_.toggleSuitLamp();
     audio_.event("ui", 0.5f, 0.8f);
@@ -1092,14 +1134,14 @@ int GameApp::run() {
                       [this] { quit_ = true; },
                       [this] { return session_->foot().aliveCount(); },
                       [this] { return session_->footPlayers().front().health; },
-                      [this] { return session_->footPlayers().front().magazine; },
+                      [this] { return session_->foot().magazine(session_->footPlayers().front()); },
                       [this] {  // test driver only: look straight at the nearest living enemy
                         CharacterState& c = session_->character();
                         const Vec3 eye = c.eye(session_->characterParams());
                         float best = 1e9f;
                         for (const FootEnemy& e : session_->foot().enemies()) {
-                          if (e.state == CrawlerState::Dead) continue;
-                          const Vec3 to = e.body.feet + Vec3{0, 0.42f, 0} - eye;
+                          if (e.state == EnemyState::Dead) continue;
+                          const Vec3 to = e.body.feet + Vec3{0, session_->foot().enemyDef(e).hitCentreHeight, 0} - eye;
                           if (length(to) >= best) continue;
                           best = length(to);
                           c.yaw = std::atan2(to.x, -to.z);
@@ -1654,7 +1696,7 @@ int GameApp::run() {
           const float k = l.intensityAt(t) * a.strength;
           if (k > 0) params.pointLights.push_back({l.position - view.position, l.range, l.color * (k * l.intensity)});
         }
-        if (!surface) footView_.addLights(*session_, view.rotation, params.pointLights);
+        if (!surface) footView_.addLights(*session_, view.rotation, view.position, params.pointLights);
       }
     }
 

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Loot tables (docs/data_schemas/foot.md). A map's loot marker names one with fh_kind (\"salvage\" = loot.salvage). One weighted entry is rolled per pickup, deterministically per map and marker.",
+  "tables": [
+    { "id": "loot.salvage", "mesh": "salvage", "prompt": "Take the salvage",
+      "entries": [
+        { "weight": 3, "credits": [100, 200], "ammo": { "ammo.rivets": [8, 16] } },
+        { "weight": 1, "credits": [250, 420] },
+        { "weight": 1, "credits": [60, 120], "ammo": { "ammo.flechettes": [4, 8], "ammo.cells": [40, 60] } }
+      ] },
+    { "id": "loot.medical", "mesh": "medical", "prompt": "Take the medical kit",
+      "entries": [ { "weight": 1, "heal": 40 } ] },
+    { "id": "loot.ammo", "mesh": "ammo", "prompt": "Take the ammunition",
+      "entries": [
+        { "weight": 2, "ammo": { "ammo.rivets": [18, 30] } },
+        { "weight": 1, "ammo": { "ammo.flechettes": [8, 14] } },
+        { "weight": 1, "ammo": { "ammo.cells": [80, 120] } }
+      ] },
+    { "id": "loot.cache_flechette", "mesh": "cache", "prompt": "Open the tool cache",
+      "entries": [ { "weight": 1, "weapon": "weapon.flechette_caster", "ammo": { "ammo.flechettes": [12, 12] } } ] },
+    { "id": "loot.cache_arc", "mesh": "cache", "prompt": "Open the tool cache",
+      "entries": [ { "weight": 1, "weapon": "weapon.arc_cutter", "ammo": { "ammo.cells": [100, 100] } } ] },
+    { "id": "loot.drop_small", "mesh": "ammo", "prompt": "Take it",
+      "entries": [
+        { "weight": 3, "ammo": { "ammo.rivets": [4, 9] } },
+        { "weight": 1, "ammo": { "ammo.flechettes": [2, 4] } },
+        { "weight": 1, "ammo": { "ammo.cells": [20, 35] } },
+        { "weight": 1, "heal": 12 }
+      ] },
+    { "id": "loot.drop_large", "mesh": "ammo", "prompt": "Take it",
+      "entries": [
+        { "weight": 1, "credits": [150, 300], "ammo": { "ammo.rivets": [12, 20], "ammo.flechettes": [4, 8] } },
+        { "weight": 1, "credits": [100, 200], "heal": 30, "ammo": { "ammo.cells": [50, 80] } }
+      ] }
+  ]
+}

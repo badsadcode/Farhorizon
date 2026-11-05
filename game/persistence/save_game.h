@@ -16,7 +16,7 @@ namespace fh {
 class GameSession;
 
 struct SaveGame {
-  static constexpr int kSchemaVersion = 4;  // v2: landing sites, v3: combat/upgrades/contracts, v4: fights on foot (migrated)
+  static constexpr int kSchemaVersion = 5;  // v2 landing, v3 combat/contracts, v4 fights on foot, v5 foot weapons (migrated)
   int schemaVersion = kSchemaVersion;
   std::string sceneId;
   double worldTime = 0;
@@ -39,7 +39,12 @@ struct SaveGame {
   // v4: fights on foot.
   std::vector<std::string> clearedMarkers;
   float footHealth = 100;
-  int footMagazine = 12, footReserve = 36;
+  // v5: on-foot loadout by content id, and loot dropped by enemies that is still lying around.
+  std::vector<std::string> footWeapons{"weapon.rivet_driver"};
+  std::string footWeapon = "weapon.rivet_driver";
+  std::map<std::string, int> footMagazines{{"weapon.rivet_driver", 12}};
+  std::map<std::string, int> footAmmo{{"ammo.rivets", 36}};
+  std::map<std::string, DVec3> footDrops;  // "<scene>#drop<marker>" -> position in that map
   struct ContractState {
     std::string key, templateId, kind, title, description, issuer, destination, commodity, faction;
     int units = 0, killsRequired = 0, kills = 0;
