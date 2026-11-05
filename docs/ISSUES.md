@@ -69,3 +69,4 @@
 | 65 | open | foot | The brute is one sphere for hits; there are no weak spots or armour plates yet. |
 | 66 | open | foot | The test range uses plain untextured materials; it is a test map, not a showcase. |
 | 67 | open | foot | The new UI scripts run slowly on the software renderer CI uses, so `test_range.txt` is a manual showcase and is not run in CI. |
+| 68 | open | render | On the software renderer (llvmpipe) a few single frames come out washed out, with the whole room brightly lit (seen during a flechette volley and a brute's charge in the test range). The owner's GPU screenshots of the same kind of scene are dark and correct. Unconfirmed on a real GPU: watch for it. |
