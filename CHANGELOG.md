@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.0 — Room for a crew (2026-11-05)
+Groundwork for co-op (roadmap step 4.1). Nothing changes when you play alone, which is the point.
+* **The game now tracks up to four players in one session.** Each has their own body, health, guns,
+  ammunition and wallet, and can be somewhere different: one in the cockpit, one walking the ship, one
+  out in a derelict.
+* **Each place runs on its own.** A derelict with someone in it has its own enemies and fight; two
+  people in the same place share it. A place nobody is in sleeps, and what was killed there stays dead.
+* **Crew rules.** The first to sit down takes the helm; others ride as passengers. The pilot can only
+  undock or launch when everyone is seated.
+* **Personal wallets, shared hold.** Whoever pays for cargo pays from their own wallet, and it goes into the
+  ship's one hold. Loot you pick up is yours. Crew who leave keep their money for when they come back,
+  in saves too (save version 6; older saves load as before).
+* **Simulated players** drive crew members in tests, with no window or network: four of them walking and
+  fighting through a map for 40 seconds must come out identical twice. ADR 0014 has the details.
+
 ## 0.10.1 — Low-spec mode (2026-11-05)
 * **Low spec mode** (Options > Graphics, or `--low-spec` on the command line) turns off shadows, ambient
   occlusion, reflections and volumetric clouds, shades at most 6 lamps, and renders the 3D scene at half

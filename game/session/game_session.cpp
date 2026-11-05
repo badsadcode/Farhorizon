@@ -19,7 +19,12 @@ const char* locationName(Location l) {
 
 GameSession::GameSession(std::unique_ptr<SpaceWorld> world) : world_(std::move(world)) {
   baseShip_ = world_->player().def;
-  for (FootPlayer& p : footPlayers_) foot_.outfit(p);  // built-in loadout until setFootContent()
+  CrewMember me;
+  me.id = 0;
+  me.name = "Pilot";
+  players_.push_back(me);
+  footPlayers_.resize(1);
+  for (FootPlayer& p : footPlayers_) idleFoot_.outfit(p);  // built-in loadout until setFootContent()
   world_->setShipDescriber([this](std::uint32_t id) { return combat_.describe(*world_, id); });
   lastCollisions_ = world_->player().collisions;
   // Locations for contracts: every dockable station and landing site.
@@ -30,45 +35,217 @@ GameSession::GameSession(std::unique_ptr<SpaceWorld> world) : world_(std::move(w
     for (const auto& site : pl.def.sites) locations_.push_back({site.id, site.name});
 }
 
-const InteriorDef* GameSession::activeInterior() const {
-  if (location_ == Location::Cockpit) return nullptr;
-  auto it = interiors_.find(activeInteriorId_);
-  return it == interiors_.end() ? nullptr : &it->second;
+// ---- Crew --------------------------------------------------------------------------------------
+
+int GameSession::slotOf(PlayerId id) const {
+  for (size_t i = 0; i < players_.size(); ++i)
+    if (players_[i].id == id) return int(i);
+  return -1;
 }
 
-ActionResult GameSession::fail(const std::string& msg) {
-  notice_ = msg;
-  noticeTime_ = world_->simulationTime();
-  log::info("session", "{}", msg);
+int GameSession::pilotSlot() const {
+  for (size_t i = 0; i < players_.size(); ++i)
+    if (players_[i].location == Location::Cockpit && players_[i].pilot) return int(i);
+  return -1;
+}
+
+CrewMember* GameSession::player(PlayerId id) {
+  const int s = slotOf(id);
+  return s < 0 ? nullptr : &players_[size_t(s)];
+}
+
+const CrewMember* GameSession::player(PlayerId id) const {
+  const int s = slotOf(id);
+  return s < 0 ? nullptr : &players_[size_t(s)];
+}
+
+FootPlayer* GameSession::footPlayer(PlayerId id) {
+  const int s = slotOf(id);
+  return s < 0 ? nullptr : &footPlayers_[size_t(s)];
+}
+
+PlayerId GameSession::addPlayer(const std::string& name) {
+  if (int(players_.size()) >= kMaxPlayers) return 0;
+  CrewMember m;
+  m.id = nextPlayerId_++;
+  m.name = name.empty() ? std::format("Crew {}", m.id) : name;
+  m.location = Location::Cockpit;
+  m.pilot = pilotSlot() < 0;  // the helm, if nobody has it
+  if (auto w = crewWallets_.find(m.name); w != crewWallets_.end()) m.credits = w->second;  // welcome back
+  players_.push_back(m);
+  FootPlayer f;
+  idleFoot_.outfit(f);
+  footPlayers_.push_back(f);
+  log::info("crew", "{} joined ({} aboard)", players_.back().name, players_.size());
+  return m.id;
+}
+
+bool GameSession::removePlayer(PlayerId id) {
+  const int s = slotOf(id);
+  if (s <= 0) return false;  // unknown, or this machine's player
+  leavePlace(s);
+  log::info("crew", "{} left", players_[size_t(s)].name);
+  crewWallets_[players_[size_t(s)].name] = players_[size_t(s)].credits;  // kept for when they come back
+  players_.erase(players_.begin() + s);
+  footPlayers_.erase(footPlayers_.begin() + s);
+  return true;
+}
+
+std::map<std::string, std::int64_t> GameSession::allCrewWallets() const {
+  auto all = crewWallets_;
+  for (size_t i = 1; i < players_.size(); ++i) all[players_[i].name] = players_[i].credits;
+  return all;
+}
+
+bool GameSession::crewAboard() const {
+  return std::all_of(players_.begin(), players_.end(), [](const CrewMember& m) { return m.location == Location::Cockpit; });
+}
+
+void GameSession::notifyPlayer(PlayerId who, const std::string& text) {
+  if (CrewMember* m = player(who)) {
+    m->notice = text;
+    m->noticeTime = world_->simulationTime();
+  }
+}
+
+ActionResult GameSession::failFor(int slot, const std::string& msg) {
+  CrewMember& m = players_[size_t(slot)];
+  m.notice = msg;
+  m.noticeTime = world_->simulationTime();
+  log::info("session", "{}{}", slot == 0 ? "" : m.name + ": ", msg);
   return {false, msg};
 }
 
-ActionResult GameSession::enterInterior(const AssetID& id, const std::string& spawn, Location loc) {
+ActionResult GameSession::undock(PlayerId by) {
+  const int s = slotOf(by);
+  if (s < 0) return {false, "No such player"};
+  if (players_[size_t(s)].location != Location::Cockpit || !players_[size_t(s)].pilot)
+    return failFor(s, "Only the pilot can undock");
+  if (!crewAboard()) return failFor(s, "Crew not aboard: everyone must be seated before the clamps let go");
+  if (!docking_.undock(*world_)) return failFor(s, docking_.message());
+  return {true, docking_.message()};
+}
+
+// ---- Places ------------------------------------------------------------------------------------
+
+GameSession::Instance* GameSession::instanceOf(int slot) {
+  const CrewMember& m = players_[size_t(slot)];
+  if (m.location == Location::Cockpit) return nullptr;
+  auto it = instances_.find(m.interior);
+  return it == instances_.end() ? nullptr : &it->second;
+}
+
+const GameSession::Instance* GameSession::instanceOf(int slot) const {
+  const CrewMember& m = players_[size_t(slot)];
+  if (m.location == Location::Cockpit) return nullptr;
+  auto it = instances_.find(m.interior);
+  return it == instances_.end() ? nullptr : &it->second;
+}
+
+const InteriorDef* GameSession::interiorOf(PlayerId who) const {
+  const int s = slotOf(who);
+  if (s < 0 || players_[size_t(s)].location == Location::Cockpit) return nullptr;
+  auto it = interiors_.find(players_[size_t(s)].interior);
+  return it == interiors_.end() ? nullptr : &it->second;
+}
+
+const AssetID& GameSession::activeInteriorId() const {
+  static const AssetID kNone;
+  return players_.front().location == Location::Cockpit ? kNone : players_.front().interior;
+}
+
+const std::vector<Aabb>& GameSession::activeColliders() const {
+  static const std::vector<Aabb> kNone;
+  const Instance* in = instanceOf(0);
+  return in ? in->colliders : kNone;
+}
+
+const HeightField& GameSession::activeTerrain() const {
+  static const HeightField kNone;
+  const Instance* in = instanceOf(0);
+  return in ? in->terrain : kNone;
+}
+
+const FootCombat* GameSession::footCombatAt(const AssetID& interior) const {
+  auto it = instances_.find(interior);
+  return it == instances_.end() ? nullptr : &it->second.foot;
+}
+
+bool GameSession::footArmed() const {
+  const Instance* in = instanceOf(0);
+  return in && in->armed;
+}
+
+const FootCombat& GameSession::foot() const {
+  const Instance* in = instanceOf(0);
+  return in ? in->foot : idleFoot_;
+}
+
+FootCombat& GameSession::foot() {
+  Instance* in = instanceOf(0);
+  return in ? in->foot : idleFoot_;
+}
+
+const std::vector<GameSession::FootDrop>& GameSession::footDrops() const {
+  static const std::vector<FootDrop> kNone;
+  const Instance* in = instanceOf(0);
+  return in ? in->drops : kNone;
+}
+
+void GameSession::leavePlace(int slot) {
+  CrewMember& m = players_[size_t(slot)];
+  if (m.location == Location::Cockpit) return;
+  const AssetID was = m.interior;
+  m.location = Location::Cockpit;  // provisional: callers set where they actually went
+  m.interior.clear();
+  footPlayers_[size_t(slot)].trigger = false;
+  footPlayers_[size_t(slot)].beamActive = false;
+  const bool empty = std::none_of(players_.begin(), players_.end(),
+                                  [&](const CrewMember& o) { return o.location != Location::Cockpit && o.interior == was; });
+  if (empty) instances_.erase(was);  // nobody left: the place sleeps; the dead stay dead (clearedMarkers_)
+}
+
+ActionResult GameSession::enterInterior(int slot, const AssetID& id, const std::string& spawn, Location loc) {
   auto it = interiors_.find(id);
-  if (it == interiors_.end()) return fail("Interior '" + id + "' is not loaded");
+  if (it == interiors_.end()) return failFor(slot, "Interior '" + id + "' is not loaded");
   auto sp = it->second.spawns.find(spawn);
-  if (sp == it->second.spawns.end()) return fail("Interior '" + id + "' has no spawn '" + spawn + "'");
-  activeInteriorId_ = id;
-  colliders_ = it->second.buildColliders();
-  if (it->second.parkedShip) {
-    // The parked ship blocks walking: a box around its footprint.
-    const auto& ps = *it->second.parkedShip;
-    const Vec3 h = it->second.parkedShipColliderHalfExtents;
-    if (h.x > 0 && h.y > 0 && h.z > 0) colliders_.push_back({ps.position - h, ps.position + h});
+  if (sp == it->second.spawns.end()) return failFor(slot, "Interior '" + id + "' has no spawn '" + spawn + "'");
+  leavePlace(slot);
+  const InteriorDef& def = it->second;
+  auto [found, created] = instances_.try_emplace(id);
+  Instance& in = found->second;
+  if (created) {
+    in.colliders = def.buildColliders();
+    if (def.parkedShip) {
+      // The parked ship blocks walking: a box around its footprint.
+      const auto& ps = *def.parkedShip;
+      const Vec3 h = def.parkedShipColliderHalfExtents;
+      if (h.x > 0 && h.y > 0 && h.z > 0) in.colliders.push_back({ps.position - h, ps.position + h});
+    }
+    in.gravity = def.gravity;
+    in.terrain = def.terrain ? HeightField(*def.terrain) : HeightField{};
+    beginInstance(id, in, def);
   }
-  characterParams_.gravity = it->second.gravity;
-  terrain_ = it->second.terrain ? HeightField(*it->second.terrain) : HeightField{};
-  character_ = CharacterState{};
-  character_.feet = sp->second.position;
-  if (terrain_.valid())
-    character_.feet.y = std::max(character_.feet.y, terrain_.heightAt(character_.feet.x, character_.feet.z));
-  character_.yaw = radians(sp->second.yawDeg);
-  location_ = loc;
-  beginFoot(it->second);
-  notice_ = it->second.name;
-  noticeTime_ = world_->simulationTime();
-  log::info("session", "entered {} ({})", it->second.name, locationName(loc));
-  return {true, it->second.name};
+  CrewMember& m = players_[size_t(slot)];
+  m.character = CharacterState{};
+  // Several people at one spawn stand side by side rather than inside each other.
+  int already = 0;
+  for (size_t i = 0; i < players_.size(); ++i)
+    if (int(i) != slot && players_[i].location != Location::Cockpit && players_[i].interior == id) ++already;
+  const float yaw = radians(sp->second.yawDeg);
+  const Vec3 right{std::cos(yaw), 0, std::sin(yaw)};
+  m.character.feet = sp->second.position + right * (0.8f * float((already + 1) / 2) * (already % 2 ? 1.0f : -1.0f));
+  if (in.terrain.valid()) m.character.feet.y = std::max(m.character.feet.y, in.terrain.heightAt(m.character.feet.x, m.character.feet.z));
+  m.character.yaw = yaw;
+  m.location = loc;
+  m.pilot = false;
+  m.interior = id;
+  m.footEvents.clear();
+  if (!in.armed) refitFoot(slot);  // somewhere safe: patched up, and the locker refills the guns
+  m.notice = def.name;
+  m.noticeTime = world_->simulationTime();
+  log::info("session", "{}entered {} ({})", slot == 0 ? "" : m.name + " ", def.name, locationName(loc));
+  return {true, def.name};
 }
 
 const AssetID* GameSession::surfaceSceneId() const {
@@ -91,80 +268,96 @@ bool GameSession::engageTravel() {
 }
 
 bool GameSession::requestLanding() {
-  if (location_ != Location::Cockpit || !freeFlight()) return fail("Cannot begin a landing right now").ok;
+  if (location() != Location::Cockpit || !freeFlight()) return fail("Cannot begin a landing right now").ok;
   return landing_.request(*world_);
 }
 
 bool GameSession::launch() {
-  if (location_ != Location::Cockpit) return fail("Take the pilot seat to launch").ok;
+  if (location() != Location::Cockpit) return fail("Take the pilot seat to launch").ok;
+  if (!players_.front().pilot) return fail("Only the pilot can launch").ok;
+  if (!crewAboard()) return fail("Crew not aboard: everyone must be seated before lift-off").ok;
   return landing_.launch(*world_);
 }
 
-ActionResult GameSession::leaveSeat() {
-  if (location_ != Location::Cockpit) return fail("You are not in the pilot seat");
-  if (!parked()) return fail("Leaving the seat is only safe while docked or landed");
-  if (shipInterior_.empty()) return fail("This ship has no walkable interior");
-  return enterInterior(shipInterior_, "seat", Location::ShipInterior);
+ActionResult GameSession::leaveSeat(PlayerId who) {
+  const int s = slotOf(who);
+  if (s < 0) return {false, "No such player"};
+  if (players_[size_t(s)].location != Location::Cockpit) return failFor(s, "You are not in a seat");
+  if (!parked()) return failFor(s, "Leaving the seat is only safe while docked or landed");
+  if (shipInterior_.empty()) return failFor(s, "This ship has no walkable interior");
+  return enterInterior(s, shipInterior_, "seat", Location::ShipInterior);
 }
 
-ActionResult GameSession::perform(const std::string& action) {
-  if (action.rfind("say:", 0) == 0) {  // a data log in a map
-    notify(action.substr(4));
-    return {true, notice_};
-  }
-  if (action.rfind("loot:", 0) == 0) return takeLoot(std::atoi(action.c_str() + 5));
+ActionResult GameSession::enterMap(PlayerId who, const AssetID& id) {
+  const int s = slotOf(who);
+  if (s < 0) return {false, "No such player"};
+  return enterInterior(s, id, "start", Location::StationInterior);
+}
+
+ActionResult GameSession::perform(PlayerId who, const std::string& action) {
+  const int s = slotOf(who);
+  if (s < 0) return {false, "No such player"};
+  CrewMember& m = players_[size_t(s)];
+  auto told = [&](const std::string& text) {
+    m.notice = text;
+    m.noticeTime = world_->simulationTime();
+    return ActionResult{true, text};
+  };
+  if (action.rfind("say:", 0) == 0) return told(action.substr(4));  // a data log in a map
+  if (action.rfind("loot:", 0) == 0) return takeLoot(s, std::atoi(action.c_str() + 5));
   if (action == "leaveMap") {
     if (docking_.state() == DockState::Docked && docking_.station()) {
       const auto& dock = world_->props().at(*docking_.station()).def.docking;
-      if (dock && dock->interior == activeInteriorId_) return enterInterior(shipInterior_, "airlock", Location::ShipInterior);
+      if (dock && dock->interior == m.interior) return enterInterior(s, shipInterior_, "airlock", Location::ShipInterior);
     }
-    mapExitRequested_ = true;  // played straight from Blender: nothing to go back to
+    m.mapExitRequested = true;  // played straight from Blender: nothing to go back to
     return {true, ""};
   }
   if (action == "takeSeat") {
-    if (location_ != Location::ShipInterior) return fail("The pilot seat is aboard your ship");
-    location_ = Location::Cockpit;
-    activeInteriorId_.clear();
-    colliders_.clear();
-    notice_ = "Pilot seat. L to undock when ready.";
-    noticeTime_ = world_->simulationTime();
-    return {true, notice_};
+    if (m.location != Location::ShipInterior) return failFor(s, "The pilot seat is aboard your ship");
+    leavePlace(s);
+    m.location = Location::Cockpit;
+    m.pilot = pilotSlot() < 0;
+    return told(m.pilot ? "Pilot seat. L to undock when ready." : "Passenger seat. The pilot has the helm.");
   }
   if (action == "exitShip") {
-    if (location_ != Location::ShipInterior) return fail("You are not aboard");
+    if (m.location != Location::ShipInterior) return failFor(s, "You are not aboard");
     if (landing_.state() == LandState::Landed) {
-      if (const AssetID* id = surfaceSceneId()) return enterInterior(*id, "fromShip", Location::StationInterior);
+      if (const AssetID* id = surfaceSceneId()) return enterInterior(s, *id, "fromShip", Location::StationInterior);
     }
-    if (docking_.state() != DockState::Docked) return fail("Airlock sealed: the ship is not docked");
+    if (docking_.state() != DockState::Docked) return failFor(s, "Airlock sealed: the ship is not docked");
     const auto station = docking_.station();
     const auto& dock = world_->props().at(*station).def.docking;
-    if (!dock) return fail("This station has no walkable interior");
-    return enterInterior(dock->interior, "fromShip", Location::StationInterior);
+    if (!dock) return failFor(s, "This station has no walkable interior");
+    return enterInterior(s, dock->interior, "fromShip", Location::StationInterior);
   }
   if (action == "boardShip") {
-    if (location_ != Location::StationInterior) return fail("Your ship is not here");
-    return enterInterior(shipInterior_, "airlock", Location::ShipInterior);
+    if (m.location != Location::StationInterior) return failFor(s, "Your ship is not here");
+    return enterInterior(s, shipInterior_, "airlock", Location::ShipInterior);
   }
   if (action == "terminal") {
     if (!dockedMarket() && !hasService("contracts") && !hasService("repair"))
-      return fail("Terminal offline: nothing on this terminal");
-    marketRequested_ = true;
+      return failFor(s, "Terminal offline: nothing on this terminal");
+    m.marketRequested = true;
     return {true, "Market terminal"};
   }
-  return fail("Unknown action '" + action + "'");
+  return failFor(s, "Unknown action '" + action + "'");
 }
 
-bool GameSession::markerCleared(int marker) const {
-  return clearedMarkers_.count(activeInteriorId_ + "#" + std::to_string(marker)) > 0;
+bool GameSession::markerCleared(const AssetID& interior, int marker) const {
+  return clearedMarkers_.count(interior + "#" + std::to_string(marker)) > 0;
 }
 
 void GameSession::setFootContent(const FootContent* content) {
-  foot_.configure(content);
-  for (FootPlayer& p : footPlayers_) foot_.outfit(p);
+  idleFoot_.configure(content);
+  for (auto& [id, in] : instances_) in.foot.configure(content);
+  for (FootPlayer& p : footPlayers_) idleFoot_.outfit(p);
 }
 
-const NavGrid* GameSession::activeNav() const {
-  auto it = navs_.find(activeInteriorId_);
+const NavGrid* GameSession::activeNav() const { return navAt(activeInteriorId()); }
+
+const NavGrid* GameSession::navAt(const AssetID& interior) const {
+  auto it = navs_.find(interior);
   return it == navs_.end() ? nullptr : it->second.get();
 }
 
@@ -181,150 +374,200 @@ void GameSession::cycleFootWeapon(int direction) {
   }
 }
 
-void GameSession::refitFoot() {
-  for (FootPlayer& p : footPlayers_) {
-    if (p.magazines.size() != foot_.content().weapons.size()) {
-      foot_.outfit(p);
-      continue;
-    }
-    p.health = 100;
-    p.reloadLeft = p.switchLeft = 0;
-    for (size_t w = 0; w < p.owned.size(); ++w)
-      if (p.owned[w]) p.magazines[w] = foot_.content().weapons[w].magazine;
-    for (const auto& [id, n] : foot_.content().startAmmo)
-      if (const int a = foot_.content().ammoIndex(id); a >= 0) p.ammo[size_t(a)] = std::max(p.ammo[size_t(a)], n);
+void GameSession::refitFoot(int slot) {
+  FootPlayer& p = footPlayers_[size_t(slot)];
+  const FootContent& c = idleFoot_.content();
+  if (p.magazines.size() != c.weapons.size()) {
+    idleFoot_.outfit(p);
+    return;
   }
+  p.health = 100;
+  p.reloadLeft = p.switchLeft = 0;
+  for (size_t w = 0; w < p.owned.size(); ++w)
+    if (p.owned[w]) p.magazines[w] = c.weapons[w].magazine;
+  for (const auto& [id, n] : c.startAmmo)
+    if (const int a = c.ammoIndex(id); a >= 0) p.ammo[size_t(a)] = std::max(p.ammo[size_t(a)], n);
 }
 
-void GameSession::beginFoot(const InteriorDef& def) {
+void GameSession::beginInstance(const AssetID& id, Instance& in, const InteriorDef& def) {
+  in.foot.configure(&idleFoot_.content());
   std::vector<FootSpawn> spawns;
-  bool hostile = false;
   for (int i = 0; i < int(def.markers.size()); ++i) {
-    const InteriorMarker& m = def.markers[size_t(i)];
-    if (m.type != "enemy_spawn") continue;
-    hostile = true;
-    if (!markerCleared(i)) spawns.push_back({i, m.position, m.yawDeg, m.kind});
+    const InteriorMarker& mk = def.markers[size_t(i)];
+    if (mk.type != "enemy_spawn") continue;
+    in.armed = true;
+    if (!markerCleared(id, i)) spawns.push_back({i, mk.position, mk.yawDeg, mk.kind});
   }
-  footArmed_ = hostile;
-  foot_.begin(spawns);
-  footEvents_.clear();
-  if (hostile && def.meshCollider && !navs_.count(activeInteriorId_)) {
-    // Where enemies can walk: baked once per map, the first time it is entered.
+  in.foot.begin(spawns);
+  if (in.armed && def.meshCollider && !navs_.count(id)) {
+    // Where enemies can walk: baked once per map, the first time anyone enters it.
     auto nav = std::make_unique<NavGrid>();
     if (nav->build(*def.meshCollider))
-      log::info("foot", "nav grid for '{}': {} cells, {} links", activeInteriorId_, nav->nodeCount(), nav->edgeCount());
-    navs_[activeInteriorId_] = std::move(nav);
+      log::info("foot", "nav grid for '{}': {} cells, {} links", id, nav->nodeCount(), nav->edgeCount());
+    navs_[id] = std::move(nav);
   }
-  rebuildDrops();
-  if (!hostile) refitFoot();  // back somewhere safe: patched up, and the locker refills the guns
+  rebuildDrops(id, in);
 }
 
-void GameSession::rebuildDrops() {
-  drops_.clear();
-  const std::string prefix = activeInteriorId_ + "#drop";
+void GameSession::rebuildDrops(const AssetID& id, Instance& in) {
+  in.drops.clear();
+  const std::string prefix = id + "#drop";
+  auto defIt = interiors_.find(id);
+  const InteriorDef* def = defIt == interiors_.end() ? nullptr : &defIt->second;
   for (const auto& [key, pos] : dropPositions_) {
     if (key.rfind(prefix, 0) != 0 || clearedMarkers_.count(key)) continue;
-    const InteriorDef* def = activeInterior();
     const int marker = std::atoi(key.c_str() + prefix.size());
     std::string table;
     if (def && marker >= 0 && marker < int(def->markers.size())) {
-      const int e = foot_.content().enemyIndex(def->markers[size_t(marker)].kind.empty() ? "crawler" : def->markers[size_t(marker)].kind);
-      if (e >= 0) table = foot_.content().enemies[size_t(e)].dropTable;
+      const std::string& kind = def->markers[size_t(marker)].kind;
+      const int e = in.foot.content().enemyIndex(kind.empty() ? "crawler" : kind);
+      if (e >= 0) table = in.foot.content().enemies[size_t(e)].dropTable;
     }
-    if (!table.empty()) drops_.push_back({key, table, pos});
+    if (!table.empty()) in.drops.push_back({key, table, pos});
   }
 }
 
-void GameSession::pickUpDrops() {
-  FootPlayer& me = footPlayers_.front();
-  for (size_t i = 0; i < drops_.size();) {
-    const FootDrop& d = drops_[i];
-    const Vec3 rel = d.position - character_.feet;
-    const LootTable* table = foot_.content().lootTable(d.table);
-    if (!table || length(Vec3{rel.x, 0, rel.z}) > 1.1f || std::fabs(rel.y) > 1.2f) {
+void GameSession::pickUpDrops(const AssetID& id, Instance& in) {
+  (void)id;
+  for (size_t i = 0; i < in.drops.size();) {
+    const FootDrop& d = in.drops[i];
+    const LootTable* table = in.foot.content().lootTable(d.table);
+    int taker = -1;
+    for (size_t s = 0; s < players_.size() && taker < 0 && table; ++s) {
+      if (players_[s].location == Location::Cockpit || players_[s].interior != id) continue;
+      const Vec3 rel = d.position - players_[s].character.feet;
+      if (length(Vec3{rel.x, 0, rel.z}) <= 1.1f && std::fabs(rel.y) <= 1.2f) taker = int(s);
+    }
+    if (taker < 0) {
       ++i;
       continue;
     }
     int credits = 0;
-    const std::string what = foot_.apply(me, rollLoot(*table, lootSeed(d.key + "#roll")), &credits);
-    credits_ += credits;
+    const std::string what = in.foot.apply(footPlayers_[size_t(taker)], rollLoot(*table, lootSeed(d.key + "#roll")), &credits);
+    players_[size_t(taker)].credits += credits;
     clearedMarkers_.insert(d.key);
     dropPositions_.erase(d.key);
-    footEvents_.push_back({FootEvent::Type::Pickup, d.position});
-    notify("Picked up: " + what);
-    drops_.erase(drops_.begin() + std::ptrdiff_t(i));
+    for (size_t s = 0; s < players_.size(); ++s)
+      if (players_[s].location != Location::Cockpit && players_[s].interior == id)
+        players_[s].footEvents.push_back({FootEvent::Type::Pickup, d.position});
+    notifyPlayer(players_[size_t(taker)].id, "Picked up: " + what);
+    in.drops.erase(in.drops.begin() + std::ptrdiff_t(i));
   }
 }
 
-void GameSession::stepFoot(float dt) {
-  if (!footArmed_) return;
-  const InteriorDef* def = activeInterior();
-  if (!def) return;
-  FootPlayer& me = footPlayers_.front();
-  me.feet = character_.feet;
-  me.eye = character_.eye(characterParams_);
-  me.look = character_.lookDirection();
-  foot_.update(dt, footPlayers_, colliders_, def->meshCollider.get(), activeNav());
-  if (length(me.knock) > 0) {  // a charge sends you flying
-    character_.velocity += me.knock;
-    me.knock = {};
+void GameSession::stepInstance(const AssetID& id, Instance& in, float dt) {
+  auto defIt = interiors_.find(id);
+  if (defIt == interiors_.end()) return;
+  const InteriorDef& def = defIt->second;
+  std::vector<int> present;
+  for (size_t s = 0; s < players_.size(); ++s)
+    if (players_[s].location != Location::Cockpit && players_[s].interior == id) present.push_back(int(s));
+  // Bodies first: everyone walks, then the fight sees where they ended up.
+  CharacterParams params = characterParams_;
+  params.gravity = in.gravity;
+  for (int s : present) {
+    CrewMember& m = players_[size_t(s)];
+    stepCharacter(m.character, m.input, params, in.colliders, dt, in.terrain.valid() ? &in.terrain : nullptr,
+                  def.meshCollider.get());
+    m.input.yawDelta = m.input.pitchDelta = 0;  // consumed
+    m.input.jump = false;
+    // Safety net: never let a bad collider set drop anyone into the void.
+    if (m.character.feet.y < -50.0f) {
+      const char* spawn = m.location == Location::ShipInterior ? "airlock" : (def.spawns.count("start") ? "start" : "fromShip");
+      if (def.spawns.count(spawn)) {
+        m.character = CharacterState{};
+        m.character.feet = def.spawns.at(spawn).position;
+        log::warn("session", "{} fell out of '{}'; respawned", m.name, id);
+      }
+    }
   }
-  for (const FootEvent& e : foot_.takeEvents()) {
-    footEvents_.push_back(e);
+  if (!in.armed) return;
+  // The fight sees only the people in this place, numbered 0..n-1; events go back in each one's numbering.
+  std::vector<FootPlayer> fighters;
+  for (int s : present) {
+    FootPlayer f = footPlayers_[size_t(s)];
+    const CrewMember& m = players_[size_t(s)];
+    f.feet = m.character.feet;
+    f.eye = m.character.eye(characterParams_);
+    f.look = m.character.lookDirection();
+    fighters.push_back(std::move(f));
+  }
+  auto navIt = navs_.find(id);
+  in.foot.update(dt, fighters, in.colliders, def.meshCollider.get(), navIt == navs_.end() ? nullptr : navIt->second.get());
+  for (size_t k = 0; k < present.size(); ++k) {
+    const int s = present[k];
+    CrewMember& m = players_[size_t(s)];
+    FootPlayer& f = fighters[k];
+    if (length(f.knock) > 0) {  // a charge sends you flying
+      m.character.velocity += f.knock;
+      f.knock = {};
+    }
+    footPlayers_[size_t(s)] = std::move(f);
+  }
+  for (FootEvent e : in.foot.takeEvents()) {
+    const int fighter = e.player;
+    const int who = fighter >= 0 && fighter < int(present.size()) ? present[size_t(fighter)] : -1;
     if (e.type == FootEvent::Type::EnemyDied) {
-      const FootEnemy& dead = foot_.enemies()[size_t(e.enemy)];
-      const std::string key = activeInteriorId_ + "#" + std::to_string(dead.markerIndex);
-      clearedMarkers_.insert(key);
+      const FootEnemy& dead = in.foot.enemies()[size_t(e.enemy)];
+      clearedMarkers_.insert(id + "#" + std::to_string(dead.markerIndex));
       // A drop or not is decided by the map and marker, so a reload cannot reroll it.
-      const FootEnemyDef& d = foot_.enemyDef(dead);
-      const std::string dropKey = activeInteriorId_ + "#drop" + std::to_string(dead.markerIndex);
+      const FootEnemyDef& d = in.foot.enemyDef(dead);
+      const std::string dropKey = id + "#drop" + std::to_string(dead.markerIndex);
       const float roll = float(lootSeed(dropKey) >> 40) / float(1u << 24);
-      if (!d.dropTable.empty() && roll < d.dropChance && foot_.content().lootTable(d.dropTable)) {
+      if (!d.dropTable.empty() && roll < d.dropChance && in.foot.content().lootTable(d.dropTable)) {
         dropPositions_[dropKey] = dead.body.feet + Vec3{0, 0.02f, 0};
-        drops_.push_back({dropKey, d.dropTable, dropPositions_[dropKey]});
+        in.drops.push_back({dropKey, d.dropTable, dropPositions_[dropKey]});
       }
     }
-    if (e.type == FootEvent::Type::PlayerDown) {
-      // For now you wake at the way in, hurt, and they lose interest. Nothing is taken from you.
-      const auto spawn = def->spawns.count("start") ? def->spawns.find("start") : def->spawns.find("fromShip");
-      if (spawn != def->spawns.end()) {
-        character_ = CharacterState{};
-        character_.feet = spawn->second.position;
-        character_.yaw = radians(spawn->second.yawDeg);
+    // Everyone in the place sees it; `player` becomes 0 for "you" and 1+ for someone else.
+    for (int s : present) {
+      FootEvent mine = e;
+      mine.player = who < 0 ? -1 : (who == s ? 0 : 1 + who);
+      players_[size_t(s)].footEvents.push_back(mine);
+    }
+    if (e.type == FootEvent::Type::PlayerDown && who >= 0) {
+      // You wake at the way in, hurt, and they lose interest. Nothing is taken from you.
+      CrewMember& m = players_[size_t(who)];
+      const auto spawn = def.spawns.count("start") ? def.spawns.find("start") : def.spawns.find("fromShip");
+      if (spawn != def.spawns.end()) {
+        m.character = CharacterState{};
+        m.character.feet = spawn->second.position;
+        m.character.yaw = radians(spawn->second.yawDeg);
       }
-      me.health = 60;
-      me.trigger = false;
-      foot_.returnHome();
-      notify("You black out. Your suit drags you back to the way in.");
+      footPlayers_[size_t(who)].health = 60;
+      footPlayers_[size_t(who)].trigger = false;
+      // They settle only when nobody is left standing in the place.
+      const bool anyoneUp = std::any_of(present.begin(), present.end(), [&](int s) { return footPlayers_[size_t(s)].alive() && s != who; });
+      if (!anyoneUp) in.foot.returnHome();
+      notifyPlayer(m.id, "You black out. Your suit drags you back to the way in.");
     }
   }
-  pickUpDrops();
+  pickUpDrops(id, in);
 }
 
-ActionResult GameSession::takeLoot(int marker) {
-  const InteriorDef* def = activeInterior();
-  if (!def || marker < 0 || marker >= int(def->markers.size())) return fail("Nothing to take");
-  if (markerCleared(marker)) return fail("Already taken");
-  const InteriorMarker& m = def->markers[size_t(marker)];
-  const LootTable* table = foot_.content().lootTable(m.kind.empty() ? "salvage" : m.kind);
-  if (!table) table = foot_.content().lootTable("salvage");
-  if (!table) return fail("Nothing useful");
-  FootPlayer& me = footPlayers_.front();
-  const std::string key = activeInteriorId_ + "#" + std::to_string(marker);
+ActionResult GameSession::takeLoot(int slot, int marker) {
+  CrewMember& m = players_[size_t(slot)];
+  const InteriorDef* def = interiorOf(m.id);
+  Instance* in = instanceOf(slot);
+  if (!def || !in || marker < 0 || marker >= int(def->markers.size())) return failFor(slot, "Nothing to take");
+  if (markerCleared(m.interior, marker)) return failFor(slot, "Already taken");
+  const InteriorMarker& mk = def->markers[size_t(marker)];
+  const LootTable* table = in->foot.content().lootTable(mk.kind.empty() ? "salvage" : mk.kind);
+  if (!table) table = in->foot.content().lootTable("salvage");
+  if (!table) return failFor(slot, "Nothing useful");
+  FootPlayer& me = footPlayers_[size_t(slot)];
+  const std::string key = m.interior + "#" + std::to_string(marker);
   const LootRoll roll = rollLoot(*table, lootSeed(key));
   int credits = 0;
-  const std::string what = foot_.apply(me, roll, &credits);
-  credits_ += credits;
+  const std::string what = in->foot.apply(me, roll, &credits);
+  m.credits += credits;  // personal wallets: it is yours
   clearedMarkers_.insert(key);
-  footEvents_.push_back({FootEvent::Type::Pickup, m.position});
-  if (!roll.weapon.empty()) footEvents_.push_back({FootEvent::Type::Unlocked, m.position, {}, 0, -1, me.switchRequest});
+  m.footEvents.push_back({FootEvent::Type::Pickup, mk.position});
+  if (!roll.weapon.empty()) m.footEvents.push_back({FootEvent::Type::Unlocked, mk.position, {}, 0, -1, me.switchRequest});
   const std::string message = table->mesh == "medical" ? "Medical kit: " + what : "Took: " + what;
-  notify(message);
+  m.notice = message;
+  m.noticeTime = world_->simulationTime();
   return {true, message};
-}
-
-ActionResult GameSession::enterMap(const AssetID& id) {
-  return enterInterior(id, "start", Location::StationInterior);
 }
 
 std::string GameSession::promptFor(const Interactable& it) const {
@@ -333,21 +576,23 @@ std::string GameSession::promptFor(const Interactable& it) const {
       const int marker = std::atoi(it.action.c_str() + 5);
       if (marker >= 0 && marker < int(def->markers.size())) {
         const std::string& kind = def->markers[size_t(marker)].kind;
-        if (const LootTable* t = foot_.content().lootTable(kind.empty() ? "salvage" : kind)) return t->prompt;
+        if (const LootTable* t = foot().content().lootTable(kind.empty() ? "salvage" : kind)) return t->prompt;
       }
     }
   return it.prompt;
 }
 
-const Interactable* GameSession::focusedInteractable() const {
-  const InteriorDef* def = activeInterior();
-  if (!def) return nullptr;
-  const Vec3 eye = character_.eye(characterParams_);
-  const Vec3 look = character_.lookDirection();
+const Interactable* GameSession::focusedInteractable(PlayerId who) const {
+  const int s = slotOf(who);
+  const InteriorDef* def = interiorOf(who);
+  if (s < 0 || !def) return nullptr;
+  const CrewMember& m = players_[size_t(s)];
+  const Vec3 eye = m.character.eye(characterParams_);
+  const Vec3 look = m.character.lookDirection();
   const Interactable* best = nullptr;
   float bestScore = -1;
   for (const auto& it : def->interactables) {
-    if (it.action.rfind("loot:", 0) == 0 && markerCleared(std::atoi(it.action.c_str() + 5))) continue;
+    if (it.action.rfind("loot:", 0) == 0 && markerCleared(m.interior, std::atoi(it.action.c_str() + 5))) continue;
     const Vec3 to = it.position - eye;
     const float d = length(to);
     if (d > it.radius + 0.6f) continue;
@@ -362,16 +607,18 @@ const Interactable* GameSession::focusedInteractable() const {
   return best;
 }
 
-ActionResult GameSession::interact() {
-  if (location_ == Location::Cockpit) return leaveSeat();
-  const Interactable* it = focusedInteractable();
-  if (!it) return fail("Nothing to use here");
-  return perform(it->action);
+ActionResult GameSession::interact(PlayerId who) {
+  const int s = slotOf(who);
+  if (s < 0) return {false, "No such player"};
+  if (players_[size_t(s)].location == Location::Cockpit) return leaveSeat(who);
+  const Interactable* it = focusedInteractable(who);
+  if (!it) return failFor(s, "Nothing to use here");
+  return perform(who, it->action);
 }
 
 void GameSession::setEconomy(CommodityDb db, std::int64_t credits) {
   commodities_ = std::move(db);
-  credits_ = credits;
+  players_.front().credits = credits;
   cargo_ = CargoHold(&commodities_, world_->player().def.cargoCapacityTons);
   mining_.setParams(world_->player().def.mining);
 }
@@ -416,13 +663,13 @@ ActionResult GameSession::buyUpgrade(const std::string& id) {
   const UpgradeDef* u = upgradeDb_ ? upgradeDb_->find(id) : nullptr;
   if (!u) return fail("Unknown upgrade");
   if (ownsUpgrade(id)) return fail(u->name + " is already fitted");
-  if (credits_ < u->price) return fail(std::format("{} costs {} cr", u->name, u->price));
-  credits_ -= u->price;
+  if (players_.front().credits < u->price) return fail(std::format("{} costs {} cr", u->name, u->price));
+  players_.front().credits -= u->price;
   upgrades_.push_back(id);
   applyShip();
-  log::info("upgrades", "fitted {} for {} cr (balance {})", u->name, u->price, credits_);
+  log::info("upgrades", "fitted {} for {} cr (balance {})", u->name, u->price, players_.front().credits);
   notify("Fitted: " + u->name);
-  return {true, notice_};
+  return {true, players_.front().notice};
 }
 
 std::int64_t GameSession::repairCost() const {
@@ -437,22 +684,22 @@ ActionResult GameSession::repair() {
   const std::int64_t cost = repairCost();
   if (cost <= 0) return fail("Hull is already sound");
   Durability& d = combat_.player();
-  if (credits_ < cost) {
+  if (players_.front().credits < cost) {
     // Partial repair with whatever we can afford.
     const float price = upgradeDb_ ? upgradeDb_->repairPricePerHull : 3.0f;
-    const float points = float(credits_) / price;
+    const float points = float(players_.front().credits) / price;
     if (points < 1.0f) return fail(std::format("Repairs cost {} cr", cost));
     d.hull = std::min(d.maxHull, d.hull + points);
-    credits_ = 0;
+    players_.front().credits = 0;
     notify("Partial repair: credits exhausted");
-    return {true, notice_};
+    return {true, players_.front().notice};
   }
-  credits_ -= cost;
+  players_.front().credits -= cost;
   d.hull = d.maxHull;
   d.shield = d.maxShield;
   log::info("upgrades", "repaired hull for {} cr", cost);
   notify(std::format("Hull repaired ({} cr)", cost));
-  return {true, notice_};
+  return {true, players_.front().notice};
 }
 
 std::string GameSession::currentLocationId() const {
@@ -480,7 +727,7 @@ ActionResult GameSession::acceptContract(const Contract& offer) {
   if (!contractDb_ || !hasService("contracts")) return fail("No contract board here");
   if (auto err = contracts_.accept(*contractDb_, offer, cargo_)) return fail(*err);
   notify("Accepted: " + offer.title);
-  return {true, notice_};
+  return {true, players_.front().notice};
 }
 
 ActionResult GameSession::abandonContract(size_t index) {
@@ -488,13 +735,13 @@ ActionResult GameSession::abandonContract(size_t index) {
   const std::string title = contracts_.active()[index].title;
   contracts_.abandon(index, cargo_);
   notify("Abandoned: " + title);
-  return {true, notice_};
+  return {true, players_.front().notice};
 }
 
 void GameSession::onParked() {
   const std::string loc = currentLocationId();
   if (loc.empty()) return;
-  ContractUpdate u = contracts_.onParked(loc, locations_, cargo_, credits_);
+  ContractUpdate u = contracts_.onParked(loc, locations_, cargo_, players_.front().credits);
   if (!u.messages.empty()) notify(u.messages.back());
 }
 
@@ -505,7 +752,7 @@ void GameSession::handleCombatEvents() {
       contracts_.onShipDestroyed(e.faction, &msgs);
       const ShipType* t = combat_.shipType(e.shipDef);
       if (t && t->def.ai.bounty > 0) {
-        credits_ += t->def.ai.bounty;
+        players_.front().credits += t->def.ai.bounty;
         notify(std::format("Target destroyed. Bounty +{} cr", t->def.ai.bounty));
       }
       if (!msgs.empty()) notify(msgs.back());
@@ -533,8 +780,8 @@ void GameSession::handleDefeat() {
   mining_.clearChunks();
   cargo_.clear();
   auto failed = contracts_.onShipLost();
-  const std::int64_t charge = std::min(credits_, deductible_);
-  credits_ -= charge;
+  const std::int64_t charge = std::min(players_.front().credits, deductible_);
+  players_.front().credits -= charge;
   world_->clearTarget();
   travel_.cancel(*world_);
   // The insurer tows what is left of the ship to the nearest station with a shipyard.
@@ -578,15 +825,18 @@ Market* GameSession::dockedMarket() {
   return &it->second;
 }
 
-TradeResult GameSession::trade(const std::string& commodity, int units) {
+TradeResult GameSession::trade(PlayerId who, const std::string& commodity, int units) {
+  CrewMember* buyer = player(who);
+  if (!buyer) return {0, 0, "No such player"};
   Market* m = dockedMarket();
   if (!m) return {0, 0, "No market: dock at a station first"};
   const int i = m->entryIndex(commodity);
-  TradeResult r = units > 0 ? m->buy(commodities_, i, units, credits_, cargo_)
-                            : m->sell(commodities_, i, -units, credits_, cargo_);
+  // Personal wallets, shared hold: whoever pays owns the deal, the cargo goes in the ship.
+  TradeResult r = units > 0 ? m->buy(commodities_, i, units, buyer->credits, cargo_)
+                            : m->sell(commodities_, i, -units, buyer->credits, cargo_);
   if (r.units > 0)
-    log::info("economy", "{} {} x {} for {} cr (balance {})", units > 0 ? "bought" : "sold", r.units, commodity,
-              r.credits, credits_);
+    log::info("economy", "{}{} {} x {} for {} cr (balance {})", who == localPlayer() ? "" : buyer->name + " ",
+              units > 0 ? "bought" : "sold", r.units, commodity, r.credits, buyer->credits);
   return r;
 }
 
@@ -598,7 +848,7 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   landing_.preStep(*world_, dt);
   world_->fixedUpdate(dt);
   docking_.postStep(*world_, dt);
-  const bool canMine = location_ == Location::Cockpit && freeFlight();
+  const bool canMine = pilotSlot() >= 0 && freeFlight();
   miningEvents_ = mining_.fixedUpdate(*world_, miningTrigger_ && canMine, cargo_, dt);
   // Collisions hurt (only in free flight; clamps and pads are gentle).
   PlayerShip& ps = world_->player();
@@ -613,26 +863,10 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   const bool parkedNow = parked();
   if (wasParked_ && !*wasParked_ && parkedNow) onParked();
   wasParked_ = parkedNow;
-  if (location_ != Location::Cockpit) {
-    {
-      const InteriorDef* interior = activeInterior();
-      stepCharacter(character_, characterInput_, characterParams_, colliders_, dt, terrain_.valid() ? &terrain_ : nullptr,
-                    interior ? interior->meshCollider.get() : nullptr);
-    }
-    stepFoot(dt);
-    characterInput_.yawDelta = characterInput_.pitchDelta = 0;  // consumed
-    characterInput_.jump = false;
-    // Safety net: never let a bad collider set drop the player into the void.
-    if (character_.feet.y < -50.0f) {
-      const InteriorDef* def = activeInterior();
-      const char* spawn = location_ == Location::ShipInterior ? "airlock" : "fromShip";
-      if (def && def->spawns.count(spawn)) {
-        character_ = CharacterState{};
-        character_.feet = def->spawns.at(spawn).position;
-        log::warn("session", "player fell out of '{}'; respawned", activeInteriorId_);
-      }
-    }
-  }
+  // Everyone on foot, place by place. A place nobody is in does not exist (and does not move).
+  for (auto& [id, in] : instances_) stepInstance(id, in, dt);
+  for (CrewMember& m : players_)
+    if (m.location == Location::Cockpit) m.input = CharacterInput{};
   if (auto delta = world_->rebaseIfNeeded()) {
     mining_.applyRebase(*delta);
     combat_.applyRebase(*delta);

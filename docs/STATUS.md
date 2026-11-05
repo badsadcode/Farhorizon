@@ -1,6 +1,6 @@
 # FARHORIZON status
 
-_Last updated: 2026-11-05 · Roadmap step 3 (points of interest, FPS): three weapons, three enemy types, pathfinding and loot tables (0.10). Order ahead: `docs/ROADMAP.md`._
+_Last updated: 2026-11-05 · Roadmap step 4.1 (multi-player simulation) done in 0.11.0: up to four crew, per-place instances, personal wallets and a shared hold, simulated players (ADR 0014). Step 3's fights are waiting for the owner's playtest. Order ahead: `docs/ROADMAP.md`._
 Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 
 ## Stage 0 — bootstrap
@@ -10,7 +10,7 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Dependency manifest + licenses | ✅ | `docs/DEPENDENCIES.md` |
 | Vulkan minimum feature set | ✅ | ADR 0001 |
 | Logging, crash diagnostics | 🟡 | contextual fatal logging; no minidumps |
-| Test harness | ✅ | 101 tests (incl. headless Stage 3, 4, 5 and 6 exit criteria) + content validation (CTest) + scripted UI runs (`tests/ui_scripts/`) |
+| Test harness | ✅ | 183 tests (incl. headless Stage 3, 4, 5 and 6 exit criteria) + content validation (CTest) + scripted UI runs (`tests/ui_scripts/`) |
 | CI | ✅ | Windows (MSVC Release build + tests) and Linux (sanitizers + headless render + validation) both green |
 
 ## Stage 1 — window and visible space
@@ -152,6 +152,17 @@ Legend: ✅ implemented and verified · 🟡 partial · ⬜ absent
 | Emissive surfaces cast light | ✅ | checked by measurement and by eye; not yet judged in play |
 | Placed reflection probes | ✅ | sample map; checked by eye, not yet judged in play |
 | Lighting on real GPUs | ✅ | sun cascades, lamp cube shadows, AO, live reflection probe, surface detail; ADR 0011. Checked in screenshots and scripted runs; not yet judged by a human in motion. |
+
+## Roadmap step 4 — co-op
+| Item | State | Notes |
+|---|---|---|
+| 4.1 Players separate from the world | ✅ | up to 4 crew in one `GameSession`; slot 0 is this machine's player; ADR 0014 |
+| Per-place instances (own fight, drops, nav) | ✅ | created on first entry, put away when empty; unit tests |
+| Pilot/passenger, undock and launch need everyone seated | ✅ | unit tests; the app's L key goes through the same rule |
+| Personal wallets, shared hold, away wallets in saves (v6) | ✅ | unit tests, v5 migration |
+| Simulated players, headless | ✅ | `SimPlayer`; four-player 40 s soak, repeatable |
+| World pauses when nobody is connected | ⬜ | belongs to the server (4.3/4.4) |
+| 4.2–4.5 | ⬜ | walkable moving ship, LAN test, dedicated server, crew stations |
 
 ## Later stages
 Not started.

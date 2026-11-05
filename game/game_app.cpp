@@ -902,7 +902,7 @@ void GameApp::handleAppInput() {
           }
           case DockState::RequestingClearance:
           case DockState::ApproachAuthorized: d.cancel(); break;
-          case DockState::Docked: d.undock(world()); break;
+          case DockState::Docked: session_->undock(); break;
           default: break;
         }
       }

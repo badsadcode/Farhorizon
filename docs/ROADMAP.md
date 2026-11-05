@@ -16,7 +16,8 @@ status lives in `STATUS.md`._
    Next: the owner's playtest of the new fights; enemies avoiding each other; weak spots and armour.
 4. **Co-op, 1-4 players.**
    1. Multi-player simulation: separate players from the world; separate ship reference frames;
-      tested headless with simulated players.
+      tested headless with simulated players. **Done (0.11.0, ADR 0014):** crew list, per-place
+      instances, pilot/passenger rules, personal wallets with a shared hold, `SimPlayer` and a 4-player soak.
    2. Walkable moving ship, multi-deck, in single-player. Reverses "no walking inside a moving ship"
       in ADR 0005: characters are stored relative to their ship.
    3. Network test on a LAN: one flies, another walks the ship. Server-authoritative, ENet.

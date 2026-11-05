@@ -62,6 +62,7 @@ std::string serializeSave(const SaveGame& s) {
   json drops = json::object();
   for (const auto& [key, pos] : s.footDrops) drops[key] = vec(pos);
   j["footDrops"] = drops;
+  j["crew"] = {{"wallets", s.crewWallets}};
   return j.dump(2);
 }
 
@@ -107,6 +108,10 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     j["footDrops"] = json::object();
     j["schemaVersion"] = 5;
   }
+  if (j.value("schemaVersion", -1) == 5) {
+    j["crew"] = {{"wallets", json::object()}};  // v5 was always played alone
+    j["schemaVersion"] = 6;
+  }
   if (j.value("schemaVersion", -1) != SaveGame::kSchemaVersion)
     return fail("unsupported save version " + std::to_string(version) + " (this build reads version " +
                 std::to_string(SaveGame::kSchemaVersion) + ")");
@@ -137,6 +142,7 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     s.clearedMarkers = p.at("clearedMarkers").get<std::vector<std::string>>();
     s.footHealth = p.at("footHealth").get<float>();
     s.footWeapons = p.at("footWeapons").get<std::vector<std::string>>();
+    s.crewWallets = j.at("crew").at("wallets").get<std::map<std::string, std::int64_t>>();
     s.footWeapon = p.at("footWeapon").get<std::string>();
     s.footMagazines = p.at("footMagazines").get<std::map<std::string, int>>();
     s.footAmmo = p.at("footAmmo").get<std::map<std::string, int>>();
@@ -259,6 +265,7 @@ SaveGame captureSave(GameSession& session, const std::string& sceneId) {
   s.shipVelocity = (s.docked || landedAt) ? Vec3{} : f.velocity;
   s.boostEnergy = f.boostEnergy;
   s.credits = session.credits();
+  s.crewWallets = session.allCrewWallets();
   s.cargo = session.cargo().contents();
   const Durability& dur = session.combat().player();
   s.hull = dur.hull;
@@ -317,6 +324,7 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
   f.boostEnergy = s.boostEnergy;
   w.player().previous = f;
   session.setCredits(s.credits);
+  session.setCrewWallets(s.crewWallets);
   // Upgrades first: they change hold capacity and durability limits.
   if (session.upgradeDb()) {
     std::vector<std::string> owned;

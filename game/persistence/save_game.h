@@ -16,7 +16,7 @@ namespace fh {
 class GameSession;
 
 struct SaveGame {
-  static constexpr int kSchemaVersion = 5;  // v2 landing, v3 combat/contracts, v4 fights on foot, v5 foot weapons (migrated)
+  static constexpr int kSchemaVersion = 6;  // v2 landing, v3 combat/contracts, v4 fights on foot, v5 foot weapons, v6 crew wallets (migrated)
   int schemaVersion = kSchemaVersion;
   std::string sceneId;
   double worldTime = 0;
@@ -45,6 +45,8 @@ struct SaveGame {
   std::map<std::string, int> footMagazines{{"weapon.rivet_driver", 12}};
   std::map<std::string, int> footAmmo{{"ammo.rivets", 36}};
   std::map<std::string, DVec3> footDrops;  // "<scene>#drop<marker>" -> position in that map
+  // v6: co-op crew. The host's wallet is `credits`; other crew keep theirs here by name. The hold is shared.
+  std::map<std::string, std::int64_t> crewWallets;
   struct ContractState {
     std::string key, templateId, kind, title, description, issuer, destination, commodity, faction;
     int units = 0, killsRequired = 0, kills = 0;
