@@ -1,6 +1,10 @@
 // Networking: the message format, and a host and client talking over real UDP on this machine.
 #include <cmath>
 #include <cstdlib>
+#include <format>
+#include <functional>
+#include <string>
+#include <vector>
 #include <memory>
 
 #include "engine/assets/asset_manifest.h"

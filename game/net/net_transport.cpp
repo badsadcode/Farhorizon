@@ -3,6 +3,7 @@
 #include <enet/enet.h>
 
 #include <map>
+#include <cstdint>
 #include <mutex>
 
 #include "engine/core/log.h"
