@@ -190,7 +190,7 @@ std::optional<ShipDef> loadShipDef(const AssetManifest& manifest, const AssetID&
     return std::nullopt;
   }
   auto def = parseShipDef(*text, "ship '" + id + "'", errors);
-  if (def && !def->interior.empty() && (!manifest.find(def->interior) || manifest.find(def->interior)->type != "interior")) {
+  if (def && !def->interior.empty() && (!manifest.find(def->interior) || (manifest.find(def->interior)->type != "interior" && manifest.find(def->interior)->type != "map"))) {
     if (errors) errors->push_back("ship '" + id + "': interior '" + def->interior + "' not in manifest");
     return std::nullopt;
   }

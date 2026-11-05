@@ -188,8 +188,8 @@ std::optional<SaveGame> deserializeSave(const std::string& text, std::string* er
     if (s.location != "cockpit" && s.location != "ship" && s.location != "station")
       return fail("save file has an unknown location '" + s.location + "'");
     const bool landed = !s.landedSite.empty();
-    if (s.location != "cockpit" && !s.docked && !landed)
-      return fail("save file is inconsistent: on foot but neither docked nor landed");
+    if (s.location == "station" && !s.docked && !landed)
+      return fail("save file is inconsistent: outside the ship but neither docked nor landed");
     if (s.docked && landed) return fail("save file is inconsistent: docked and landed at once");
     for (const auto& [id, n] : s.cargo)
       if (n < 0) return fail("save file has negative cargo for '" + id + "'");
@@ -409,6 +409,8 @@ bool applySave(GameSession& session, const SaveGame& s, std::string* error) {
       if (s.location == "station" && !session.perform("exitShip").ok) return fail("cannot restore surface location");
     }
   }
+  if (!s.docked && s.landedSite.empty() && s.location == "ship" && !session.leaveSeat().ok)
+    return fail("cannot restore walking aboard a flying ship");
   FootPlayer& me = session.footPlayers().front();
   me.health = s.footHealth;
   {  // Loadout by id: weapons or ammo that no longer exist in content are dropped.

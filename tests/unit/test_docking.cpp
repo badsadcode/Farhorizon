@@ -5,6 +5,7 @@
 #include "game/content/interior_def.h"
 #include "game/economy/economy.h"
 #include "game/session/game_session.h"
+#include "game/session/sim_player.h"
 #include "game/session/world_builder.h"
 #include "test_framework.h"
 
@@ -65,6 +66,17 @@ bool runUntil(GameSession& s, float maxSeconds, const std::function<bool()>& don
 }
 
 // Walks the on-foot character to (x, z) with real physics; fails if it gets stuck.
+// Across the ship's decks, the way a player would go: by the stair.
+bool walkAboard(GameSession& s, const Vec3& goal) {
+  SimPlayer walker(s, s.localPlayer());
+  walker.walkTo(goal, 0.9f);
+  for (int i = 0; i < 60 * 40 && !walker.arrived(); ++i) {
+    walker.step();
+    s.fixedUpdate(kDt);
+  }
+  return walker.arrived() && !walker.gaveUp();
+}
+
 bool walkTo(GameSession& s, float x, float z, float maxSeconds = 20.0f) {
   return runUntil(s, maxSeconds, [&] {
     CharacterState& c = s.character();
@@ -101,7 +113,6 @@ TEST(docking_refuses_out_of_range_and_invalid_actions) {
   CHECK(!s.docking().request(s.world()));
   CHECK(s.docking().state() == DockState::Undocked);
   CHECK(!s.docking().undock(s.world()));
-  CHECK(!s.leaveSeat().ok);                 // not docked
   CHECK(!s.perform("exitShip").ok);         // not aboard on foot
   CHECK(s.location() == Location::Cockpit);
 }
@@ -150,14 +161,13 @@ TEST(stage3_dock_walk_launch_loop_20_times) {
                    s.docking().approach().distance);
       return;
     }
-    // Leave the seat and walk to the airlock (corridor first, then the side branch).
+    // Leave the seat and walk to the airlock, a deck below.
     CHECK(s.leaveSeat().ok);
     CHECK(s.location() == Location::ShipInterior);
     const Interactable* airlock = find(s, "exitShip");
     CHECK(airlock != nullptr);
     if (!airlock) return;
-    CHECK(walkTo(s, 0.0f, airlock->position.z));
-    CHECK(walkTo(s, airlock->position.x - 1.0f, airlock->position.z));
+    CHECK(walkAboard(s, airlock->position - Vec3{0.4f, 1.0f, 0.0f}));
     lookAt(s, airlock->position);
     CHECK(s.focusedInteractable() == airlock);
     CHECK(s.interact().ok);
@@ -182,8 +192,7 @@ TEST(stage3_dock_walk_launch_loop_20_times) {
     const Interactable* seat = find(s, "takeSeat");
     CHECK(seat != nullptr);
     if (!seat) return;
-    CHECK(walkTo(s, 0.0f, s.character().feet.z));
-    CHECK(walkTo(s, 0.0f, seat->position.z + 1.1f));
+    CHECK(walkAboard(s, seat->position + Vec3{0.9f, -1.0f, 0.5f}));
     lookAt(s, seat->position);
     CHECK(s.interact().ok);
     CHECK(s.location() == Location::Cockpit);

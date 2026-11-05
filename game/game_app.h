@@ -19,6 +19,7 @@
 #include "engine/audio/audio_device.h"
 #include "game/audio_director.h"
 #include "game/foot/foot_view.h"
+#include "game/session/sim_player.h"
 #include "game/fx/light_selector.h"
 #include "game/fx/particles.h"
 #include "game/market_ui.h"
@@ -170,6 +171,7 @@ class GameApp {
   LightSelector lampSelector_;
   FootMeshes footMeshes_;
   FootView footView_;
+  std::optional<SimPlayer> scriptWalker_;  // the walk-to command in UI scripts
   AssetID lampSelectorScene_;
   float tunnelAmount_ = 0.0f;
   std::vector<Vec3> travelNozzles_;  // relative to the ship

@@ -111,7 +111,7 @@ TEST(crew_undock_needs_the_pilot_and_everyone_aboard) {
   CHECK(s->undock().ok);
   for (int i = 0; i < 60 * 10 && s->docking().state() != DockState::Undocked; ++i) s->fixedUpdate(kDt);
   CHECK(s->docking().state() == DockState::Undocked);
-  CHECK(!s->leaveSeat(mara).ok);  // nobody walks about in flight
+  CHECK(s->leaveSeat(mara).ok);  // a passenger can walk about in flight
 }
 
 TEST(crew_in_different_places_have_their_own_worlds_on_foot) {

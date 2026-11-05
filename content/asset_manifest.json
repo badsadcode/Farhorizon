@@ -159,8 +159,9 @@
       "license": "CC0 1.0 - Kenney Space Kit 'supports_high' (kenney.nl). Placeholder interior piece."
     },
     "interior.sparrow": {
-      "type": "interior",
-      "source": "interiors/sparrow.interior.json"
+      "type": "map",
+      "source": "interiors/sparrow_decks.glb",
+      "license": "Original, made for FARHORIZON by tools/blender/build_ship_interior.py."
     },
     "interior.kestrel_hangar": {
       "type": "interior",

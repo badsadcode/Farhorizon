@@ -52,7 +52,7 @@ Each one shows as an icon with its name. They can be moved, rotated, duplicated 
 | **Exit** | Using it leaves the map |
 | **Data Log** | Shows a message when used. Write it in **Text** |
 | **Terminal** | A station services terminal |
-| **Pilot Seat**, **Airlock** | For ship interiors |
+| **Pilot Seat**, **Airlock** | For ship interiors. Place them at chest height: the player stands one metre below |
 | **Reflection Probe** | Makes shiny surfaces in a room reflect that room. See [Shiny surfaces](#shiny-surfaces) |
 | **Enemy Spawn** | An enemy sleeps here, facing the way the entity faces. Set `fh_kind` to `crawler` (default), `spitter` or `brute` (the types in `content/foot/enemies.json`). Any map with one gives the player their guns |
 | **Loot** | A pickup. `fh_kind` names a loot table from `content/foot/loot.json`: `salvage` (default), `medical`, `ammo`, `cache_flechette`, `cache_arc`. The validator rejects unknown names |

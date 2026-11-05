@@ -43,8 +43,8 @@ class SimPlayer {
   float range_ = 25.0f;
   int replanIn_ = 0;
   bool gaveUp_ = false;
-  float bestDistance_ = 0;  // closest we have been to the target on this walk
-  int sinceProgress_ = 0;   // steps since that last improved
+  Vec3 progressFrom_{};     // where we last counted as moving
+  int sinceProgress_ = 0;   // steps since then
 };
 
 }  // namespace fh

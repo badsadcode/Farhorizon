@@ -194,6 +194,10 @@ void UiScript::step(const UiScriptHost& host) {
     pushButton(mouseX_, mouseY_, true);
   } else if (cmd == "release-mouse") {
     pushButton(mouseX_, mouseY_, false);
+  } else if (cmd == "walk-to") {
+    Vec3 goal{};
+    in >> goal.x >> goal.y >> goal.z;
+    host.walkTo(goal);
   } else if (cmd == "aim-at-enemy") {
     host.aimAtEnemy();
   } else if (cmd == "expect-enemies") {

@@ -972,6 +972,8 @@ void GameApp::playFootSounds(const std::vector<FootEvent>& events, const Vec3& l
 }
 
 void GameApp::handleFootInput(float /*dt*/) {
+  controller_.setThrottle(0.0f);  // back in the seat, the ship does not lurch off at its old set speed
+  controller_.recenter();
   CharacterInput& ci = session_->characterInput();
   auto axis = [&](const char* neg, const char* pos) {
     return (input_.down(pos) ? 1.0f : 0.0f) - (input_.down(neg) ? 1.0f : 0.0f);
@@ -1147,6 +1149,10 @@ int GameApp::run() {
                           c.yaw = std::atan2(to.x, -to.z);
                           c.pitch = std::asin(to.y / best);
                         }
+                      },
+                      [this](const Vec3& goal) {  // test driver only
+                        scriptWalker_.emplace(*session_, session_->localPlayer());
+                        scriptWalker_->walkTo(goal, 0.7f);
                       }});
     }
     if (!window_->pollEvents(input_)) break;
@@ -1169,6 +1175,7 @@ int GameApp::run() {
                          world().player().input);
     } else {
       handleFootInput(float(dt));
+      if (scriptWalker_) scriptWalker_->step();
       if (benchmark_ && benchmark_->lookTurnDegPerSec != 0.0f)
         session_->characterInput().yawDelta += radians(benchmark_->lookTurnDegPerSec) * float(dt);
       world().player().input = FlightInput{};  // nobody at the controls
@@ -1265,6 +1272,16 @@ int GameApp::run() {
                                      (devCam || !mouseCaptured_) && !menus_.active());
     if (camera_.mode() == CameraMode::Chase || camera_.mode() == CameraMode::Cockpit)
       view.fovDeg = std::clamp(view.fovDeg + settings_.fovOffsetDeg, 40.0f, 110.0f);
+    // Walking aboard: the eye rides with the ship, and the world outside the windows is the real one. A
+    // landed ship is the exception, since a planet's surface is a scene of its own.
+    const bool shipBoard = session_->location() == Location::ShipInterior && session_->landing().state() != LandState::Landed;
+    if (shipBoard) {
+      const CharacterState& ch = session_->character();
+      view.position = ship.position + ship.rotation.rotate(ch.eye(session_->characterParams()));
+      view.rotation = normalize(ship.rotation * ch.viewRotation());
+      view.fovDeg = 75.0f;
+    }
+    combatShake_ = std::max(combatShake_, session_->takeShipJolt());
     {  // re-entry / touchdown shake and transit field-of-view stretch
       const float heat = session_->landing().heat();
       const bool approach = session_->landing().state() == LandState::SurfaceApproach;
@@ -1276,7 +1293,7 @@ int GameApp::run() {
                                   Quat::fromAxisAngle({0, 1, 0}, shake * std::sin(t * 29.0f + 1.3f)));
       }
       const TravelState ts = session_->travel().state();
-      if (ts == TravelState::Transit || ts == TravelState::Decelerating)
+      if (!shipBoard && (ts == TravelState::Transit || ts == TravelState::Decelerating))
         view.fovDeg += 14.0f * std::clamp(session_->travel().speed() / world().player().def.travel.maxSpeed, 0.0f, 1.0f);
     }
     const VkExtent2D ext = renderer_->extent();
@@ -1346,8 +1363,9 @@ int GameApp::run() {
     std::vector<MeshDrawItem> items;
     items.reserve(world().asteroids().size() + world().props().size() + 1);
     const PlayerShip& player = world().player();
-    items.push_back({player.visual, Mat4::translation(ship.position - view.position) * Mat4::rotation(ship.rotation) *
-                                        player.meshFix});
+    if (!shipBoard)  // from inside, the hull would only block the windows
+      items.push_back({player.visual, Mat4::translation(ship.position - view.position) * Mat4::rotation(ship.rotation) *
+                                          player.meshFix});
     for (const auto& p : world().props()) {
       const Vec3 rel = p.local - view.position;
       if (!frustum.sphereVisible(rel, p.collisionRadius * 1.5f)) continue;
@@ -1608,7 +1626,43 @@ int GameApp::run() {
     });
 
     // ---- On foot (or in the cockpit on a planet's surface): render the local scene instead ----
-    if (!cockpit || surface) {
+    if (shipBoard) {
+      if (const InteriorDef* idef = session_->activeInterior()) {
+        const AssetID sceneId = session_->activeInteriorId();
+        const Mat4 shipModel = Mat4::translation(ship.position - view.position) * Mat4::rotation(ship.rotation);
+        auto inView = [&](const Vec3& p) { return ship.position + ship.rotation.rotate(p) - view.position; };
+        for (const auto& pi : interiorPieces_[sceneId]) items.push_back({pi.mesh, shipModel * pi.model});
+        const auto footEvents = session_->takeFootEvents();
+        footView_.update(simPaused ? 0.0f : float(dt), footEvents, *session_);
+        // The cabin keeps its own lamps and ambient. The sun stays the real one, so it comes in through the
+        // windows and moves as the ship turns.
+        const InteriorLighting& L = idef->lighting;
+        params.ambientSky = L.ambientSky;
+        params.ambientGround = L.ambientGround;
+        params.exposure = L.exposure;
+        params.pointLights.clear();
+        const double t = world().simulationTime();
+        for (const auto& l : idef->lights) {
+          const float k = l.intensityAt(t);
+          if (k > 0) glows.push_back({Vec4(inView(l.position), l.size), Vec4(l.color * k, 0)});
+        }
+        if (lampSelectorScene_ != sceneId) {
+          lampSelector_.reset();
+          lampSelectorScene_ = sceneId;
+        }
+        std::vector<LampCandidate> lamps;
+        for (std::uint32_t i = 0; i < idef->lights.size(); ++i) {
+          const LightDef& l = idef->lights[i];
+          if (l.range > 0)
+            lamps.push_back({i, inView(l.position), l.intensity * std::max({l.color.x, l.color.y, l.color.z})});
+        }
+        for (const ActiveLamp& a : lampSelector_.update(lamps, simPaused ? 0.0f : float(dt))) {
+          const LightDef& l = idef->lights[a.id];
+          const float k = l.intensityAt(t) * a.strength;
+          if (k > 0) params.pointLights.push_back({inView(l.position), l.range, l.color * (k * l.intensity)});
+        }
+      }
+    } else if (!cockpit || surface) {
       const InteriorDef* idef = surface ? surface : session_->activeInterior();
       const AssetID sceneId = surface ? *session_->surfaceSceneId() : session_->activeInteriorId();
       if (idef) {
@@ -1701,21 +1755,22 @@ int GameApp::run() {
     }
 
     // Interior "key" lights are fake sky light, so only open scenes shadow them.
-    const bool onFootOrSurface = !cockpit || surface;
-    const InteriorDef* localScene = onFootOrSurface ? (surface ? surface : session_->activeInterior()) : nullptr;
+    const bool onFootOrSurface = (!cockpit || surface) && !shipBoard;
+    const InteriorDef* localScene = onFootOrSurface ? (surface ? surface : session_->activeInterior())
+                                                    : (shipBoard ? session_->activeInterior() : nullptr);
     params.cameraPosition = view.position;
     // Low-spec mode (Options or --low-spec): drop the GPU-heavy features and render the scene smaller.
     const bool lowSpec = settings_.lowSpec || options_.lowSpec;
     renderer_->setRenderScale(lowSpec ? std::min(0.5f, settings_.renderScale) : settings_.renderScale);
     params.maxPointLights = lowSpec ? 6 : 16;
     params.sunShadows = !lowSpec && settings_.shadows &&
-                        (!localScene || localScene->surfaceSky.has_value() || localScene->keyCastsShadows);
+                        (!localScene || shipBoard || localScene->surfaceSky.has_value() || localScene->keyCastsShadows);
     params.pointShadows = !lowSpec && settings_.shadows && localScene != nullptr;
     params.ambientOcclusion = !lowSpec && settings_.ambientOcclusion;
     params.reflections = !lowSpec && settings_.reflections ? 1.0f : 0.0f;
     params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
     params.liveAmbient = !(localScene && localScene->meshCollider);
-    if (!lowSpec && localScene && !localScene->reflectionProbes.empty() && !surface) {
+    if (!lowSpec && localScene && !localScene->reflectionProbes.empty() && !surface && !shipBoard) {
       params.probeGeneration = 1 + std::uint32_t(std::hash<std::string>{}(session_->activeInteriorId()) & 0xFFFFFFu);
       for (const ReflectionProbeDef& pr : localScene->reflectionProbes)
         params.reflectionProbes.push_back({pr.position - view.position, pr.boxMin - view.position, pr.boxMax - view.position});
@@ -1724,7 +1779,7 @@ int GameApp::run() {
           params.probeLights.push_back({l.position - view.position, l.range, l.color * l.intensity});
     }
     params.clouds.clear();
-    if (!lowSpec && settings_.volumetricClouds && !localScene) {
+    if (!lowSpec && settings_.volumetricClouds && (!localScene || shipBoard)) {
       for (const CloudDef& c : scene_.clouds) {
         const Vec3 rel = world().frame().toLocal(c.center) - view.position;
         // Beyond this they are barely a few pixels of faint gas, and the sky has its own nebula.
@@ -1750,7 +1805,7 @@ int GameApp::run() {
       params.tunnel.amount = 0.0f;
     } else {
       fx_.buildSprites(view.position, ship.position, particleSprites_);
-      dust_.buildSprites(view.position, player.state.velocity, particleSprites_);
+      if (!shipBoard) dust_.buildSprites(view.position, player.state.velocity, particleSprites_);  // it would drift through the cabin
     }
     if (renderer_->render(params, items, glows, particleSprites_, overlay_.vertices(), shot)) {
       pendingScreenshot_.reset();

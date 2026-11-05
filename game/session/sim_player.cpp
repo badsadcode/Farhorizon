@@ -25,7 +25,7 @@ void SimPlayer::walkTo(const Vec3& target, float arriveRadius) {
   path_.clear();
   replanIn_ = 0;
   gaveUp_ = false;
-  bestDistance_ = 1e30f;
+  if (const CrewMember* m = session_->player(id_)) progressFrom_ = m->character.feet;
   sinceProgress_ = 0;
 }
 
@@ -61,9 +61,9 @@ void SimPlayer::step() {
       walking_ = false;
       path_.clear();
     } else {
-      const float d = length(target_ - body.feet);
-      if (d < bestDistance_ - 0.25f) {
-        bestDistance_ = d;
+      // Stuck means not moving. A route may lead away from the goal for a while, round a wall or up a stair.
+      if (length(body.feet - progressFrom_) > 0.25f) {
+        progressFrom_ = body.feet;
         sinceProgress_ = 0;
       }
       if (replanIn_-- <= 0 || path_.empty()) {
@@ -78,7 +78,7 @@ void SimPlayer::step() {
       }
       while (path_.size() > 1) {
         const Vec3 c = path_.front() - body.feet;
-        if (length(Vec3{c.x, 0, c.z}) > 0.5f) break;
+        if (length(Vec3{c.x, 0, c.z}) > 0.3f) break;  // close: cutting a corner early can pin you against it
         path_.erase(path_.begin());
       }
       const Vec3 to = path_.empty() ? flat : path_.front() - body.feet;

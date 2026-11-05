@@ -207,7 +207,10 @@ class GameSession {
   }
   // Events from the last fixed step(s), after the session has handled them (for audio/HUD).
   std::vector<CombatEvent> takeCombatEvents() { return std::exchange(combatEvents_, {}); }
-  bool combatActive() const { return pilotSlot() >= 0 && freeFlight(); }  // someone flies, in open space
+  // In open space, whether or not anyone is at the helm: leaving the seat does not make pirates go away.
+  bool combatActive() const { return freeFlight(); }
+  // How hard the ship was just hit, 0..1. The app turns this into camera shake.
+  float takeShipJolt() { return std::exchange(shipJolt_, 0.0f); }
 
   // Services of the place we are parked at ("repair", "upgrades", "contracts").
   bool hasService(const std::string& s) const;
@@ -234,6 +237,7 @@ class GameSession {
   std::int64_t insuranceDeductible() const { return deductible_; }
 
  private:
+  float shipJolt_ = 0;
   // A walkable place with at least one player in it: its own colliders and its own fight.
   struct Instance {
     std::vector<Aabb> colliders;

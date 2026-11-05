@@ -1,0 +1,37 @@
+# Leave the helm in open space, look out of the window, walk both decks, then fly on.
+# Run from an empty folder. Coordinates are from tools/blender/build_ship_interior.py.
+wait 10
+expect-screen main
+key Return
+wait 30
+expect-location cockpit
+key F
+wait 10
+expect-location ship
+shot walk01_cockpit.png
+# Upper deck: back through the galley to the bunks.
+walk-to 0.3 2.8 -4
+wait 140
+shot walk02_galley.png
+walk-to -0.4 2.8 3
+wait 200
+shot walk03_bunks.png
+# Down the stair to the hold, and aft to the engine room.
+walk-to -0.3 0 -3.5
+wait 460
+shot walk04_hold.png
+walk-to -0.5 0 6.2
+wait 280
+shot walk05_engine.png
+# The airlock will not open out here.
+walk-to 1.6 0 -4.2
+wait 360
+shot walk06_airlock.png
+key F
+wait 10
+expect-location ship
+# Back up to the seat, and take the helm again.
+walk-to 0.6 2.8 -7.2
+wait 640
+shot walk07_back.png
+quit

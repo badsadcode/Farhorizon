@@ -727,6 +727,13 @@ void drawInteriorHud(OverlayBuilder& o, const InteriorHudContext& c) {
     p.centered(cx, p.s(12), where + "   " + def->name, kDim, small);
   }
   if (!c.mouseCaptured) p.centered(cx, p.s(14) + p.lineH(small), "MOUSE FREE - click to look around", kDim, small);
+  if (s.location() == Location::ShipInterior && !s.parked()) {
+    const Durability& d = s.combat().player();
+    const float speed = length(s.world().player().state.velocity);
+    const std::string state = s.travel().active() ? std::string("DRIVE ENGAGED") : std::format("{:.0f} m/s", speed);
+    p.centered(cx, p.s(14) + 2 * p.lineH(small), std::format("HELM EMPTY   {}   HULL {:.0f}%", state, d.hullFraction() * 100.0f),
+               d.hullFraction() < 0.5f ? kWarn : kDim, small);
+  }
   economyPanel(p, s, c.width);
   if (c.showContractTracker) contractsPanel(p, s);
   if (s.world().simulationTime() - s.noticeTime() < 4.0 && !s.notice().empty())

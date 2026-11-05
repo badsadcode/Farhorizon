@@ -24,8 +24,8 @@ state (design doc 15).
     (`colliders` on props), so the ship can land on the roof without a mesh collider.
   * While Capture/Docked/Undocking, the player ship is kinematic and its collisions are off (the
     pad pose is authoritative).
-* **Interiors are separate local scenes** (`content/interiors/*.interior.json`). There is no
-  walking inside a moving ship (doc 5.1). An interior is built from **piece templates** (a mesh plus
+* **Interiors are separate local scenes** (`content/interiors/*.interior.json`). There was no
+  walking inside a moving ship at first (doc 5.1); ADR 0015 changed that. An interior is built from **piece templates** (a mesh plus
   box colliders in tile units) placed on a 90° grid, plus authored colliders, spawn points,
   interactables (`takeSeat`, `exitShip`, `boardShip`, `terminal`) and glow lights. A station
   interior can show the player's **parked ship** with a walk-blocking box.

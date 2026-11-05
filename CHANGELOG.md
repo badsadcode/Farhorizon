@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — Leaving the helm (2026-11-05)
+Roadmap step 4.2, in single-player: the ship is a place you can walk around while it flies.
+* **Press F in flight to leave the seat.** The ship brakes to a stop by itself, and if the travel drive is
+  running it holds its course. You can't leave during docking or landing, and the airlock stays shut.
+* **The Sparrow has two decks, joined by a stair.** Cockpit, galley and bunks above; the hold, the airlock and the
+  engine room below. It replaces the old one-room cabin. All original, built by `tools/blender/build_ship_interior.py`.
+* **The windows are real.** Through them you see the actual planets, stations, ships and nebulae, moving as the ship
+  moves. Sunlight comes in through them and shifts as the ship turns.
+* **The ship doesn't wait for you.** Pirates keep attacking with nobody at the helm, a crash throws you towards the
+  bow and shakes the view, and a small readout shows the speed and hull while the helm is empty.
+* Saves made while walking aboard in flight load back there.
+* Enemy and player route grids are now baked for every map, not only those with enemies.
+
 ## 0.11.0 — Room for a crew (2026-11-05)
 Groundwork for co-op (roadmap step 4.1). Nothing changes when you play alone, which is the point.
 * **The game now tracks up to four players in one session.** Each has their own body, health, guns,

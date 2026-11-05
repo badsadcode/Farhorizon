@@ -19,6 +19,7 @@
 //   expect-docked
 //   quit
 // Failed expectations are logged and make the process exit with code 3.
+#include "engine/math/math.h"
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -40,6 +41,7 @@ struct UiScriptHost {
   std::function<float()> footHealth;
   std::function<int()> footMagazine;
   std::function<void()> aimAtEnemy;
+  std::function<void(const Vec3&)> walkTo;
 };
 
 class UiScript {

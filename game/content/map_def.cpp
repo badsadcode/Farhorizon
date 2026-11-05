@@ -116,8 +116,12 @@ std::optional<LoadedMap> loadMap(const std::filesystem::path& path, std::vector<
       use("terminal", "Terminal");
     } else if (type == "seat") {
       use("takeSeat", "Take the pilot seat");
+      d.spawns["seat"] = {n.position - Vec3{0, 1, 0}, yaw};  // placed at chest height, so it is easy to look at
+      d.kind = "ship";
     } else if (type == "airlock") {
       use("exitShip", "Cycle the airlock");
+      d.spawns["airlock"] = {n.position - Vec3{0, 1, 0}, yaw};
+      ++exits;  // a way out, when the ship is parked
     } else if (type == "reflection_probe") {
       // The box is the Empty's cube: its scale gives the half size, and boxes stay axis-aligned.
       if (d.reflectionProbes.size() >= kMaxReflectionProbes) {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FARHORIZON VERSION 0.11.0 LANGUAGES C CXX)
+project(FARHORIZON VERSION 0.12.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -162,6 +162,7 @@ if(FH_BUILD_TESTS)
     tests/unit/test_nav.cpp
     tests/unit/test_foot_arsenal.cpp
     tests/unit/test_crew.cpp
+    tests/unit/test_ship_walk.cpp
     tests/unit/test_map.cpp
   )
   target_link_libraries(fh_unit_tests PRIVATE fh_core)

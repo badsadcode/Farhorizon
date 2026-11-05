@@ -283,9 +283,21 @@ ActionResult GameSession::leaveSeat(PlayerId who) {
   const int s = slotOf(who);
   if (s < 0) return {false, "No such player"};
   if (players_[size_t(s)].location != Location::Cockpit) return failFor(s, "You are not in a seat");
-  if (!parked()) return failFor(s, "Leaving the seat is only safe while docked or landed");
+  // Docking and landing need someone at the helm. Otherwise the ship looks after itself: it brakes in
+  // open space, and the travel drive holds its course.
+  if (!parked() && (docking_.state() != DockState::Undocked || landing_.busy()))
+    return failFor(s, "Not during docking or landing");
   if (shipInterior_.empty()) return failFor(s, "This ship has no walkable interior");
-  return enterInterior(s, shipInterior_, "seat", Location::ShipInterior);
+  const bool flying = !parked();
+  const bool cruising = travel_.active();
+  ActionResult r = enterInterior(s, shipInterior_, "seat", Location::ShipInterior);
+  if (r.ok && flying) {
+    CrewMember& m = players_[size_t(s)];
+    m.notice = cruising ? "You leave the helm. The drive holds its course." : "You leave the helm. The ship brakes to a stop.";
+    m.noticeTime = world_->simulationTime();
+    r.message = m.notice;
+  }
+  return r;
 }
 
 ActionResult GameSession::enterMap(PlayerId who, const AssetID& id) {
@@ -399,8 +411,8 @@ void GameSession::beginInstance(const AssetID& id, Instance& in, const InteriorD
     if (!markerCleared(id, i)) spawns.push_back({i, mk.position, mk.yawDeg, mk.kind});
   }
   in.foot.begin(spawns);
-  if (in.armed && def.meshCollider && !navs_.count(id)) {
-    // Where enemies can walk: baked once per map, the first time anyone enters it.
+  if (def.meshCollider && !navs_.count(id)) {
+    // Where people and enemies can walk: baked once per map, the first time anyone enters it.
     auto nav = std::make_unique<NavGrid>();
     if (nav->build(*def.meshCollider))
       log::info("foot", "nav grid for '{}': {} cells, {} links", id, nav->nodeCount(), nav->edgeCount());
@@ -855,9 +867,15 @@ std::optional<Vec3> GameSession::fixedUpdate(float dt) {
   if (ps.collisions != lastCollisions_) {
     lastCollisions_ = ps.collisions;
     if (freeFlight()) combat_.applyCollisionDamage(ps.lastImpactSpeed, world_->simulationTime(), ps.def.combat);
+    // Anyone on their feet is thrown towards the bow.
+    const float hit = std::clamp(ps.lastImpactSpeed / 30.0f, 0.0f, 1.0f);
+    shipJolt_ = std::max(shipJolt_, hit);
+    for (CrewMember& m : players_)
+      if (m.location == Location::ShipInterior) m.character.velocity += Vec3{0, 1.5f * hit, -4.5f * hit};
   }
   const bool active = combatActive();
-  combat_.fixedUpdate(*world_, mining_, firePrimary_ && active, fireSecondary_ && active, active, dt);
+  const bool piloted = pilotSlot() >= 0;
+  combat_.fixedUpdate(*world_, mining_, firePrimary_ && active && piloted, fireSecondary_ && active && piloted, active, dt);
   handleCombatEvents();  // handles PlayerDestroyed (weapons or collisions) -> handleDefeat()
   if (combat_.player().dead()) handleDefeat();  // safety net outside free flight
   const bool parkedNow = parked();

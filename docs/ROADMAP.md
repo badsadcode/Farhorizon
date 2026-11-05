@@ -18,8 +18,8 @@ status lives in `STATUS.md`._
    1. Multi-player simulation: separate players from the world; separate ship reference frames;
       tested headless with simulated players. **Done (0.11.0, ADR 0014):** crew list, per-place
       instances, pilot/passenger rules, personal wallets with a shared hold, `SimPlayer` and a 4-player soak.
-   2. Walkable moving ship, multi-deck, in single-player. Reverses "no walking inside a moving ship"
-      in ADR 0005: characters are stored relative to their ship.
+   2. Walkable moving ship, multi-deck, in single-player. **Done (0.12.0, ADR 0015):** leave the helm in flight,
+      a two-deck Sparrow, real windows. Next is the network test on a LAN.
    3. Network test on a LAN: one flies, another walks the ship. Server-authoritative, ENet.
    4. `farhorizon_server.exe` with a real GUI (setup, players, logs tab) and no Vulkan requirement.
       Clients are untrusted; password required. Friend's PC hosts; one forwarded UDP port.

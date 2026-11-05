@@ -12,7 +12,7 @@
 | 8 | info | perf | The software rasterizer (llvmpipe) is GPU-bound on the procedural sky (5-octave fbm ×3 per pixel). This should be negligible on real GPUs. Bake it to a cubemap if it ever shows up in profiles. |
 | 9 | fixed (0.3) | physics | Props support oriented-box colliders; docking uses scripted capture onto a roof pad. |
 | 10 | fixed (0.7) | input | In-game rebinding in Options > Controls (ADR 0010). One key per action in the UI; several keys per action still work through `input.json`. |
-| 11 | open | camera | In flight, the cockpit camera still sees the exterior hull top as a flat "dash". The walkable cabin exists, but flight uses the exterior view. |
+| 11 | partly fixed (0.12) | camera | Walking to the cockpit now shows the real view, but in flight the cockpit camera still sees the exterior hull top as a flat "dash". The walkable cabin exists, but flight uses the exterior view. |
 | 12 | open | render | The retro look costs ~25 ms more than `clean` on the software rasteriser (expected to be negligible on GPUs). Bloom is iterative Gaussian, not a mip pyramid. |
 | 13 | fixed (0.5) | gameplay | In-system travel drive implemented (ADR 0008). |
 | 14 | open | interiors | Interior lighting is flat (one key light + fill + rim, no point lights or shadows). The Kenney placeholder pieces leave small ceiling gaps that show the clear colour or sky. |
@@ -70,3 +70,6 @@
 | 66 | open | foot | The test range uses plain untextured materials; it is a test map, not a showcase. |
 | 67 | open | foot | The new UI scripts run slowly on the software renderer CI uses, so `test_range.txt` is a manual showcase and is not run in CI. |
 | 68 | open | render | On the software renderer (llvmpipe) a few single frames come out washed out, with the whole room brightly lit (seen during a flechette volley and a brute's charge in the test range). The owner's GPU screenshots of the same kind of scene are dark and correct. Unconfirmed on a real GPU: watch for it. |
+| 69 | open | ships | The Sparrow's two-deck interior is much bigger than its exterior model, and its windows do not line up with the hull. The exterior needs rebuilding to fit. |
+| 70 | open | render | Aboard a ship, placed reflection probes are skipped, so shiny surfaces there only get the live probe. Sun shadows also reach only as far as the cascades cover. |
+| 71 | open | ships | Interior screens and the reactor core are flat bright blocks with no detail, and crates are plain colours. |
