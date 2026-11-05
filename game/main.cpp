@@ -32,6 +32,7 @@ void printUsage() {
       "  --ship-mesh <file.glb> fly this model instead of the ship's own\n"
       "  --start-at <prop id>   debug: start next to this object, e.g. station.derelict\n"
       "  --settings <file>      settings file (default settings.json)\n"
+      "  --low-spec             low-spec mode: no shadows, AO, reflections or clouds; half-resolution scene\n"
       "  --ui-script <file>     developer: drive the UI with scripted input (game/ui/ui_script.h)\n"
       "  --size <W>x<H>         window size (default 1600x900)\n"
       "  --validation           enable Vulkan validation layer (default on in Debug builds)\n"
@@ -93,6 +94,7 @@ int main(int argc, char** argv) {
     else if (a == "--continue") o.loadPath = "saves/quicksave.json";
     else if (a == "--settings") o.settingsPath = next();
     else if (a == "--map") o.mapPath = next();
+    else if (a == "--low-spec") o.lowSpec = true;
     else if (a == "--start-at") o.startAt = next();
     else if (a == "--ship-mesh") o.shipMesh = next();
     else if (a == "--ui-script") o.uiScript = next();

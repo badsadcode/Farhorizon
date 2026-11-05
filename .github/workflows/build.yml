@@ -74,9 +74,10 @@ jobs:
           for s in "options_rebind:" "terminal:--start-docked" "graphics_save:--start-docked" "full_stop:" "map_sample:--map $root/tests/data/derelict_fixture.glb" "foot_combat:--map $root/tests/data/derelict_fixture.glb" "derelict:--start-at station.derelict --start-in station"; do
             name="${s%%:*}"; flag="${s#*:}"
             dir="$root/ui_run/$name"; mkdir -p "$dir"; cd "$dir"
+            # Low-spec mode: these runs check input and logic; the smoke run above keeps full lighting.
             # Ray-marched clouds are too slow on a software GPU for runs this long.
             echo '{"graphics":{"volumetricClouds":false}}' > settings.json
-            xvfb-run -a -s "-screen 0 1920x1080x24" "$root/build/farhorizon" $flag --validation               --settings settings.json --ui-script "$root/tests/ui_scripts/$name.txt"
+            xvfb-run -a -s "-screen 0 1920x1080x24" "$root/build/farhorizon" $flag --low-spec --validation --settings settings.json --ui-script "$root/tests/ui_scripts/$name.txt"
             cd "$root"
           done
       - uses: actions/upload-artifact@v4

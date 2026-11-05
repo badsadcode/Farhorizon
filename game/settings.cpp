@@ -14,6 +14,7 @@ using nlohmann::json;
 void Settings::clamp() {
   fovOffsetDeg = std::clamp(fovOffsetDeg, -15.0f, 20.0f);
   uiScale = std::clamp(uiScale, 0.75f, 1.5f);
+  renderScale = std::clamp(renderScale, 0.5f, 1.0f);
   for (float* v : {&masterVolume, &ambienceVolume, &effectsVolume, &engineVolume, &uiVolume})
     *v = std::clamp(*v, 0.0f, 1.0f);
   mouseSensitivity = std::clamp(mouseSensitivity, 0.25f, 3.0f);
@@ -43,6 +44,8 @@ std::optional<Settings> parseSettings(const std::string& text, std::string* erro
     flag(g, "ambientOcclusion", s.ambientOcclusion);
     flag(g, "reflections", s.reflections);
     flag(g, "volumetricClouds", s.volumetricClouds);
+    flag(g, "lowSpec", s.lowSpec);
+    num(g, "renderScale", s.renderScale);
   }
   if (auto a = j.value("audio", json::object()); a.is_object()) {
     num(a, "master", s.masterVolume);
@@ -78,7 +81,8 @@ std::string serializeSettings(const Settings& s) {
   j["graphics"] = {{"look", s.look},          {"vsync", s.vsync},     {"fullscreen", s.fullscreen},
                    {"fovOffsetDeg", s.fovOffsetDeg}, {"uiScale", s.uiScale}, {"cameraShake", s.cameraShake},
                    {"shadows", s.shadows},   {"ambientOcclusion", s.ambientOcclusion},
-                   {"reflections", s.reflections}, {"volumetricClouds", s.volumetricClouds}};
+                   {"reflections", s.reflections}, {"volumetricClouds", s.volumetricClouds},
+                   {"lowSpec", s.lowSpec},     {"renderScale", s.renderScale}};
   j["audio"] = {{"master", s.masterVolume},
                 {"ambience", s.ambienceVolume},
                 {"effects", s.effectsVolume},

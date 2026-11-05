@@ -124,6 +124,7 @@ struct RenderFrameParams {
   Vec3 cameraPosition{};           // keeps shadow texels fixed in the world while the camera moves
   bool sunShadows = false;
   bool pointShadows = false;       // every lamp in the list casts shadows
+  int maxPointLights = 16;         // shaded lamps (low-spec mode uses fewer)
   bool ambientOcclusion = false;
   float reflections = 0.0f;        // live reflection probe strength; 0 disables it
   bool liveAmbient = true;         // the live probe also supplies ambient light (not in Blender maps)
@@ -168,6 +169,10 @@ class Renderer {
   void setStarfield(const std::vector<StarInstance>& stars);
   // UI atlas for the overlay (RGBA8; null = plain white). Survives clearMeshes().
   void setUiAtlas(const std::uint8_t* rgba, std::uint32_t w, std::uint32_t h);
+  // The 3D scene renders at this fraction of the window size (0.25..1) and is scaled up by the
+  // tonemap pass; the HUD stays sharp at full size. Low-spec mode uses it on slow GPUs.
+  void setRenderScale(float scale);
+  float renderScale() const { return renderScale_; }
 
   // Renders and presents one frame. Items may come in any order; they are grouped per mesh and
   // drawn instanced. Returns false if the frame was skipped (swapchain
@@ -222,6 +227,8 @@ class Renderer {
   void allocateProbeArray(std::uint32_t count);
   VkDescriptorSet allocateMaterialSet(VkImageView view, VkSampler sampler = VK_NULL_HANDLE,
                                       VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  VkExtent2D sceneExtent() const;
+  float renderScale_ = 1.0f;
   GpuImage uiAtlas_;
   VkDescriptorSet overlaySet_ = VK_NULL_HANDLE;
   void writeScreenshot(const std::filesystem::path& path, const GpuBuffer& readback, VkExtent2D extent);

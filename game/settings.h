@@ -21,6 +21,8 @@ struct Settings {
   bool ambientOcclusion = true;
   bool reflections = true;
   bool volumetricClouds = true;
+  bool lowSpec = false;         // low-spec mode: no shadows/AO/reflections/clouds, half render scale, 6 lamps
+  float renderScale = 1.0f;     // 3D scene resolution (0.5..1); the HUD stays at full resolution
   // Audio (0..1).
   float masterVolume = 0.9f;
   float ambienceVolume = 1.0f;

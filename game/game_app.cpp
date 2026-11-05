@@ -1704,13 +1704,18 @@ int GameApp::run() {
     const bool onFootOrSurface = !cockpit || surface;
     const InteriorDef* localScene = onFootOrSurface ? (surface ? surface : session_->activeInterior()) : nullptr;
     params.cameraPosition = view.position;
-    params.sunShadows = settings_.shadows && (!localScene || localScene->surfaceSky.has_value() || localScene->keyCastsShadows);
-    params.pointShadows = settings_.shadows && localScene != nullptr;
-    params.ambientOcclusion = settings_.ambientOcclusion;
-    params.reflections = settings_.reflections ? 1.0f : 0.0f;
+    // Low-spec mode (Options or --low-spec): drop the GPU-heavy features and render the scene smaller.
+    const bool lowSpec = settings_.lowSpec || options_.lowSpec;
+    renderer_->setRenderScale(lowSpec ? std::min(0.5f, settings_.renderScale) : settings_.renderScale);
+    params.maxPointLights = lowSpec ? 6 : 16;
+    params.sunShadows = !lowSpec && settings_.shadows &&
+                        (!localScene || localScene->surfaceSky.has_value() || localScene->keyCastsShadows);
+    params.pointShadows = !lowSpec && settings_.shadows && localScene != nullptr;
+    params.ambientOcclusion = !lowSpec && settings_.ambientOcclusion;
+    params.reflections = !lowSpec && settings_.reflections ? 1.0f : 0.0f;
     params.post.surfaceDetail = looks_.profiles[size_t(activeLook_)].surfaceDetail;
     params.liveAmbient = !(localScene && localScene->meshCollider);
-    if (localScene && !localScene->reflectionProbes.empty() && !surface) {
+    if (!lowSpec && localScene && !localScene->reflectionProbes.empty() && !surface) {
       params.probeGeneration = 1 + std::uint32_t(std::hash<std::string>{}(session_->activeInteriorId()) & 0xFFFFFFu);
       for (const ReflectionProbeDef& pr : localScene->reflectionProbes)
         params.reflectionProbes.push_back({pr.position - view.position, pr.boxMin - view.position, pr.boxMax - view.position});
@@ -1719,7 +1724,7 @@ int GameApp::run() {
           params.probeLights.push_back({l.position - view.position, l.range, l.color * l.intensity});
     }
     params.clouds.clear();
-    if (settings_.volumetricClouds && !localScene) {
+    if (!lowSpec && settings_.volumetricClouds && !localScene) {
       for (const CloudDef& c : scene_.clouds) {
         const Vec3 rel = world().frame().toLocal(c.center) - view.position;
         // Beyond this they are barely a few pixels of faint gas, and the sky has its own nebula.

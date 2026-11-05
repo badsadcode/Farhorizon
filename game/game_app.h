@@ -52,6 +52,7 @@ struct AppOptions {
   bool vsync = true;
   bool devOverlay = true;
   bool autofly = false;
+  bool lowSpec = false;                          // --low-spec: force low-spec mode (CI, slow machines)
   std::optional<std::string> cameraOverride;
   int exitAfterFrames = 0;                       // 0 = run until closed
   std::optional<std::filesystem::path> screenshotOnExit;

@@ -590,8 +590,16 @@ void Renderer::createPipelines() {
   log::info("render", "pipelines created (sky, stars, mesh, bloom, tonemap, overlay)");
 }
 
+VkExtent2D Renderer::sceneExtent() const {
+  const VkExtent2D w = ctx_.swapchainExtent();
+  return {std::max(1u, std::uint32_t(std::lround(float(w.width) * renderScale_))),
+          std::max(1u, std::uint32_t(std::lround(float(w.height) * renderScale_)))};
+}
+
+void Renderer::setRenderScale(float scale) { renderScale_ = std::clamp(scale, 0.25f, 1.0f); }
+
 void Renderer::ensureTargets() {
-  const VkExtent2D e = ctx_.swapchainExtent();
+  const VkExtent2D e = sceneExtent();  // the 3D scene renders here; tonemap scales it to the window
   if (depth_.image && depth_.extent.width == e.width && depth_.extent.height == e.height) return;
   vkDeviceWaitIdle(ctx_.device());
   gpu::destroy(ctx_, depth_);
@@ -936,7 +944,8 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   ensureTargets();
   const std::uint32_t fi = ctx_.frameIndex();
   FrameResources& fr = frames_[fi];
-  const VkExtent2D extent = ctx_.swapchainExtent();
+  const VkExtent2D swapExtent = ctx_.swapchainExtent();  // window: tonemap, HUD, screenshots
+  const VkExtent2D extent = sceneExtent();               // 3D scene (render scale)
 
   // GPU time of the previous use of this frame slot (its fence has been waited on).
   if (queryPool_ && fr.timestampsWritten) {
@@ -972,7 +981,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   u.atmoZenith = Vec4(p.atmoZenith, p.atmosphereSky ? 1.0f : 0.0f);
   u.atmoHorizon = Vec4(p.atmoHorizon, std::max(0.1f, p.atmoHaze));
   u.atmoGround = Vec4(p.atmoGround, p.starVisibility);
-  const size_t nLights = std::min<size_t>(kPointShadowLights, p.pointLights.size());
+  const size_t nLights = std::min<size_t>({kPointShadowLights, size_t(std::max(0, p.maxPointLights)), p.pointLights.size()});
   u.lightCount = Vec4(float(nLights), 0, 0, 0);
   for (size_t i = 0; i < nLights; ++i) {
     u.pointPosRange[i] = Vec4(p.pointLights[i].position, p.pointLights[i].range);
@@ -1082,7 +1091,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   if (screenshotPath && !wantShot) log::warn("render", "screenshot unsupported: swapchain lacks TRANSFER_SRC usage");
   GpuBuffer readback;
   if (wantShot)
-    readback = gpu::createBuffer(ctx_, VkDeviceSize(extent.width) * extent.height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    readback = gpu::createBuffer(ctx_, VkDeviceSize(swapExtent.width) * swapExtent.height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                  true);
 
   // ---- Record ----
@@ -1697,13 +1706,15 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   swapAtt.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;  // the fullscreen tonemap writes every pixel
   swapAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   VkRenderingInfo ri2{VK_STRUCTURE_TYPE_RENDERING_INFO};
-  ri2.renderArea = {{0, 0}, extent};
+  ri2.renderArea = {{0, 0}, swapExtent};
   ri2.layerCount = 1;
   ri2.colorAttachmentCount = 1;
   ri2.pColorAttachments = &swapAtt;
   vkCmdBeginRendering(cmd, &ri2);
-  vkCmdSetViewport(cmd, 0, 1, &vp);
-  vkCmdSetScissor(cmd, 0, 1, &sc);
+  const VkViewport swapVp{0, 0, float(swapExtent.width), float(swapExtent.height), 0.0f, 1.0f};
+  const VkRect2D swapSc{{0, 0}, swapExtent};
+  vkCmdSetViewport(cmd, 0, 1, &swapVp);
+  vkCmdSetScissor(cmd, 0, 1, &swapSc);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipeline_);
   const VkDescriptorSet tonemapSets[3] = {fr.frameSet, tonemapSet_, bloomSet};
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipelineLayout_, 0, 3, tonemapSets, 0, nullptr);
@@ -1718,7 +1729,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
   // Overlay
   if (!overlay.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline_);
-    const float invHalf[2] = {2.0f / float(extent.width), 2.0f / float(extent.height)};
+    const float invHalf[2] = {2.0f / float(swapExtent.width), 2.0f / float(swapExtent.height)};
     vkCmdPushConstants(cmd, overlayPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(invHalf), invHalf);
     if (!overlaySet_) overlaySet_ = allocateMaterialSet(whiteTexture_.view, clampSampler_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipelineLayout_, 0, 1, &overlaySet_, 0, nullptr);
@@ -1736,7 +1747,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
                       VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
     VkBufferImageCopy region{};
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageExtent = {extent.width, extent.height, 1};
+    region.imageExtent = {swapExtent.width, swapExtent.height, 1};
     vkCmdCopyImageToBuffer(cmd, swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.buffer, 1, &region);
     gpu::imageBarrier(cmd, swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                       VK_PIPELINE_STAGE_2_COPY_BIT, 0, VK_PIPELINE_STAGE_2_NONE, 0);
@@ -1755,7 +1766,7 @@ bool Renderer::render(const RenderFrameParams& p, const std::vector<MeshDrawItem
 
   if (wantShot) {
     vkDeviceWaitIdle(ctx_.device());
-    writeScreenshot(*screenshotPath, readback, extent);
+    writeScreenshot(*screenshotPath, readback, swapExtent);
     gpu::destroy(ctx_, readback);
   }
   return true;

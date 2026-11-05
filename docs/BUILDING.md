@@ -54,6 +54,9 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
   xvfb-run -a -s "-screen 0 1920x1080x24" ./build/farhorizon --frames 30 --screenshot shot.png
 ```
 
+Slow machine or no GPU? Add `--low-spec`: no shadows, ambient occlusion, reflections or clouds, at most 6 lamps,
+and a half-resolution 3D scene (the HUD stays sharp). About 4 times faster on the software renderer.
+
 ## Build options
 
 | Option | Default | Meaning |

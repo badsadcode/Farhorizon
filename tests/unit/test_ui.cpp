@@ -27,6 +27,8 @@ TEST(settings_round_trip_keeps_every_field) {
   a.ambientOcclusion = false;
   a.reflections = false;
   a.volumetricClouds = false;
+  a.lowSpec = true;
+  a.renderScale = 0.7f;
   a.masterVolume = 0.5f;
   a.ambienceVolume = 0.25f;
   a.effectsVolume = 0.75f;
@@ -53,6 +55,12 @@ TEST(settings_round_trip_keeps_every_field) {
   CHECK(!b->ambientOcclusion);
   CHECK(!b->reflections);
   CHECK(!b->volumetricClouds);
+  CHECK(b->lowSpec);
+  CHECK_NEAR(b->renderScale, 0.7, 1e-5);
+  Settings tiny;
+  tiny.renderScale = 0.1f;
+  tiny.clamp();
+  CHECK_NEAR(tiny.renderScale, 0.5, 1e-5);  // never below half resolution
   CHECK_NEAR(b->masterVolume, 0.5, 1e-5);
   CHECK_NEAR(b->ambienceVolume, 0.25, 1e-5);
   CHECK_NEAR(b->effectsVolume, 0.75, 1e-5);

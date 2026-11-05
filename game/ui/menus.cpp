@@ -156,7 +156,7 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
   switch (optionsTab_) {
     case 0: {
       // All rows must clear the BACK button at any interface scale.
-      const float gRow = std::min(row, (py + ph - 84 - y) / 10.0f);
+      const float gRow = std::min(row, (py + ph - 84 - y) / 12.0f);  // 12 rows: keep them inside the panel
       int look = 0;
       for (size_t i = 0; i < env.lookIds.size(); ++i)
         if (env.lookIds[i] == s.look) look = int(i);
@@ -190,6 +190,10 @@ void MenuSystem::options(Ui& ui, MenuEnv& env, std::vector<MenuAction>& out) {
       changed |= ui.toggleRow(rx, y, rw, "Reflections", s.reflections);
       y += gRow;
       changed |= ui.toggleRow(rx, y, rw, "Volumetric clouds", s.volumetricClouds);
+      y += gRow;
+      changed |= ui.sliderRow(rx, y, rw, "Render scale", s.renderScale, 0.5f, 1.0f, 0.05f, pct(s.renderScale));
+      y += gRow;
+      changed |= ui.toggleRow(rx, y, rw, "Low spec mode (fast, plain)", s.lowSpec);
       break;
     }
     case 1:

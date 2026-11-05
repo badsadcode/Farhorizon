@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — Low-spec mode (2026-11-05)
+* **Low spec mode** (Options > Graphics, or `--low-spec` on the command line) turns off shadows, ambient
+  occlusion, reflections and volumetric clouds, shades at most 6 lamps, and renders the 3D scene at half
+  resolution while the HUD stays sharp. On the software renderer used for testing it runs about 4 times faster.
+* **Render scale** (Options > Graphics): render the 3D scene at 50 to 100% of the window size, then scale it up.
+* CI's UI scripts run in low-spec mode, since they test input and logic. The smoke run keeps full lighting.
+
 ## 0.10.0 — More guns, more things in the dark (2026-11-05)
 * **Two new weapons, found in tool caches.**
   * The **flechette caster** throws a cone of nine darts. It is brutal up close and kicks hard.
