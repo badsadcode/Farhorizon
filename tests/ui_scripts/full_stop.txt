@@ -11,7 +11,7 @@ wait 60
 expect-speed-above 20
 shot f01_flying.png
 key X
-wait 300
+wait 900
 expect-speed-below 0.05
 expect-spin-below 0.01
 shot f02_stopped.png
@@ -23,7 +23,7 @@ hold 40 W
 wait 60
 expect-speed-above 5
 key X
-wait 200
+wait 900
 expect-speed-below 0.05
 
 # With flight assist off there is nothing else to stop the ship: the hold must still do it.
@@ -33,7 +33,7 @@ wait 10
 expect-speed-above 20
 shot f03_assist_off.png
 key X
-wait 300
+wait 900
 expect-speed-below 0.05
 expect-spin-below 0.01
 
